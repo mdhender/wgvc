@@ -2,9 +2,9 @@ package wgvc
 
 import "fmt"
 
-// Generate constructs a deterministic world with separated islands and
-// clipped Voronoi provinces. All IDs equal their indexes in the corresponding
-// world collections.
+// Generate constructs a deterministic world with separated islands, clipped
+// Voronoi provinces, and spatially correlated terrain. All IDs equal their
+// indexes in the corresponding world collections.
 func Generate(config Config) (World, error) {
 	if err := config.validate(); err != nil {
 		return World{}, err
@@ -75,5 +75,6 @@ func Generate(config Config) (World, error) {
 		}
 		world.Islands[islandIndex] = island
 	}
+	assignTerrain(&world, config.WorldSeed)
 	return world, nil
 }

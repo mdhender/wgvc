@@ -17,5 +17,5 @@ func ExampleGenerate() {
 	}
 
 	fmt.Println(len(world.Islands), len(world.Provinces), world.Provinces[0].Terrain)
-	// Output: 4 20 plains
+	// Output: 4 20 mountains
 }

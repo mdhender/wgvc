@@ -244,8 +244,10 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		if int(province.IslandID) < 0 || int(province.IslandID) >= len(world.Islands) {
 			t.Fatalf("province %d has invalid island ID %d", province.ID, province.IslandID)
 		}
-		if province.Terrain != TerrainPlains {
-			t.Errorf("province %d terrain = %q, want %q", province.ID, province.Terrain, TerrainPlains)
+		switch province.Terrain {
+		case TerrainPlains, TerrainHills, TerrainMountains:
+		default:
+			t.Errorf("province %d has unsupported terrain %q", province.ID, province.Terrain)
 		}
 		if !finitePoint(province.Center) {
 			t.Errorf("province %d center is not finite: %+v", province.ID, province.Center)
