@@ -326,7 +326,11 @@ func canonicalizeGeometry(islandID IslandID, sites []Point, geometry backendGeom
 		}
 	}
 
-	return islandMesh{islandID: islandID, cells: cells, corners: corners, edges: edges}, nil
+	mesh := islandMesh{islandID: islandID, cells: cells, corners: corners, edges: edges}
+	if err := validateCompleteCandidateMesh(mesh); err != nil {
+		return islandMesh{}, err
+	}
+	return mesh, nil
 }
 
 func orderedPair(first, second int) [2]int {
