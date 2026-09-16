@@ -56,7 +56,7 @@ Root choice minimizes distance from the original candidate site to `(0.5,
 0.5)`, breaking equal-distance ties by original candidate index. Frontier
 ranking uses the score above, again breaking ties by original candidate index.
 Growth order is private: the stage returns exactly the requested IDs sorted in
-ascending original-candidate order for deterministic downstream compaction.
+ascending original-candidate order for deterministic downstream processing.
 
 ## Evidence and limits
 
@@ -77,7 +77,7 @@ WGVC_UPDATE_BLOB_SVG=1 go test -run TestCandidateBlobContactSheet
 This sheet records the regular-site feasibility fixture, not the final public
 world rendering. Production candidate sites are deterministically perturbed
 within their grid slots while retaining and validating the required
-grid-neighbor edges. Production then extracts and compacts retained topology,
-scales measured land area, places complete candidate envelopes, and assembles
-the result without retessellating selected sites. See the final
+grid-neighbor edges. Production measures the selected land, scales and places
+complete candidate envelopes, and returns both land and water without
+retessellating selected sites. See the final
 [blob-island gallery and documentation](blob-islands.md).

@@ -240,3 +240,20 @@ func validateCanonicalMesh(mesh islandMesh, requireUnitCoverage bool) error {
 func pointCross(first, second, third Point) float64 {
 	return (second.X-first.X)*(third.Y-first.Y) - (second.Y-first.Y)*(third.X-first.X)
 }
+
+func edgePairLess(first, second [2]int) bool {
+	if first[0] != second[0] {
+		return first[0] < second[0]
+	}
+	return first[1] < second[1]
+}
+
+func minimumInt(values []int) int {
+	minimum := values[0]
+	for _, value := range values[1:] {
+		if value < minimum {
+			minimum = value
+		}
+	}
+	return minimum
+}

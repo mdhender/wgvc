@@ -89,7 +89,9 @@ func TestGenerateLargerWorldHasMultipleTerrainClasses(t *testing.T) {
 	}
 	terrains := make(map[Terrain]bool)
 	for _, province := range world.Provinces {
-		terrains[province.Terrain] = true
+		if province.Terrain != TerrainWater {
+			terrains[province.Terrain] = true
+		}
 	}
 	if len(terrains) < 2 {
 		t.Fatalf("larger world has only one terrain class: %v", terrains)

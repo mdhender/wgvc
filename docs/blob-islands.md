@@ -2,9 +2,9 @@
 
 `Generate` builds irregular Voronoi islands while preserving its original
 public contract: callers provide only `WorldSeed`, `ProvinceCount`, and
-`IslandCount`, and receive exactly those land province and island counts.
-Water candidates, shape parameters, selection order, and placement envelopes
-remain private. The public types and function signature are unchanged.
+`IslandCount`, and receive exactly those land province and island counts plus
+the water candidates surrounding them. Water provinces use `TerrainWater`.
+Shape parameters, selection order, and placement envelopes remain private.
 
 The approach is inspired by Amit Patel's
 [Polygonal Map Generation for Games](http://www-cs-students.stanford.edu/~amitp/game-programming/polygon-map-generation/):
@@ -26,14 +26,14 @@ For every successful generation:
 5. Reserve clipping-frame cells as ocean and select exactly the allocated
    number of edge-connected interior cells. Every omitted candidate remains
    connected through omitted cells to frame water, so no lake is enclosed.
-6. Extract selected cells from the existing map. Unused corners and edges are
-   removed and IDs are compacted. A retained/omitted shared edge becomes a
-   one-incidence coastline edge. The selected sites are never retessellated.
+6. Classify selected cells as land and all other candidates as water. All
+   candidate cells and shared topology are retained. A land/water shared edge
+   is the coastline. The selected sites are never retessellated.
 7. Measure retained polygon area and uniformly scale the island so land area
    equals its allocation. Place complete candidate envelopes with guaranteed
    water gaps; using the envelope rather than tight land bounds preserves room
    for the private surrounding ocean.
-8. Assemble compact world-global IDs and assign terrain last.
+8. Assemble world-global IDs and assign land terrain last, preserving water.
 
 Every public province remains finite, convex, counterclockwise, positive-area,
 and center-containing. Every island is one authoritative shared-edge land
@@ -68,9 +68,9 @@ the fixtures and output.
 The exhaustive small-world matrix covers every valid province/island count
 through 12 across three seeds. Fixed medium, asymmetric multi-island, and large
 fixtures additionally lock exact corner, edge, and coastline counts plus
-normalized coastline signatures. Tests independently check pre-extraction
-frame exclusion and exterior-water connectivity, post-extraction land
-connectivity, canonical coastline loops, compact topology without orphans,
+normalized coastline signatures. Tests independently check frame exclusion,
+exterior-water connectivity, land connectivity, canonical coastline loops,
+complete topology without orphans,
 island separation, area scaling, geometry, terrain, full-world determinism,
 and concurrent race safety. Shape assertions require sufficiently large
 fixtures to have non-square, concave silhouettes; distinct signatures ensure

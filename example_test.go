@@ -16,6 +16,14 @@ func ExampleGenerate() {
 		panic(err)
 	}
 
-	fmt.Println(len(world.Islands), len(world.Provinces), world.Provinces[0].Terrain)
-	// Output: 4 20 mountains
+	land, water := 0, 0
+	for _, province := range world.Provinces {
+		if province.Terrain == wgvc.TerrainWater {
+			water++
+		} else {
+			land++
+		}
+	}
+	fmt.Println(len(world.Islands), land, water)
+	// Output: 4 20 102
 }

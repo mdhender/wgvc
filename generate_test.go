@@ -56,7 +56,7 @@ func TestGenerateValidWorlds(t *testing.T) {
 	}
 }
 
-func TestGeneratePreservesRetainedBlobGeometry(t *testing.T) {
+func TestGeneratePreservesCandidateGeometry(t *testing.T) {
 	config := Config{WorldSeed: 42, ProvinceCount: 20, IslandCount: 4}
 	allocations, err := allocateProvinces(config.ProvinceCount, config.IslandCount)
 	if err != nil {
@@ -74,7 +74,7 @@ func TestGeneratePreservesRetainedBlobGeometry(t *testing.T) {
 
 	provinceOffset, cornerOffset, edgeOffset := 0, 0, 0
 	for islandIndex, placed := range layout.islands {
-		mesh := placed.mesh
+		mesh := placed.candidateMesh
 		for localCornerID, point := range mesh.corners {
 			if got, want := world.Corners[cornerOffset+localCornerID].Point, point; got != want {
 				t.Errorf("island %d corner %d = %+v, want %+v", islandIndex, localCornerID, got, want)
@@ -154,13 +154,40 @@ func TestGenerateConcurrentCallsAreIndependent(t *testing.T) {
 	}
 }
 
+func TestGenerateKeepsWaterProvinces(t *testing.T) {
+	config := Config{WorldSeed: 0x0123456789abcdef, ProvinceCount: 128, IslandCount: 11}
+	world, err := Generate(config)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	assertValidWorld(t, world, config)
+
+	land, water := 0, 0
+	for _, province := range world.Provinces {
+		if province.Terrain == TerrainWater {
+			water++
+		} else {
+			land++
+		}
+	}
+	if land != config.ProvinceCount {
+		t.Errorf("land province count = %d, want %d", land, config.ProvinceCount)
+	}
+	if water != 390 {
+		t.Errorf("water province count = %d, want 390", water)
+	}
+	if got, want := len(world.Provinces), 518; got != want {
+		t.Fatalf("total province count = %d, want %d", got, want)
+	}
+}
+
 func assertValidWorld(t *testing.T, world World, config Config) {
 	t.Helper()
 	if got := len(world.Islands); got != config.IslandCount {
 		t.Fatalf("island count = %d, want %d", got, config.IslandCount)
 	}
-	if got := len(world.Provinces); got != config.ProvinceCount {
-		t.Fatalf("province count = %d, want %d", got, config.ProvinceCount)
+	if got := len(world.Provinces); got <= config.ProvinceCount {
+		t.Fatalf("total province count = %d, want more than %d land provinces", got, config.ProvinceCount)
 	}
 
 	memberships := make([]int, len(world.Provinces))
@@ -185,8 +212,12 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		}
 	}
 	for provinceID, count := range memberships {
-		if count != 1 {
-			t.Errorf("province %d appears in %d island memberships", provinceID, count)
+		want := 1
+		if world.Provinces[provinceID].Terrain == TerrainWater {
+			want = 0
+		}
+		if count != want {
+			t.Errorf("province %d appears in %d island memberships, want %d", provinceID, count, want)
 		}
 	}
 
@@ -230,8 +261,10 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 			if world.Provinces[first].IslandID != world.Provinces[second].IslandID {
 				t.Errorf("interior edge %d joins islands %d and %d", edge.ID, world.Provinces[first].IslandID, world.Provinces[second].IslandID)
 			}
-			neighbors[first] = append(neighbors[first], second)
-			neighbors[second] = append(neighbors[second], first)
+			if world.Provinces[first].Terrain != TerrainWater && world.Provinces[second].Terrain != TerrainWater {
+				neighbors[first] = append(neighbors[first], second)
+				neighbors[second] = append(neighbors[second], first)
+			}
 		}
 	}
 
@@ -244,7 +277,7 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 			t.Fatalf("province %d has invalid island ID %d", province.ID, province.IslandID)
 		}
 		switch province.Terrain {
-		case TerrainPlains, TerrainHills, TerrainMountains:
+		case TerrainWater, TerrainPlains, TerrainHills, TerrainMountains:
 		default:
 			t.Errorf("province %d has unsupported terrain %q", province.ID, province.Terrain)
 		}
@@ -278,7 +311,9 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		if area <= 0 {
 			t.Errorf("province %d signed area = %g, want positive", province.ID, area)
 		}
-		islandAreas[province.IslandID] += area
+		if province.Terrain != TerrainWater {
+			islandAreas[province.IslandID] += area
+		}
 		for ringIndex, start := range ring {
 			if cross(start, ring[(ringIndex+1)%len(ring)], province.Center) < -1e-8 {
 				t.Errorf("province %d does not contain its center %+v", province.ID, province.Center)

@@ -2,11 +2,12 @@
 
 `Generate` accepts a world seed, province count, and island count. Counts must
 satisfy `ProvinceCount >= IslandCount >= 1`. It creates the exact requested
-number of canonical islands and provinces and allocates at least one province
-to every island. Island planning creates private candidate sites and shape
-parameters. Geometry tessellates the complete candidate maps, selects exact
-connected blobs, and extracts only retained land. Placement scales retained
-land area and separates the complete candidate envelopes. `Generate` then
+number of canonical islands and land provinces, allocates at least one land
+province to every island, and also returns the surrounding water provinces.
+Island planning creates candidate sites and shape parameters. Geometry
+tessellates the complete candidate maps, selects exact connected blobs, and
+classifies the other cells as water. Placement scales land area and separates
+the complete candidate envelopes. `Generate` then
 assigns world-global IDs and terrain and returns complete province centers and
 polygon rings.
 
@@ -43,28 +44,28 @@ Island planning remains private input to later geometry stages. An island
 allocated `n` land provinces receives the smallest square interior candidate
 grid with capacity at least `2n`, surrounded by a one-cell frame. One site is
 sampled from the inset center half of each grid slot. The complete map is
-tessellated in the unit square before land selection, so private ocean cells
+tessellated in the unit square before land selection, so water cells
 constrain the final coastline.
 
 A deterministic radial score with independent three-fold and five-fold shape
 phases grows exactly `n` edge-connected interior cells from the center. Frame
 cells are never eligible. Row-convex growth ensures every omitted cell remains
 connected to clipping-frame water, so the generator introduces no lakes. The
-selected cells are extracted without retessellation: omitted cells and unused
-topology are removed, references are compacted, and land/ocean boundaries
-become one-incidence coastline edges.
+selected cells are classified as land without retessellation; all other cells
+are water. Land/water boundaries become coastline edges with both incident
+provinces retained.
 
 Placement measures each retained mesh and applies a uniform scale so its
 world-space land area equals `n`. It lays out the complete candidate envelopes,
 not merely the tighter land bounds, in row-major slots with a one-unit water
-gap and bounded positional jitter. Consequently private ocean still determines
-separation even though it is absent from `World`. Island IDs retain allocation
+gap and bounded positional jitter. Island IDs retain allocation
 order and are not spatially resorted.
 
 ## World assembly
 
-Islands are assembled in island ID order, and each island's provinces retain
-their selected original-candidate order. Corners and edges retain canonical
+Islands are assembled in island ID order. `Island.ProvinceIDs` contains only
+land, while `World.Provinces` retains every candidate in original order.
+Corners and edges retain canonical
 mesh order within each island. Local province and corner references are offset
 into their public world collections, so every public ID equals its collection
 index. Uniform positive scale and translation preserve polygon orientation,

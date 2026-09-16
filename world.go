@@ -22,6 +22,7 @@ type Point struct {
 type Terrain string
 
 const (
+	TerrainWater     Terrain = "water"
 	TerrainPlains    Terrain = "plains"
 	TerrainHills     Terrain = "hills"
 	TerrainMountains Terrain = "mountains"
@@ -36,16 +37,18 @@ type World struct {
 	Edges     []Edge
 }
 
-// Island groups the provinces in one connected land component. ProvinceIDs is
-// in ascending canonical province order.
+// Island groups the land provinces in one connected component. ProvinceIDs is
+// in ascending canonical province order; surrounding water provinces are not
+// members of an island.
 type Island struct {
 	ID          IslandID
 	ProvinceIDs []ProvinceID
 }
 
-// Province is one territorial cell. Center is the generating point used for
-// its Voronoi cell, not the polygon centroid. CornerIDs is a counterclockwise
-// polygon ring and does not repeat its closing corner.
+// Province is one land or water cell. IslandID identifies the candidate map
+// that produced it; only land provinces appear in Island.ProvinceIDs. Center
+// is the generating point used for its Voronoi cell, not the polygon centroid.
+// CornerIDs is a counterclockwise polygon ring without a repeated closing corner.
 type Province struct {
 	ID        ProvinceID
 	IslandID  IslandID
@@ -61,9 +64,9 @@ type Corner struct {
 }
 
 // Edge is an undirected geometric boundary, never a route. CornerIDs contains
-// its two endpoints. ProvinceIDs contains one province for a coastline edge or
-// two provinces for an interior edge; that incidence is authoritative
-// geometric adjacency.
+// its two endpoints. ProvinceIDs contains one province at the outside of a
+// candidate map or two provinces inside it. A coastline has one land and one
+// water province; incidence is authoritative geometric adjacency.
 type Edge struct {
 	ID          EdgeID
 	CornerIDs   [2]CornerID

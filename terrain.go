@@ -55,6 +55,9 @@ func assignTerrain(world *World, worldSeed uint64) {
 		cornerValues[cornerID] = noise.sample(corner.Point)
 	}
 	for provinceID := range world.Provinces {
+		if world.Provinces[provinceID].Terrain == TerrainWater {
+			continue
+		}
 		world.Provinces[provinceID].Terrain = terrainFromCorners(world.Provinces[provinceID], cornerValues)
 	}
 }

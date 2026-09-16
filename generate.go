@@ -28,17 +28,20 @@ func Generate(config Config) (World, error) {
 	}
 
 	world := World{
-		Islands:   make([]Island, config.IslandCount),
-		Provinces: make([]Province, 0, config.ProvinceCount),
+		Islands: make([]Island, config.IslandCount),
 	}
 	for islandIndex, placed := range layout.islands {
-		mesh := placed.mesh
+		mesh := placed.candidateMesh
 		provinceOffset := len(world.Provinces)
 		cornerOffset := len(world.Corners)
+		land := make([]bool, len(mesh.cells))
+		for _, candidateID := range placed.landCandidateIDs {
+			land[candidateID] = true
+		}
 
 		island := Island{
 			ID:          IslandID(islandIndex),
-			ProvinceIDs: make([]ProvinceID, len(mesh.cells)),
+			ProvinceIDs: make([]ProvinceID, 0, placed.landProvinceCount),
 		}
 		for localCornerID, point := range mesh.corners {
 			cornerID := CornerID(cornerOffset + localCornerID)
@@ -49,7 +52,11 @@ func Generate(config Config) (World, error) {
 		}
 		for localProvinceID, cell := range mesh.cells {
 			provinceID := ProvinceID(provinceOffset + localProvinceID)
-			island.ProvinceIDs[localProvinceID] = provinceID
+			terrain := TerrainWater
+			if land[localProvinceID] {
+				island.ProvinceIDs = append(island.ProvinceIDs, provinceID)
+				terrain = TerrainPlains
+			}
 			cornerIDs := make([]CornerID, len(cell.cornerIDs))
 			for ringIndex, localCornerID := range cell.cornerIDs {
 				cornerIDs[ringIndex] = CornerID(cornerOffset + localCornerID)
@@ -59,7 +66,7 @@ func Generate(config Config) (World, error) {
 				IslandID:  island.ID,
 				Center:    cell.center,
 				CornerIDs: cornerIDs,
-				Terrain:   TerrainPlains,
+				Terrain:   terrain,
 			})
 		}
 		for _, edge := range mesh.edges {

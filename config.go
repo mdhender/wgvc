@@ -4,9 +4,13 @@ import "fmt"
 
 // Config controls deterministic world generation.
 type Config struct {
-	WorldSeed     uint64
+	// WorldSeed controls all deterministic random streams.
+	WorldSeed uint64
+	// ProvinceCount is the number of land provinces. Generate also returns the
+	// surrounding water provinces used to shape the islands.
 	ProvinceCount int
-	IslandCount   int
+	// IslandCount is the number of connected land components.
+	IslandCount int
 }
 
 func (c Config) validate() error {

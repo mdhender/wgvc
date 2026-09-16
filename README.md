@@ -26,7 +26,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("%d islands, %d provinces\n", len(world.Islands), len(world.Provinces))
+	fmt.Printf("%d islands, %d total land and water provinces\n",
+		len(world.Islands), len(world.Provinces))
 	for _, provinceID := range world.Islands[0].ProvinceIDs {
 		province := world.Provinces[provinceID]
 		fmt.Printf("province %d: %s, %d corners\n",
@@ -41,8 +42,10 @@ The required input constraint is:
 ProvinceCount >= IslandCount >= 1
 ```
 
-Every successful call returns exactly the requested number of provinces and
-islands, with at least one province per island. For a fixed version of this
+Every successful call returns exactly the requested number of land provinces
+and islands, with at least one land province per island, plus the surrounding
+water provinces used to shape each island. Water provinces have
+`TerrainWater` and do not appear in `Island.ProvinceIDs`. For a fixed version of this
 generator, identical `Config` values produce deeply identical `World` values.
 Generation stages use independent deterministic random streams, so consuming
 randomness in terrain generation cannot perturb island placement or province
@@ -55,21 +58,22 @@ The returned geometry is indexed:
 
 - Each `Island`, `Province`, `Corner`, and `Edge` has an ID equal to its index
   in the corresponding `World` slice.
-- `Island.ProvinceIDs` lists the island's provinces in canonical order.
+- `Island.ProvinceIDs` lists the island's land provinces in canonical order.
 - `Province.CornerIDs` is a counterclockwise polygon ring without a repeated
   closing corner. `Province.Center` is its original Voronoi generating point,
   not its polygon centroid.
 - Corners and edges are shared objects. An `Edge` references two corners and
-  either one province at a coastline or two provinces at an interior boundary.
+  either one province at the outside of a candidate map or two provinces
+  inside it. A coastline edge joins one land province to one water province.
 
 Interior edge incidence is authoritative **undirected geometric adjacency**:
 two provinces are adjacent when they share a boundary. It is not a game route.
 Future routes may be directed, so `A -> B` and `B -> A` will be separate
 decisions rather than consequences of geometric adjacency.
 
-Each island is an irregular blob extracted from a larger private Voronoi map.
-Frame-touching and unselected cells remain private ocean; only the exact
-requested connected land cells are returned. The retained coastline can form
+Each island is an irregular blob selected from a larger Voronoi map.
+Frame-touching and unselected cells are returned as water alongside the exact
+requested connected land cells. The coastline can form
 bays and promontories while every province remains one convex polygon. A
 one-province island is therefore still one convex cell, and coastline detail
 increases with province count rather than adding rendering-only noise.
@@ -91,12 +95,13 @@ its corner samples and is classified using fixed thresholds:
 
 | Mean value | Terrain |
 |---:|---|
+| not sampled | `water` |
 | `< 0.4` | `plains` |
 | `>= 0.4` and `< 0.6` | `hills` |
 | `>= 0.6` | `mountains` |
 
-Noise values remain internal. Terrain assignment never creates water, removes
-provinces, or changes geometry, island membership, or adjacency.
+Noise values remain internal. Terrain assignment preserves water and never
+removes provinces or changes geometry, island membership, or adjacency.
 
 ## Tests
 

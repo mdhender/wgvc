@@ -200,7 +200,11 @@ func retainedPlacementFixture(t *testing.T, config Config, allocations []int) ([
 	if err != nil {
 		t.Fatalf("planIslands() error = %v", err)
 	}
-	meshes := tessellation{islands: make([]islandMesh, len(plans))}
+	meshes := tessellation{
+		islands:          make([]islandMesh, len(plans)),
+		candidates:       make([]islandMesh, len(plans)),
+		landCandidateIDs: make([][]int, len(plans)),
+	}
 	for islandIndex, plan := range plans {
 		candidate, err := tessellateIsland(plan.id, plan.candidates.sites)
 		if err != nil {
@@ -214,14 +218,24 @@ func retainedPlacementFixture(t *testing.T, config Config, allocations []int) ([
 		if err != nil {
 			t.Fatalf("island %d extract retained mesh: %v", plan.id, err)
 		}
+		meshes.candidates[islandIndex] = candidate
+		meshes.landCandidateIDs[islandIndex] = append([]int(nil), selected...)
 	}
 	return plans, meshes
 }
 
 func cloneTessellation(source tessellation) tessellation {
-	clone := tessellation{islands: make([]islandMesh, len(source.islands))}
+	clone := tessellation{
+		islands:          make([]islandMesh, len(source.islands)),
+		candidates:       make([]islandMesh, len(source.candidates)),
+		landCandidateIDs: make([][]int, len(source.landCandidateIDs)),
+	}
 	for islandIndex, mesh := range source.islands {
 		clone.islands[islandIndex] = cloneIslandMesh(mesh)
+	}
+	for islandIndex, mesh := range source.candidates {
+		clone.candidates[islandIndex] = cloneIslandMesh(mesh)
+		clone.landCandidateIDs[islandIndex] = append([]int(nil), source.landCandidateIDs[islandIndex]...)
 	}
 	return clone
 }

@@ -46,12 +46,16 @@ type placedIsland struct {
 	id                IslandID
 	landProvinceCount int
 	mesh              islandMesh
+	candidateMesh     islandMesh
+	landCandidateIDs  []int
 	envelope          rectangle
 	transform         uniformTransform
 }
 
 type tessellation struct {
-	islands []islandMesh
+	islands          []islandMesh
+	candidates       []islandMesh
+	landCandidateIDs [][]int
 }
 
 // allocateProvinces reserves one province per island, then apportions the

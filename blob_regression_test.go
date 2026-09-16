@@ -29,8 +29,8 @@ func TestBlobShapeRegressionFixtures(t *testing.T) {
 		{
 			name:               "medium",
 			config:             Config{WorldSeed: 42, ProvinceCount: 53, IslandCount: 1},
-			wantCorners:        140,
-			wantEdges:          192,
+			wantCorners:        340,
+			wantEdges:          508,
 			wantProvinceCounts: []int{53},
 			wantCoastlineEdges: []int{65},
 			wantConcaveTurns:   []int{29},
@@ -39,8 +39,8 @@ func TestBlobShapeRegressionFixtures(t *testing.T) {
 		{
 			name:               "asymmetric_multi_island",
 			config:             Config{WorldSeed: 8675309, ProvinceCount: 128, IslandCount: 4},
-			wantCorners:        344,
-			wantEdges:          468,
+			wantCorners:        912,
+			wantEdges:          1360,
 			wantProvinceCounts: []int{54, 36, 19, 19},
 			wantCoastlineEdges: []int{65, 43, 31, 35},
 			wantConcaveTurns:   []int{31, 20, 13, 14},
@@ -54,8 +54,8 @@ func TestBlobShapeRegressionFixtures(t *testing.T) {
 		{
 			name:               "large",
 			config:             Config{WorldSeed: 0xdeadbeef, ProvinceCount: 256, IslandCount: 1},
-			wantCorners:        580,
-			wantEdges:          835,
+			wantCorners:        1252,
+			wantEdges:          1876,
 			wantProvinceCounts: []int{256},
 			wantCoastlineEdges: []int{137},
 			wantConcaveTurns:   []int{67},
@@ -152,7 +152,7 @@ func canonicalCoastlineLoop(t *testing.T, world World, island Island) []CornerID
 	coastline := make([]Edge, 0)
 	neighbors := make(map[CornerID][]CornerID)
 	for _, edge := range world.Edges {
-		if len(edge.ProvinceIDs) != 1 || world.Provinces[edge.ProvinceIDs[0]].IslandID != island.ID {
+		if !isCoastlineEdge(world, edge, island.ID) {
 			continue
 		}
 		coastline = append(coastline, edge)
@@ -197,6 +197,16 @@ func canonicalCoastlineLoop(t *testing.T, world World, island Island) []CornerID
 		t.Fatalf("island %d coastline loop is not canonical: %v", island.ID, loop)
 	}
 	return loop
+}
+
+func isCoastlineEdge(world World, edge Edge, islandID IslandID) bool {
+	if len(edge.ProvinceIDs) != 2 {
+		return false
+	}
+	first := world.Provinces[edge.ProvinceIDs[0]]
+	second := world.Provinces[edge.ProvinceIDs[1]]
+	return first.IslandID == islandID && second.IslandID == islandID &&
+		(first.Terrain == TerrainWater) != (second.Terrain == TerrainWater)
 }
 
 func coastlineConcaveTurns(world World, loop []CornerID) int {
@@ -273,7 +283,7 @@ func renderBlobIslandGallery(t *testing.T) []byte {
 	var svg strings.Builder
 	svg.WriteString("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"940\" viewBox=\"0 0 1200 940\">\n")
 	svg.WriteString("<rect width=\"1200\" height=\"940\" fill=\"#f7f5ef\"/>\n")
-	svg.WriteString("<style>text{font-family:ui-monospace,monospace;fill:#17212b}.title{font-size:22px;font-weight:700}.label{font-size:14px}.panel{fill:#dcebf0;stroke:#9babb2;stroke-width:1}.province{fill:#eadfbe;stroke:#7b7567;stroke-width:.7;stroke-linejoin:round}.coast{stroke:#24343d;stroke-width:2.4;stroke-linecap:round}</style>\n")
+	svg.WriteString("<style>text{font-family:ui-monospace,monospace;fill:#17212b}.title{font-size:22px;font-weight:700}.label{font-size:14px}.panel{fill:#dcebf0;stroke:#9babb2;stroke-width:1}.province{stroke:#7b7567;stroke-width:.7;stroke-linejoin:round}.land{fill:#eadfbe}.water{fill:#c6e3ec;stroke:#83aab8}.coast{stroke:#24343d;stroke-width:2.4;stroke-linecap:round}</style>\n")
 	svg.WriteString("<text class=\"title\" x=\"24\" y=\"32\">Deterministic blob-island gallery — issue #15</text>\n")
 	for fixtureIndex, config := range fixtures {
 		world, err := Generate(config)
@@ -288,7 +298,11 @@ func renderBlobIslandGallery(t *testing.T) []byte {
 		fmt.Fprintf(&svg, "<rect class=\"panel\" x=\"0\" y=\"28\" width=\"%.0f\" height=\"%.0f\"/>\n", panelWidth, panelHeight-28)
 		transform := galleryTransform(world, panelWidth, panelHeight-28, 18)
 		for _, province := range world.Provinces {
-			svg.WriteString("<polygon class=\"province\" points=\"")
+			class := "land"
+			if province.Terrain == TerrainWater {
+				class = "water"
+			}
+			fmt.Fprintf(&svg, "<polygon class=\"province %s\" points=\"", class)
 			for _, cornerID := range province.CornerIDs {
 				point := transform(world.Corners[cornerID].Point)
 				fmt.Fprintf(&svg, "%.2f,%.2f ", point.X, point.Y+28)
@@ -296,7 +310,7 @@ func renderBlobIslandGallery(t *testing.T) []byte {
 			svg.WriteString("\"/>\n")
 		}
 		for _, edge := range world.Edges {
-			if len(edge.ProvinceIDs) != 1 {
+			if len(edge.ProvinceIDs) != 2 || (world.Provinces[edge.ProvinceIDs[0]].Terrain == TerrainWater) == (world.Provinces[edge.ProvinceIDs[1]].Terrain == TerrainWater) {
 				continue
 			}
 			first := transform(world.Corners[edge.CornerIDs[0]].Point)
@@ -305,7 +319,7 @@ func renderBlobIslandGallery(t *testing.T) []byte {
 		}
 		svg.WriteString("</g>\n")
 	}
-	svg.WriteString("<text class=\"label\" x=\"24\" y=\"900\">uniform land fill · thin province boundaries · heavy coastline · no terrain coloring</text>\n")
+	svg.WriteString("<text class=\"label\" x=\"24\" y=\"900\">tan = land · blue = retained water provinces · heavy coastline · no land terrain coloring</text>\n")
 	svg.WriteString("<text class=\"label\" x=\"24\" y=\"924\">reproduce: WGVC_UPDATE_BLOB_GALLERY=1 go test -run TestBlobIslandGallery</text>\n")
 	svg.WriteString("</svg>\n")
 	return []byte(svg.String())

@@ -118,6 +118,17 @@ func placeIslands(config Config, plans []islandPlan, meshes tessellation) (islan
 	if total != config.ProvinceCount {
 		return islandLayout{}, fmt.Errorf("allocation total = %d, want %d", total, config.ProvinceCount)
 	}
+	if len(meshes.candidates) != len(plans) || len(meshes.landCandidateIDs) != len(plans) {
+		return islandLayout{}, fmt.Errorf("candidate mesh count = %d/%d, want %d", len(meshes.candidates), len(meshes.landCandidateIDs), len(plans))
+	}
+	for islandIndex, plan := range plans {
+		if err := validateCompleteCandidateMesh(meshes.candidates[islandIndex]); err != nil {
+			return islandLayout{}, fmt.Errorf("island %d candidate mesh: %w", plan.id, err)
+		}
+		if len(meshes.landCandidateIDs[islandIndex]) != plan.landProvinceCount {
+			return islandLayout{}, fmt.Errorf("island %d selected candidate count = %d, want %d", plan.id, len(meshes.landCandidateIDs[islandIndex]), plan.landProvinceCount)
+		}
+	}
 
 	columnCenters := slotCenters(columnWidths)
 	rowCenters := slotCenters(rowHeights)
@@ -139,6 +150,8 @@ func placeIslands(config Config, plans []islandPlan, meshes tessellation) (islan
 			id:                plan.id,
 			landProvinceCount: plan.landProvinceCount,
 			mesh:              transformMesh(meshes.islands[islandIndex], transform),
+			candidateMesh:     transformMesh(meshes.candidates[islandIndex], transform),
+			landCandidateIDs:  append([]int(nil), meshes.landCandidateIDs[islandIndex]...),
 			envelope:          envelope,
 			transform:         transform,
 		}
