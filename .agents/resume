@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' 'wgvc requires no wake-time services or authentication.'
