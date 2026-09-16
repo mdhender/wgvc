@@ -11,13 +11,19 @@ import (
 // the public API.
 type allocationStage func(provinceCount, islandCount int) ([]int, error)
 
-type islandPlanningStage func(Config, []int) ([]islandPlan, error)
+type islandPlanningStage func(Config, []int) (islandLayout, error)
 
 type tessellationStage func([]islandPlan) (tessellation, error)
 
 type islandPlan struct {
 	id              IslandID
+	footprint       rectangle
 	provinceCenters []Point
+}
+
+type islandLayout struct {
+	islands []islandPlan
+	bounds  rectangle
 }
 
 type tessellation struct {
