@@ -29,8 +29,8 @@ For every successful generation:
 6. Preserve selected candidate identities as land and all other candidates as
    water. A land/water shared edge is the coastline.
 7. Measure retained polygon area and uniformly scale the island so land area
-   equals its allocation. Place private candidate envelopes with guaranteed
-   water gaps.
+   equals its allocation. Scatter private candidate envelopes with seeded
+   rejection packing and guaranteed water gaps.
 8. Tessellate all placed candidate sites once in the complete world bounds.
    Private frame sites preserve the blob coastlines while their water cells
    fill every gap and connect between islands.

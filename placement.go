@@ -8,7 +8,8 @@ import (
 const (
 	islandWaterGap    = 1.0
 	islandWorldMargin = 1.0
-	islandJitter      = 0.25
+	placementAttempts = 10_000
+	placementRetries  = 20
 )
 
 type rectangle struct {
@@ -77,11 +78,7 @@ func placeIslands(config Config, plans []islandPlan, meshes tessellation) (islan
 		return islandLayout{}, fmt.Errorf("island mesh count = %d, want %d", len(meshes.islands), len(plans))
 	}
 
-	columns := int(math.Ceil(math.Sqrt(float64(len(plans)))))
-	rows := (len(plans) + columns - 1) / columns
 	scales := make([]float64, len(plans))
-	columnWidths := make([]float64, columns)
-	rowHeights := make([]float64, rows)
 	total := 0
 	for islandIndex, plan := range plans {
 		if plan.id != IslandID(islandIndex) {
@@ -110,10 +107,6 @@ func placeIslands(config Config, plans []islandPlan, meshes tessellation) (islan
 			return islandLayout{}, fmt.Errorf("island %d retained land scale is invalid: %g", plan.id, scale)
 		}
 		scales[islandIndex] = scale
-		column := islandIndex % columns
-		row := islandIndex / columns
-		columnWidths[column] = math.Max(columnWidths[column], scale)
-		rowHeights[row] = math.Max(rowHeights[row], scale)
 	}
 	if total != config.ProvinceCount {
 		return islandLayout{}, fmt.Errorf("allocation total = %d, want %d", total, config.ProvinceCount)
@@ -130,21 +123,14 @@ func placeIslands(config Config, plans []islandPlan, meshes tessellation) (islan
 		}
 	}
 
-	columnCenters := slotCenters(columnWidths)
-	rowCenters := slotCenters(rowHeights)
-	random := placementRandom(config.WorldSeed)
+	envelopes, err := scatterIslandEnvelopes(config.WorldSeed, scales)
+	if err != nil {
+		return islandLayout{}, err
+	}
 	placed := make([]placedIsland, len(plans))
 	for islandIndex, plan := range plans {
 		scale := scales[islandIndex]
-		center := Point{
-			X: columnCenters[islandIndex%columns] + signedJitter(random.Float64()),
-			Y: rowCenters[islandIndex/columns] + signedJitter(random.Float64()),
-		}
-		halfScale := scale / 2
-		envelope := rectangle{
-			min: Point{X: center.X - halfScale, Y: center.Y - halfScale},
-			max: Point{X: center.X + halfScale, Y: center.Y + halfScale},
-		}
+		envelope := envelopes[islandIndex]
 		transform := uniformTransform{scale: scale, translation: envelope.min}
 		placed[islandIndex] = placedIsland{
 			id:                plan.id,
@@ -201,19 +187,67 @@ func transformMesh(mesh islandMesh, transform uniformTransform) islandMesh {
 	return transformed
 }
 
-func slotCenters(dimensions []float64) []float64 {
-	centers := make([]float64, len(dimensions))
-	if len(dimensions) > 0 {
-		centers[0] = dimensions[0] / 2
-		for index := 1; index < len(dimensions); index++ {
-			centers[index] = centers[index-1] + dimensions[index-1]/2 + islandWaterGap + 2*islandJitter + dimensions[index]/2
-		}
+// scatterIslandEnvelopes uses deterministic rejection packing in an expanding
+// square. Packing the complete candidate envelopes, rather than only the land
+// bounds, keeps the private water sites separated enough to preserve each
+// coastline when all candidates are tessellated together.
+func scatterIslandEnvelopes(worldSeed uint64, scales []float64) ([]rectangle, error) {
+	maxSpan, paddedArea := 0.0, 0.0
+	for _, scale := range scales {
+		maxSpan = math.Max(maxSpan, scale+2*islandWorldMargin)
+		paddedArea += (scale + islandWaterGap) * (scale + islandWaterGap)
 	}
-	return centers
+
+	side := math.Max(maxSpan, 1.5*math.Sqrt(paddedArea)+2*islandWorldMargin)
+	for expansion := 0; expansion < placementRetries; expansion++ {
+		random := placementRandom(worldSeed)
+		half := side / 2
+		envelopes := make([]rectangle, 0, len(scales))
+		for _, scale := range scales {
+			limit := half - islandWorldMargin - scale/2
+			accepted := false
+			for attempt := 0; attempt < placementAttempts; attempt++ {
+				center := Point{
+					X: (2*random.Float64() - 1) * limit,
+					Y: (2*random.Float64() - 1) * limit,
+				}
+				halfScale := scale / 2
+				envelope := rectangle{
+					min: Point{X: center.X - halfScale, Y: center.Y - halfScale},
+					max: Point{X: center.X + halfScale, Y: center.Y + halfScale},
+				}
+				if overlapsEnvelopes(envelope, envelopes) {
+					continue
+				}
+				envelopes = append(envelopes, envelope)
+				accepted = true
+				break
+			}
+			if !accepted {
+				break
+			}
+		}
+		if len(envelopes) == len(scales) {
+			return envelopes, nil
+		}
+		side *= 1.2
+	}
+	return nil, fmt.Errorf("could not scatter %d island envelopes after %d expansions", len(scales), placementRetries)
 }
 
-func signedJitter(value float64) float64 {
-	return (2*value - 1) * islandJitter
+func overlapsEnvelopes(envelope rectangle, placed []rectangle) bool {
+	for _, other := range placed {
+		if rectangleGap(envelope, other) < islandWaterGap {
+			return true
+		}
+	}
+	return false
+}
+
+func rectangleGap(first, second rectangle) float64 {
+	dx := math.Max(math.Max(first.min.X-second.max.X, second.min.X-first.max.X), 0)
+	dy := math.Max(math.Max(first.min.Y-second.max.Y, second.min.Y-first.max.Y), 0)
+	return math.Hypot(dx, dy)
 }
 
 func boundsAround(islands []placedIsland, margin float64) rectangle {

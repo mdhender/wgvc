@@ -56,10 +56,10 @@ Land/water boundaries become coastline edges with both incident provinces
 retained.
 
 Placement measures each retained mesh and applies a uniform scale so its
-world-space land area equals `n`. It lays out private candidate envelopes, not
-merely the tighter land bounds, in row-major slots with a one-unit water gap
-and bounded positional jitter. Island IDs retain allocation order and are not
-spatially resorted.
+world-space land area equals `n`. It scatters private candidate envelopes, not
+merely the tighter land bounds, with deterministic seeded rejection packing in
+an expanding square. Every pair retains at least a one-unit water gap. Island
+IDs retain allocation order and are not spatially resorted.
 
 ## World assembly
 

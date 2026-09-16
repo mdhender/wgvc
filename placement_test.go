@@ -44,21 +44,10 @@ func TestPlaceIslandsScalesLandAndSeparatesCandidateEnvelopes(t *testing.T) {
 	if !reflect.DeepEqual(meshes, originalMeshes) {
 		t.Fatal("placeIslands() mutated normalized meshes")
 	}
-	columns := int(math.Ceil(math.Sqrt(float64(len(allocations)))))
-	rows := (len(allocations) + columns - 1) / columns
 	scales := make([]float64, len(allocations))
-	columnWidths := make([]float64, columns)
-	rowHeights := make([]float64, rows)
 	for islandIndex, allocation := range allocations {
 		scales[islandIndex] = math.Sqrt(float64(allocation) / meshArea(meshes.islands[islandIndex]))
-		column := islandIndex % columns
-		row := islandIndex / columns
-		columnWidths[column] = math.Max(columnWidths[column], scales[islandIndex])
-		rowHeights[row] = math.Max(rowHeights[row], scales[islandIndex])
 	}
-	wantColumnCenters := expectedSlotCenters(columnWidths)
-	wantRowCenters := expectedSlotCenters(rowHeights)
-	random := placementRandom(config.WorldSeed)
 	for islandIndex, placed := range layout.islands {
 		if placed.id != IslandID(islandIndex) || placed.landProvinceCount != allocations[islandIndex] {
 			t.Errorf("placed island %d identity/allocation = %d/%d, want %d/%d", islandIndex, placed.id, placed.landProvinceCount, islandIndex, allocations[islandIndex])
@@ -78,17 +67,6 @@ func TestPlaceIslandsScalesLandAndSeparatesCandidateEnvelopes(t *testing.T) {
 		}
 		if got, want := meshArea(placed.mesh), float64(allocations[islandIndex]); math.Abs(got-want) > geometryTolerance*want {
 			t.Errorf("island %d world land area = %.17g, want %g", placed.id, got, want)
-		}
-		center := Point{
-			X: (placed.envelope.min.X + placed.envelope.max.X) / 2,
-			Y: (placed.envelope.min.Y + placed.envelope.max.Y) / 2,
-		}
-		wantCenter := Point{
-			X: wantColumnCenters[islandIndex%columns] + signedJitter(random.Float64()),
-			Y: wantRowCenters[islandIndex/columns] + signedJitter(random.Float64()),
-		}
-		if !near(center.X, wantCenter.X) || !near(center.Y, wantCenter.Y) {
-			t.Errorf("island %d envelope center = %+v, want actual-dimension slot center %+v", placed.id, center, wantCenter)
 		}
 		assertFootprintInsideBounds(t, placed.envelope, layout.bounds)
 
@@ -111,6 +89,42 @@ func TestPlaceIslandsScalesLandAndSeparatesCandidateEnvelopes(t *testing.T) {
 				t.Errorf("island envelopes %d and %d gap = %g, want at least %g", first, second, gap, islandWaterGap)
 			}
 		}
+	}
+}
+
+func TestPlaceIslandsProducesRepresentativeScattering(t *testing.T) {
+	config := Config{WorldSeed: 0x0123456789abcdef, ProvinceCount: 137, IslandCount: 11}
+	allocations, err := allocateProvinces(config.ProvinceCount, config.IslandCount)
+	if err != nil {
+		t.Fatalf("allocateProvinces() error = %v", err)
+	}
+	plans, meshes := retainedPlacementFixture(t, config, allocations)
+	layout, err := placeIslands(config, plans, meshes)
+	if err != nil {
+		t.Fatalf("placeIslands() error = %v", err)
+	}
+
+	// A row-major layout progresses mostly left-to-right and groups centers
+	// into a few horizontal bands. This representative fixture instead has
+	// substantial movement on both axes between consecutive island IDs.
+	xDirectionChanges, yDirectionChanges := 0, 0
+	centers := make([]Point, len(layout.islands))
+	for i, island := range layout.islands {
+		centers[i] = Point{
+			X: (island.envelope.min.X + island.envelope.max.X) / 2,
+			Y: (island.envelope.min.Y + island.envelope.max.Y) / 2,
+		}
+	}
+	for i := 2; i < len(centers); i++ {
+		if (centers[i-1].X-centers[i-2].X)*(centers[i].X-centers[i-1].X) < 0 {
+			xDirectionChanges++
+		}
+		if (centers[i-1].Y-centers[i-2].Y)*(centers[i].Y-centers[i-1].Y) < 0 {
+			yDirectionChanges++
+		}
+	}
+	if xDirectionChanges < 3 || yDirectionChanges < 3 {
+		t.Errorf("island centers remain visibly ordered: x direction changes=%d, y direction changes=%d", xDirectionChanges, yDirectionChanges)
 	}
 }
 
@@ -246,16 +260,6 @@ func reverseInts(values []int) {
 	}
 }
 
-func expectedSlotCenters(dimensions []float64) []float64 {
-	centers := make([]float64, len(dimensions))
-	centers[0] = dimensions[0] / 2
-	for index := 1; index < len(dimensions); index++ {
-		spacing := islandWaterGap + 2*islandJitter
-		centers[index] = centers[index-1] + dimensions[index-1]/2 + spacing + dimensions[index]/2
-	}
-	return centers
-}
-
 func assertFootprintInsideBounds(t *testing.T, footprint, bounds rectangle) {
 	t.Helper()
 	if footprint.min.X-bounds.min.X < islandWorldMargin-1e-12 ||
@@ -264,10 +268,4 @@ func assertFootprintInsideBounds(t *testing.T, footprint, bounds rectangle) {
 		bounds.max.Y-footprint.max.Y < islandWorldMargin-1e-12 {
 		t.Errorf("envelope %+v lacks margin inside bounds %+v", footprint, bounds)
 	}
-}
-
-func rectangleGap(first, second rectangle) float64 {
-	dx := math.Max(math.Max(first.min.X-second.max.X, second.min.X-first.max.X), 0)
-	dy := math.Max(math.Max(first.min.Y-second.max.Y, second.min.Y-first.max.Y), 0)
-	return math.Hypot(dx, dy)
 }

@@ -286,7 +286,7 @@ func renderBlobIslandGallery(t *testing.T) []byte {
 	svg.WriteString("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"940\" viewBox=\"0 0 1200 940\">\n")
 	svg.WriteString("<rect width=\"1200\" height=\"940\" fill=\"#f7f5ef\"/>\n")
 	svg.WriteString("<style>text{font-family:ui-monospace,monospace;fill:#17212b}.title{font-size:22px;font-weight:700}.label{font-size:14px}.panel{fill:#dcebf0;stroke:#9babb2;stroke-width:1}.province{stroke:#7b7567;stroke-width:.7;stroke-linejoin:round}.land{fill:#eadfbe}.water{fill:#c6e3ec;stroke:#83aab8}.coast{stroke:#24343d;stroke-width:2.4;stroke-linecap:round}</style>\n")
-	svg.WriteString("<text class=\"title\" x=\"24\" y=\"32\">Deterministic islands in a continuous ocean — issue #16</text>\n")
+	svg.WriteString("<text class=\"title\" x=\"24\" y=\"32\">Deterministically scattered islands in a continuous ocean — issue #17</text>\n")
 	for fixtureIndex, config := range fixtures {
 		world, err := Generate(config)
 		if err != nil {
