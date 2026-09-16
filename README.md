@@ -67,9 +67,17 @@ two provinces are adjacent when they share a boundary. It is not a game route.
 Future routes may be directed, so `A -> B` and `B -> A` will be separate
 decisions rather than consequences of geometric adjacency.
 
-Each island is currently clipped to a square footprint. This intentionally
-simple square-coastline model guarantees separated connected islands but does
-not attempt natural, non-convex coastlines.
+Each island is an irregular blob extracted from a larger private Voronoi map.
+Frame-touching and unselected cells remain private ocean; only the exact
+requested connected land cells are returned. The retained coastline can form
+bays and promontories while every province remains one convex polygon. A
+one-province island is therefore still one convex cell, and coastline detail
+increases with province count rather than adding rendering-only noise.
+
+The deterministic [blob-island gallery](docs/blob-islands.svg) shows tiny,
+medium, large, and multi-island fixtures without terrain colors. See
+[Blob-island generation](docs/blob-islands.md) for the pipeline, guarantees,
+resolution limits, regression fixtures, and reproduction command.
 
 ## Terrain
 

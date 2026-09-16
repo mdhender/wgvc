@@ -6,9 +6,9 @@ import (
 	"sort"
 )
 
-// candidateBlob retains the #9 visual fixture around the production selection
-// stage. It is deliberately not wired into Generate until the remaining #8
-// stages can preserve and compact the selected geometry.
+// candidateBlob retains the regular-site #9 feasibility fixture around the
+// production selection stage. Generate uses perturbed candidate sites and
+// delegates directly to selectCandidateCells.
 type candidateBlob struct {
 	columns  int
 	rows     int

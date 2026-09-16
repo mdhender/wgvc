@@ -1,10 +1,10 @@
 # Retained-candidate blob feasibility decision
 
-Issue #9 is a **go** for the retained-candidate architecture proposed by #8.
-The private prototype in `blob_selection.go` does not change `Generate`; it
-demonstrates bounded candidate construction and exact selection against the
-pinned rectangular Voronoi backend. The retained contact sheet is
-[`blob-selection.svg`](blob-selection.svg).
+Issue #9 was the **go** decision for the retained-candidate architecture in
+#8. The feasibility fixture demonstrates bounded candidate construction and
+exact selection against the pinned rectangular Voronoi backend. The same
+selection algorithm is now part of `Generate`; the retained historical contact
+sheet is [`blob-selection.svg`](blob-selection.svg).
 
 ## Construction and capacity
 
@@ -74,9 +74,10 @@ omitted water for representative fixtures. Reproduce it with:
 WGVC_UPDATE_BLOB_SVG=1 go test -run TestCandidateBlobContactSheet
 ```
 
-This is a feasibility shape, not final visual tuning. Regular candidate sites
-make the conservative row-convex proof direct and produce visibly non-square
-silhouettes at useful sizes, but later #8 stages may perturb sites while
-retaining and validating the required grid-neighbor edges. Production work
-must still extract and compact retained topology, scale land area, place
-islands, and integrate the result without retessellating selected sites.
+This sheet records the regular-site feasibility fixture, not the final public
+world rendering. Production candidate sites are deterministically perturbed
+within their grid slots while retaining and validating the required
+grid-neighbor edges. Production then extracts and compacts retained topology,
+scales measured land area, places complete candidate envelopes, and assembles
+the result without retessellating selected sites. See the final
+[blob-island gallery and documentation](blob-islands.md).

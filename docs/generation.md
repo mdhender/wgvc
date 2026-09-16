@@ -3,12 +3,12 @@
 `Generate` accepts a world seed, province count, and island count. Counts must
 satisfy `ProvinceCount >= IslandCount >= 1`. It creates the exact requested
 number of canonical islands and provinces and allocates at least one province
-to every island. Island planning provides separated footprints and normalized
-province centers. Geometry turns those centers into unit-square Voronoi meshes
-with shared corners, shared edges, and authoritative adjacency. `Generate`
-then transforms every mesh into world space, assigns world-global IDs, and
-returns complete province centers and polygon rings. Every province receives
-plains until the correlated terrain stage is implemented.
+to every island. Island planning creates private candidate sites and shape
+parameters. Geometry tessellates the complete candidate maps, selects exact
+connected blobs, and extracts only retained land. Placement scales retained
+land area and separates the complete candidate envelopes. `Generate` then
+assigns world-global IDs and terrain and returns complete province centers and
+polygon rings.
 
 ## Coordinates and topology
 
@@ -32,38 +32,44 @@ exact total without imposing an arbitrary island-count cap.
 ## Random streams
 
 Randomness uses local `math/rand/v2` PCG generators. The world seed is combined
-with fixed placement, per-island province, and terrain domains and expanded
-into PCG's two seeds with SplitMix64. Recreating a stream recreates its
-sequence, and consuming one stage's stream cannot alter another stage's
-sequence. No package-global random source is used.
+with fixed placement, per-island candidate-site, per-island blob-shape, and
+terrain domains and expanded into PCG's two seeds with SplitMix64. Recreating
+a stream recreates its sequence, and consuming one stage's stream cannot alter
+another stage's sequence. No package-global random source is used.
 
 ## Island planning
 
-Island planning is currently private input to the later geometry stage. An
-island allocated `n` provinces receives a square world-space footprint with
-side length `sqrt(n)`, so its area is exactly proportional to its allocation.
-Footprints occupy row-major slots in a near-square regular grid. The slot pitch
-includes a one-unit water gap plus enough slack for independently sampled
-positional jitter of at most 0.25 units per axis. Consequently every pair of
-footprints has at least a one-unit water gap. Island IDs retain allocation
-order and are not spatially resorted. World bounds are the complete footprint
-extent expanded by a one-unit water margin on every side.
+Island planning remains private input to later geometry stages. An island
+allocated `n` land provinces receives the smallest square interior candidate
+grid with capacity at least `2n`, surrounded by a one-cell frame. One site is
+sampled from the inset center half of each grid slot. The complete map is
+tessellated in the unit square before land selection, so private ocean cells
+constrain the final coastline.
 
-Each island's province centers remain normalized to the open unit square for
-the geometry backend. The square is recursively split along its longest axis;
-requested counts are divided as evenly as possible and split area is exactly
-proportional to those counts. Every resulting leaf therefore has area `1/n`.
-A center is sampled from the middle half of each leaf along both axes, using
-the island's independent random stream. This inset makes centers distinct and
-gives every pair a separation of at least `0.5/n` in normalized coordinates,
-without rejection sampling or retries.
+A deterministic radial score with independent three-fold and five-fold shape
+phases grows exactly `n` edge-connected interior cells from the center. Frame
+cells are never eligible. Row-convex growth ensures every omitted cell remains
+connected to clipping-frame water, so the generator introduces no lakes. The
+selected cells are extracted without retessellation: omitted cells and unused
+topology are removed, references are compacted, and land/ocean boundaries
+become one-incidence coastline edges.
+
+Placement measures each retained mesh and applies a uniform scale so its
+world-space land area equals `n`. It lays out the complete candidate envelopes,
+not merely the tighter land bounds, in row-major slots with a one-unit water
+gap and bounded positional jitter. Consequently private ocean still determines
+separation even though it is absent from `World`. Island IDs retain allocation
+order and are not spatially resorted.
 
 ## World assembly
 
 Islands are assembled in island ID order, and each island's provinces retain
-their local seed order. Corners and edges retain canonical mesh order within
-each island. Local province and corner references are offset into their public
-world collections, so every public ID equals its collection index. A uniform
-positive scale and translation map normalized coordinates through the island
-footprint; this preserves polygon orientation, Voronoi generating centers,
-and shared topology. No edge is shared across islands.
+their selected original-candidate order. Corners and edges retain canonical
+mesh order within each island. Local province and corner references are offset
+into their public world collections, so every public ID equals its collection
+index. Uniform positive scale and translation preserve polygon orientation,
+Voronoi generating centers, and shared topology. No edge is shared across
+islands. Terrain is assigned only after this geometry and topology are final.
+
+See [Blob-island generation](blob-islands.md) for the complete stage order,
+visual fixtures, and resolution limits.

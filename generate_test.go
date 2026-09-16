@@ -201,6 +201,8 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 
 	edgesByCorners := make(map[[2]CornerID]EdgeID, len(world.Edges))
 	neighbors := make([][]ProvinceID, len(world.Provinces))
+	edgeTraversals := make([][][2]CornerID, len(world.Edges))
+	cornerInProvince := make([]bool, len(world.Corners))
 	for edgeIndex, edge := range world.Edges {
 		if edge.ID != EdgeID(edgeIndex) {
 			t.Errorf("edge at index %d has ID %d", edgeIndex, edge.ID)
@@ -259,6 +261,7 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 				t.Fatalf("province %d has invalid corner ID %d", province.ID, cornerID)
 			}
 			ring[ringIndex] = world.Corners[cornerID].Point
+			cornerInProvince[cornerID] = true
 			next := province.CornerIDs[(ringIndex+1)%len(province.CornerIDs)]
 			key := orderedCornerIDs(cornerID, next)
 			edgeID, ok := edgesByCorners[key]
@@ -269,6 +272,7 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 			if !containsProvinceID(world.Edges[edgeID].ProvinceIDs, province.ID) {
 				t.Errorf("province %d segment edge %d lacks incidence", province.ID, edgeID)
 			}
+			edgeTraversals[edgeID] = append(edgeTraversals[edgeID], [2]CornerID{cornerID, next})
 		}
 		area := signedArea(ring)
 		if area <= 0 {
@@ -280,6 +284,21 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 				t.Errorf("province %d does not contain its center %+v", province.ID, province.Center)
 				break
 			}
+		}
+	}
+	for cornerID, used := range cornerInProvince {
+		if !used {
+			t.Errorf("corner %d is orphaned", cornerID)
+		}
+	}
+	for edgeID, traversals := range edgeTraversals {
+		incidenceCount := len(world.Edges[edgeID].ProvinceIDs)
+		if len(traversals) != incidenceCount {
+			t.Errorf("edge %d has %d polygon traversals for %d incident provinces", edgeID, len(traversals), incidenceCount)
+			continue
+		}
+		if len(traversals) == 2 && (traversals[0][0] != traversals[1][1] || traversals[0][1] != traversals[1][0]) {
+			t.Errorf("interior edge %d is not traversed in opposite directions: %v", edgeID, traversals)
 		}
 	}
 
