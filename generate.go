@@ -14,21 +14,25 @@ func Generate(config Config) (World, error) {
 	if err != nil {
 		return World{}, fmt.Errorf("allocate provinces: %w", err)
 	}
-	layout, err := planIslands(config, allocations)
+	plans, err := planIslands(config, allocations)
 	if err != nil {
 		return World{}, fmt.Errorf("plan islands: %w", err)
 	}
-	meshes, err := tessellateIslands(layout.islands)
+	meshes, err := tessellateIslands(plans)
 	if err != nil {
 		return World{}, fmt.Errorf("tessellate islands: %w", err)
+	}
+	layout, err := placeIslands(config, plans, meshes)
+	if err != nil {
+		return World{}, fmt.Errorf("place islands: %w", err)
 	}
 
 	world := World{
 		Islands:   make([]Island, config.IslandCount),
 		Provinces: make([]Province, 0, config.ProvinceCount),
 	}
-	for islandIndex, plan := range layout.islands {
-		mesh := meshes.islands[islandIndex]
+	for islandIndex, placed := range layout.islands {
+		mesh := placed.mesh
 		provinceOffset := len(world.Provinces)
 		cornerOffset := len(world.Corners)
 
@@ -40,7 +44,7 @@ func Generate(config Config) (World, error) {
 			cornerID := CornerID(cornerOffset + localCornerID)
 			world.Corners = append(world.Corners, Corner{
 				ID:    cornerID,
-				Point: plan.footprint.pointAt(point),
+				Point: point,
 			})
 		}
 		for localProvinceID, cell := range mesh.cells {
@@ -53,7 +57,7 @@ func Generate(config Config) (World, error) {
 			world.Provinces = append(world.Provinces, Province{
 				ID:        provinceID,
 				IslandID:  island.ID,
-				Center:    plan.footprint.pointAt(cell.center),
+				Center:    cell.center,
 				CornerIDs: cornerIDs,
 				Terrain:   TerrainPlains,
 			})

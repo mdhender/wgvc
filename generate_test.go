@@ -62,13 +62,17 @@ func TestGeneratePreservesPlannedGeometry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("allocateProvinces() error = %v", err)
 	}
-	layout, err := planIslands(config, allocations)
+	plans, err := planIslands(config, allocations)
 	if err != nil {
 		t.Fatalf("planIslands() error = %v", err)
 	}
-	meshes, err := tessellateIslands(layout.islands)
+	meshes, err := tessellateIslands(plans)
 	if err != nil {
 		t.Fatalf("tessellateIslands() error = %v", err)
+	}
+	layout, err := placeIslands(config, plans, meshes)
+	if err != nil {
+		t.Fatalf("placeIslands() error = %v", err)
 	}
 	world, err := Generate(config)
 	if err != nil {
@@ -76,16 +80,16 @@ func TestGeneratePreservesPlannedGeometry(t *testing.T) {
 	}
 
 	provinceOffset, cornerOffset, edgeOffset := 0, 0, 0
-	for islandIndex, plan := range layout.islands {
-		mesh := meshes.islands[islandIndex]
+	for islandIndex, placed := range layout.islands {
+		mesh := placed.mesh
 		for localCornerID, point := range mesh.corners {
-			if got, want := world.Corners[cornerOffset+localCornerID].Point, plan.footprint.pointAt(point); got != want {
+			if got, want := world.Corners[cornerOffset+localCornerID].Point, point; got != want {
 				t.Errorf("island %d corner %d = %+v, want %+v", islandIndex, localCornerID, got, want)
 			}
 		}
 		for localProvinceID, cell := range mesh.cells {
 			province := world.Provinces[provinceOffset+localProvinceID]
-			if got, want := province.Center, plan.footprint.pointAt(cell.center); got != want {
+			if got, want := province.Center, cell.center; got != want {
 				t.Errorf("island %d province %d center = %+v, want %+v", islandIndex, localProvinceID, got, want)
 			}
 			for ringIndex, localCornerID := range cell.cornerIDs {

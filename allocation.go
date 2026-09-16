@@ -11,18 +11,19 @@ import (
 // the public API.
 type allocationStage func(provinceCount, islandCount int) ([]int, error)
 
-type islandPlanningStage func(Config, []int) (islandLayout, error)
+type islandPlanningStage func(Config, []int) ([]islandPlan, error)
 
 type tessellationStage func([]islandPlan) (tessellation, error)
 
 type blobSelectionStage func(int, candidateSitePlan, islandMesh, blobShape) ([]int, error)
+
+type islandPlacementStage func(Config, []islandPlan, tessellation) (islandLayout, error)
 
 type islandPlan struct {
 	id                IslandID
 	landProvinceCount int
 	candidates        candidateSitePlan
 	shape             blobShape
-	footprint         rectangle
 	// provinceCenters drives the pre-blob tessellation until #14 integrates
 	// retained candidate cells into Generate.
 	provinceCenters []Point
@@ -40,8 +41,16 @@ type blobShape struct {
 }
 
 type islandLayout struct {
-	islands []islandPlan
+	islands []placedIsland
 	bounds  rectangle
+}
+
+type placedIsland struct {
+	id                IslandID
+	landProvinceCount int
+	mesh              islandMesh
+	envelope          rectangle
+	transform         uniformTransform
 }
 
 type tessellation struct {
