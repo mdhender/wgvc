@@ -15,6 +15,8 @@ type islandPlanningStage func(Config, []int) (islandLayout, error)
 
 type tessellationStage func([]islandPlan) (tessellation, error)
 
+type blobSelectionStage func(int, candidateSitePlan, islandMesh, blobShape) ([]int, error)
+
 type islandPlan struct {
 	id                IslandID
 	landProvinceCount int

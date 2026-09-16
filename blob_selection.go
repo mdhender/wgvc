@@ -6,9 +6,9 @@ import (
 	"sort"
 )
 
-// candidateBlob is a feasibility prototype for retained-cell islands. It is
-// deliberately not wired into Generate until the remaining #8 stages can
-// preserve and compact the selected geometry.
+// candidateBlob retains the #9 visual fixture around the production selection
+// stage. It is deliberately not wired into Generate until the remaining #8
+// stages can preserve and compact the selected geometry.
 type candidateBlob struct {
 	columns  int
 	rows     int
@@ -25,10 +25,8 @@ type occupiedInterval struct {
 	set   bool
 }
 
-// selectCandidateBlob tessellates a bounded rectangular candidate grid and
-// selects exactly landCount interior cells. The one-cell outer ring is always
-// water. Interior capacity is at least twice the request, so no retries or
-// quota changes are needed.
+// selectCandidateBlob tessellates the regular #9 fixture and delegates its
+// selection to selectCandidateCells.
 func selectCandidateBlob(landCount int, seed uint64) (candidateBlob, error) {
 	if landCount < 1 {
 		return candidateBlob{}, fmt.Errorf("land count must be at least 1: %d", landCount)
@@ -44,57 +42,114 @@ func selectCandidateBlob(landCount int, seed uint64) (candidateBlob, error) {
 	if err != nil {
 		return candidateBlob{}, fmt.Errorf("tessellate %d blob candidates: %w", len(sites), err)
 	}
-	// Run complete candidate-mesh validation rather than validating only the
-	// cells that will become land.
-	if _, err := canonicalizeGeometry(0, sites, geometry); err != nil {
+	shape := generateBlobShape(blobShapeRandom(seed, 0))
+	mesh, err := canonicalizeGeometry(0, sites, geometry)
+	if err != nil {
 		return candidateBlob{}, fmt.Errorf("validate complete candidate mesh: %w", err)
 	}
-
-	frame := candidateFrameCells(geometry)
-	neighbors := candidateNeighbors(geometry)
-	if err := validateCandidateGrid(columns, rows, neighbors); err != nil {
+	order, err := selectCandidateCells(landCount, candidateSitePlan{
+		columns: columns,
+		rows:    rows,
+		sites:   sites,
+	}, mesh, shape)
+	if err != nil {
 		return candidateBlob{}, err
 	}
-	for index := range sites {
-		row, column := index/columns, index%columns
-		wantFrame := row == 0 || row == rows-1 || column == 0 || column == columns-1
-		if frame[index] != wantFrame {
-			return candidateBlob{}, fmt.Errorf("candidate %d frame contact = %t, want %t", index, frame[index], wantFrame)
+	frame := candidateFrameCells(geometry)
+	land := make([]bool, len(sites))
+	for _, candidateID := range order {
+		land[candidateID] = true
+	}
+
+	return candidateBlob{
+		columns: columns, rows: rows, sites: sites, geometry: geometry,
+		land: land, frame: frame, order: order,
+	}, nil
+}
+
+// selectCandidateCells chooses exactly landCount cells from a canonical
+// complete candidate mesh. The result is in ascending original candidate
+// order, independently of the order in which the blob grows.
+func selectCandidateCells(landCount int, candidates candidateSitePlan, mesh islandMesh, shape blobShape) ([]int, error) {
+	if landCount < 1 {
+		return nil, fmt.Errorf("land count must be at least 1: %d", landCount)
+	}
+	if candidates.columns < 3 || candidates.rows < 3 ||
+		candidates.columns > int(^uint(0)>>1)/candidates.rows {
+		return nil, fmt.Errorf("invalid candidate grid dimensions: %dx%d", candidates.columns, candidates.rows)
+	}
+	candidateCount := candidates.columns * candidates.rows
+	if len(candidates.sites) != candidateCount {
+		return nil, fmt.Errorf("candidate site count = %d, want %d for %dx%d grid", len(candidates.sites), candidateCount, candidates.columns, candidates.rows)
+	}
+	if len(mesh.cells) != candidateCount {
+		return nil, fmt.Errorf("candidate mesh cell count = %d, want %d", len(mesh.cells), candidateCount)
+	}
+	for candidateID, cell := range mesh.cells {
+		if cell.siteIndex != candidateID {
+			return nil, fmt.Errorf("candidate mesh cell %d refers to original candidate %d", candidateID, cell.siteIndex)
+		}
+		if cell.center != candidates.sites[candidateID] {
+			return nil, fmt.Errorf("candidate mesh cell %d center does not match its original site", candidateID)
 		}
 	}
 
-	shape := generateBlobShape(blobShapeRandom(seed, 0))
-	scores := make([]float64, len(sites))
-	for index, site := range sites {
-		scores[index] = shape.score(site)
+	neighbors, frame, err := candidateMeshTopology(mesh)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateCandidateGrid(candidates.columns, candidates.rows, neighbors); err != nil {
+		return nil, fmt.Errorf("validate candidate mesh: %w", err)
+	}
+	eligibleCount := 0
+	for candidateID := range mesh.cells {
+		row, column := candidateID/candidates.columns, candidateID%candidates.columns
+		wantFrame := row == 0 || row == candidates.rows-1 || column == 0 || column == candidates.columns-1
+		if frame[candidateID] != wantFrame {
+			return nil, fmt.Errorf("candidate %d frame contact = %t, want %t", candidateID, frame[candidateID], wantFrame)
+		}
+		if !frame[candidateID] {
+			eligibleCount++
+		}
+	}
+	if landCount > eligibleCount {
+		return nil, fmt.Errorf("insufficient eligible candidate capacity: need %d land cells, have %d", landCount, eligibleCount)
 	}
 
-	root := nearestInteriorCandidate(sites, frame)
-	land := make([]bool, len(sites))
-	land[root] = true
-	order := []int{root}
-	intervals := make([]occupiedInterval, rows)
-	rootRow, rootColumn := root/columns, root%columns
+	scores := make([]float64, candidateCount)
+	for candidateID, cell := range mesh.cells {
+		scores[candidateID] = shape.score(cell.center)
+		if math.IsNaN(scores[candidateID]) || math.IsInf(scores[candidateID], 0) {
+			return nil, fmt.Errorf("candidate %d has non-finite blob score", candidateID)
+		}
+	}
+
+	root := nearestInteriorCandidate(candidates.sites, frame)
+	selected := make([]bool, candidateCount)
+	selected[root] = true
+	growthOrder := []int{root}
+	intervals := make([]occupiedInterval, candidates.rows)
+	rootRow, rootColumn := root/candidates.columns, root%candidates.columns
 	intervals[rootRow] = occupiedInterval{left: rootColumn, right: rootColumn, set: true}
 
-	for len(order) < landCount {
-		frontier := blobGrowthCandidates(columns, rows, intervals, land)
+	for len(growthOrder) < landCount {
+		frontier := blobGrowthCandidates(candidates.columns, candidates.rows, intervals, selected)
 		sortBlobCandidates(frontier, scores)
 
 		chosen := -1
-		for _, candidate := range frontier {
-			if hasSelectedNeighbor(candidate, neighbors, land) {
-				chosen = candidate
+		for _, candidateID := range frontier {
+			if hasSelectedNeighbor(candidateID, neighbors, selected) {
+				chosen = candidateID
 				break
 			}
 		}
 		if chosen == -1 {
-			return candidateBlob{}, fmt.Errorf("blob selection stalled after %d of %d land cells", len(order), landCount)
+			return nil, fmt.Errorf("blob selection stalled after %d of %d land cells", len(growthOrder), landCount)
 		}
 
-		land[chosen] = true
-		order = append(order, chosen)
-		row, column := chosen/columns, chosen%columns
+		selected[chosen] = true
+		growthOrder = append(growthOrder, chosen)
+		row, column := chosen/candidates.columns, chosen%candidates.columns
 		if !intervals[row].set {
 			intervals[row] = occupiedInterval{left: column, right: column, set: true}
 		} else {
@@ -103,10 +158,57 @@ func selectCandidateBlob(landCount int, seed uint64) (candidateBlob, error) {
 		}
 	}
 
-	return candidateBlob{
-		columns: columns, rows: rows, sites: sites, geometry: geometry,
-		land: land, frame: frame, order: order,
-	}, nil
+	selectedIDs := make([]int, 0, landCount)
+	for candidateID, isSelected := range selected {
+		if isSelected {
+			selectedIDs = append(selectedIDs, candidateID)
+		}
+	}
+	return selectedIDs, nil
+}
+
+func candidateMeshTopology(mesh islandMesh) ([][]int, []bool, error) {
+	neighbors := make([][]int, len(mesh.cells))
+	frame := make([]bool, len(mesh.cells))
+	for edgeID, edge := range mesh.edges {
+		firstCorner, secondCorner := edge.cornerIDs[0], edge.cornerIDs[1]
+		if firstCorner < 0 || firstCorner >= len(mesh.corners) || secondCorner < 0 || secondCorner >= len(mesh.corners) {
+			return nil, nil, fmt.Errorf("candidate mesh edge %d refers to unknown corner %v", edgeID, edge.cornerIDs)
+		}
+		if !finitePoint(mesh.corners[firstCorner]) || !finitePoint(mesh.corners[secondCorner]) {
+			return nil, nil, fmt.Errorf("candidate mesh edge %d has a non-finite endpoint", edgeID)
+		}
+		if pointDistance(mesh.corners[firstCorner], mesh.corners[secondCorner]) <= geometryTolerance {
+			return nil, nil, fmt.Errorf("candidate mesh edge %d has non-positive length within tolerance", edgeID)
+		}
+		if len(edge.siteIndexes) < 1 || len(edge.siteIndexes) > 2 {
+			return nil, nil, fmt.Errorf("candidate mesh edge %d has %d incident candidates", edgeID, len(edge.siteIndexes))
+		}
+		for _, candidateID := range edge.siteIndexes {
+			if candidateID < 0 || candidateID >= len(mesh.cells) {
+				return nil, nil, fmt.Errorf("candidate mesh edge %d refers to unknown candidate %d", edgeID, candidateID)
+			}
+		}
+		if len(edge.siteIndexes) == 1 {
+			frame[edge.siteIndexes[0]] = true
+			continue
+		}
+		first, second := edge.siteIndexes[0], edge.siteIndexes[1]
+		if first >= second {
+			return nil, nil, fmt.Errorf("candidate mesh edge %d has non-canonical incidence %v", edgeID, edge.siteIndexes)
+		}
+		neighbors[first] = append(neighbors[first], second)
+		neighbors[second] = append(neighbors[second], first)
+	}
+	for candidateID := range neighbors {
+		sort.Ints(neighbors[candidateID])
+		for neighborIndex := 1; neighborIndex < len(neighbors[candidateID]); neighborIndex++ {
+			if neighbors[candidateID][neighborIndex-1] == neighbors[candidateID][neighborIndex] {
+				return nil, nil, fmt.Errorf("candidate mesh repeats adjacency between %d and %d", candidateID, neighbors[candidateID][neighborIndex])
+			}
+		}
+	}
+	return neighbors, frame, nil
 }
 
 func candidateGridDimensions(landCount int) (int, int, error) {

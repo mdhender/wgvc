@@ -27,6 +27,192 @@ func TestCandidateBlobCorpus(t *testing.T) {
 	}
 }
 
+func TestSelectCandidateCellsCorpus(t *testing.T) {
+	counts := []int{1, 2, 3, 7, 17, 53, 128, 256}
+	seeds := []uint64{0, 1, 42, 0xdeadbeef}
+	for _, count := range counts {
+		for _, seed := range seeds {
+			t.Run(fmt.Sprintf("n%d/s%d", count, seed), func(t *testing.T) {
+				candidates, mesh, shape := candidateSelectionFixture(t, count, seed)
+				originalCandidates := cloneCandidateSitePlan(candidates)
+				originalMesh := cloneIslandMesh(mesh)
+
+				selected, err := selectCandidateCells(count, candidates, mesh, shape)
+				if err != nil {
+					t.Fatalf("selectCandidateCells() error = %v", err)
+				}
+				if !reflect.DeepEqual(candidates, originalCandidates) {
+					t.Fatal("selection mutated candidate inputs")
+				}
+				if !reflect.DeepEqual(mesh, originalMesh) {
+					t.Fatal("selection mutated candidate mesh")
+				}
+				if len(selected) != count {
+					t.Fatalf("selected %d candidates, want %d", len(selected), count)
+				}
+
+				land := make([]bool, len(mesh.cells))
+				for selectionIndex, candidateID := range selected {
+					if selectionIndex > 0 && selected[selectionIndex-1] >= candidateID {
+						t.Fatalf("selected IDs are not in canonical original-candidate order: %v", selected)
+					}
+					land[candidateID] = true
+				}
+				neighbors, frame, err := candidateMeshTopology(mesh)
+				if err != nil {
+					t.Fatalf("candidateMeshTopology() error = %v", err)
+				}
+				for _, candidateID := range selected {
+					if frame[candidateID] {
+						t.Errorf("selected candidate %d touches the clipping frame", candidateID)
+					}
+				}
+				assertSelectionConnected(t, land, neighbors, count)
+				assertWaterReachesFrame(t, land, frame, neighbors)
+
+				repeated, err := selectCandidateCells(count, candidates, mesh, shape)
+				if err != nil {
+					t.Fatalf("repeated selectCandidateCells() error = %v", err)
+				}
+				if !reflect.DeepEqual(repeated, selected) {
+					t.Fatalf("repeated selection = %v, want %v", repeated, selected)
+				}
+			})
+		}
+	}
+}
+
+func TestSelectCandidateCellsUsesCentralRootAndCandidateTieBreak(t *testing.T) {
+	sites := []Point{
+		{X: 0.25, Y: 0.25},
+		{X: 0.75, Y: 0.25},
+		{X: 0.25, Y: 0.75},
+		{X: 0.75, Y: 0.75},
+	}
+	frame := make([]bool, len(sites))
+	if got, want := nearestInteriorCandidate(sites, frame), 0; got != want {
+		t.Fatalf("equal-distance root = %d, want candidate-index tie winner %d", got, want)
+	}
+
+	frontier := []int{9, 4, 7, 2}
+	sortBlobCandidates(frontier, make([]float64, 10))
+	if want := []int{2, 4, 7, 9}; !reflect.DeepEqual(frontier, want) {
+		t.Fatalf("equal-score frontier = %v, want %v", frontier, want)
+	}
+}
+
+func TestCandidateMeshTopologyUsesOnlyPositiveLengthSharedEdges(t *testing.T) {
+	mesh := islandMesh{
+		cells:   make([]meshCell, 2),
+		corners: []Point{{X: 0, Y: 0}, {X: 2 * geometryTolerance, Y: 0}, {X: 0, Y: 1}},
+		edges: []meshEdge{
+			{cornerIDs: [2]int{0, 1}, siteIndexes: []int{0}},
+			{cornerIDs: [2]int{0, 2}, siteIndexes: []int{1}},
+		},
+	}
+	neighbors, _, err := candidateMeshTopology(mesh)
+	if err != nil {
+		t.Fatalf("corner-contact topology error = %v", err)
+	}
+	if len(neighbors[0]) != 0 || len(neighbors[1]) != 0 {
+		t.Fatalf("corner-only contact created adjacency: %v", neighbors)
+	}
+
+	mesh.edges = append(mesh.edges, meshEdge{
+		cornerIDs:   [2]int{0, 1},
+		siteIndexes: []int{0, 1},
+	})
+	neighbors, _, err = candidateMeshTopology(mesh)
+	if err != nil {
+		t.Fatalf("positive-length narrow connection error = %v", err)
+	}
+	if want := [][]int{{1}, {0}}; !reflect.DeepEqual(neighbors, want) {
+		t.Fatalf("narrow shared-edge neighbors = %v, want %v", neighbors, want)
+	}
+}
+
+func TestBlobGrowthCandidatesExcludeGapThatCouldBecomeLake(t *testing.T) {
+	const columns, rows = 5, 5
+	intervals := make([]occupiedInterval, rows)
+	intervals[1] = occupiedInterval{left: 1, right: 3, set: true}
+	intervals[2] = occupiedInterval{left: 1, right: 1, set: true}
+	intervals[3] = occupiedInterval{left: 1, right: 3, set: true}
+	land := make([]bool, columns*rows)
+	for _, candidateID := range []int{6, 7, 8, 11, 16, 17, 18} {
+		land[candidateID] = true
+	}
+
+	frontier := blobGrowthCandidates(columns, rows, intervals, land)
+	if containsInt(frontier, 13) {
+		t.Fatalf("frontier %v includes candidate 13, which skips the row gap at candidate 12", frontier)
+	}
+	if !containsInt(frontier, 12) {
+		t.Fatalf("frontier %v omits interval-extending candidate 12", frontier)
+	}
+}
+
+func TestSelectCandidateCellsRejectsMalformedMeshAndInsufficientCapacity(t *testing.T) {
+	candidates, mesh, shape := candidateSelectionFixture(t, 7, 42)
+
+	t.Run("malformed incidence", func(t *testing.T) {
+		broken := cloneIslandMesh(mesh)
+		broken.edges[0].siteIndexes = nil
+		if _, err := selectCandidateCells(7, candidates, broken, shape); err == nil || !strings.Contains(err.Error(), "edge 0") {
+			t.Fatalf("selectCandidateCells() error = %v, want contextual edge-incidence error", err)
+		}
+	})
+
+	t.Run("non-positive edge", func(t *testing.T) {
+		broken := cloneIslandMesh(mesh)
+		broken.edges[0].cornerIDs[1] = broken.edges[0].cornerIDs[0]
+		if _, err := selectCandidateCells(7, candidates, broken, shape); err == nil || !strings.Contains(err.Error(), "non-positive length") {
+			t.Fatalf("selectCandidateCells() error = %v, want edge-length error", err)
+		}
+	})
+
+	t.Run("capacity", func(t *testing.T) {
+		capacity := (candidates.columns - 2) * (candidates.rows - 2)
+		if _, err := selectCandidateCells(capacity+1, candidates, mesh, shape); err == nil || !strings.Contains(err.Error(), "insufficient eligible candidate capacity") {
+			t.Fatalf("selectCandidateCells() error = %v, want capacity error", err)
+		}
+	})
+}
+
+func candidateSelectionFixture(t *testing.T, landCount int, seed uint64) (candidateSitePlan, islandMesh, blobShape) {
+	t.Helper()
+	candidates, err := planCandidateSites(landCount, candidateRandom(seed, 0))
+	if err != nil {
+		t.Fatalf("planCandidateSites() error = %v", err)
+	}
+	mesh, err := tessellateIsland(0, candidates.sites)
+	if err != nil {
+		t.Fatalf("tessellateIsland() error = %v", err)
+	}
+	return candidates, mesh, generateBlobShape(blobShapeRandom(seed, 0))
+}
+
+func cloneCandidateSitePlan(source candidateSitePlan) candidateSitePlan {
+	clone := source
+	clone.sites = append([]Point(nil), source.sites...)
+	return clone
+}
+
+func cloneIslandMesh(source islandMesh) islandMesh {
+	clone := source
+	clone.corners = append([]Point(nil), source.corners...)
+	clone.cells = make([]meshCell, len(source.cells))
+	for cellID, cell := range source.cells {
+		clone.cells[cellID] = cell
+		clone.cells[cellID].cornerIDs = append([]int(nil), cell.cornerIDs...)
+	}
+	clone.edges = make([]meshEdge, len(source.edges))
+	for edgeID, edge := range source.edges {
+		clone.edges[edgeID] = edge
+		clone.edges[edgeID].siteIndexes = append([]int(nil), edge.siteIndexes...)
+	}
+	return clone
+}
+
 func TestCandidateBlobIsDeterministicIncludingScoreTies(t *testing.T) {
 	first, err := selectCandidateBlob(53, 42)
 	if err != nil {

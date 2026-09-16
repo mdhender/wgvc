@@ -45,6 +45,19 @@ omitted interior cell can move horizontally through omitted cells to the
 one-cell frame ring. These invariants establish termination and exterior-water
 connectivity independently of the fixed-seed corpus.
 
+The production selection boundary accepts the canonical complete candidate
+mesh, its original row-major candidate plan, the requested land quota, and the
+already-derived shape parameters. It validates edge incidence and grid
+connectivity without mutating those inputs. Only a two-cell, positive-length
+canonical mesh edge creates adjacency; sharing a corner does not. Every cell
+incident to a one-cell clipping-frame edge is ineligible.
+
+Root choice minimizes distance from the original candidate site to `(0.5,
+0.5)`, breaking equal-distance ties by original candidate index. Frontier
+ranking uses the score above, again breaking ties by original candidate index.
+Growth order is private: the stage returns exactly the requested IDs sorted in
+ascending original-candidate order for deterministic downstream compaction.
+
 ## Evidence and limits
 
 The corpus covers counts `1`, `2`, `3`, prime and non-square counts, tens of
