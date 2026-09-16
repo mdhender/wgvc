@@ -84,6 +84,20 @@ medium, large, and multi-island fixtures without terrain colors. See
 [Blob-island generation](docs/blob-islands.md) for the pipeline, guarantees,
 resolution limits, regression fixtures, and reproduction command.
 
+## Render a map
+
+The `wgvc-render` command generates a world and writes an SVG map by default:
+
+```sh
+go run ./cmd/wgvc-render -seed 42 -provinces 137 -islands 11 -output world
+```
+
+Use `-format png` for `world.png`, or `-format both` to write both
+`world.svg` and `world.png`. The `-output` value is a path without an
+extension. `-width` and `-height` set both SVG and PNG dimensions in pixels.
+Both formats are rendered from the same scene and include terrain fills, thin
+cell borders, and a heavier coastline.
+
 ## Terrain
 
 Terrain is generated from a seeded two-dimensional value-noise field in world
