@@ -9,17 +9,17 @@ under the MIT License, which is compatible with this repository's MIT
 license.
 
 The retained harness in `geometry_backend_test.go` proves the backend behavior
-needed by a later production wrapper. It covers horizontal and vertical
-two-site cases, horizontal and vertical collinear sites, a near-collinear
-case, four cocircular sites, an equal-axis grid, repeatability, and several
-irregular separated point sets. It verifies finite closed counterclockwise
-rings, one cell per distinct site, complete unit-square area, nondegenerate
-edges, and consistent edge-to-cell incidence.
+used by the production wrapper in `geometry.go`. It covers horizontal and
+vertical two-site cases, horizontal and vertical collinear sites, a
+near-collinear case, four cocircular sites, an equal-axis grid, repeatability,
+and several irregular separated point sets. It verifies finite closed
+counterclockwise rings, one cell per distinct site, complete unit-square area,
+nondegenerate edges, and consistent edge-to-cell incidence.
 
 ## Wrapper contract
 
-The production wrapper should keep backend types private and apply the same
-rules demonstrated by the harness:
+The production wrapper keeps backend types private and applies the same rules
+demonstrated by the harness:
 
 - Normalize each island's clipping rectangle and finite, distinct sites to the
   open unit square before invoking the backend. Sites on the clipping boundary
@@ -41,16 +41,25 @@ rules demonstrated by the harness:
   is therefore not adjacency; the cocircular fixture proves that the two
   diagonal pairs are not neighbors.
 
+Each island produces a normalized private mesh. Corner IDs are assigned by
+lexicographic coordinate order. Undirected edge endpoints and incident site
+indexes are ascending, and edges are ordered by their endpoint IDs. Cell rings
+are counterclockwise, remain in caller site order, and rotate to begin at their
+lowest corner ID. Coordinates are not rounded or merged. Mesh IDs remain local
+to an island; conversion through its footprint and assignment of public
+world-global IDs belong to the later generation integration stage.
+
 ## Numerical policy
 
 Geometry is evaluated only after normalization to `[0,1]²`. Comparisons use an
 absolute tolerance of `1e-9`, matching the backend's clipping and cell-closing
-epsilon at that scale. Coordinates are never compared exactly except when
-mapping unchanged input sites and rejecting exact duplicates. Output is
-invalid if it contains a non-finite coordinate, an edge of length at most
-`1e-9`, an open ring, a non-positive-area cell, a point outside the clipping
-square by more than the tolerance, or total cell area differing from one by
-more than the tolerance.
+epsilon at that scale. Exact comparisons map unchanged input sites, reject
+exact duplicates, and identify endpoints that the backend reports as shared;
+coordinates are never rounded or tolerance-merged. Output is invalid if it
+contains a non-finite coordinate, an edge of length at most `1e-9`, an open
+ring, a non-positive-area cell, a point outside the clipping square by more
+than the tolerance, or total cell area differing from one by more than the
+tolerance.
 
 The site planner remains responsible for producing separated sites. This
 decision does not define a policy for nearly coincident sites.

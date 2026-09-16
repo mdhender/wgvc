@@ -6,138 +6,11 @@ import (
 	"reflect"
 	"sort"
 	"testing"
-
-	voronoi "github.com/pzsz/voronoi"
 )
 
 // backendTolerance matches the selected backend's absolute epsilon after all
 // sites and the clipping rectangle have been normalized to the unit square.
-const backendTolerance = 1e-9
-
-type backendGeometry struct {
-	cells []backendCell
-	edges []backendEdge
-}
-
-type backendCell struct {
-	siteIndex int
-	ring      []Point
-}
-
-type backendEdge struct {
-	ends        [2]Point
-	siteIndexes []int
-}
-
-// computeBackendGeometry is a retained prototype of the production wrapper.
-// It deliberately keeps backend types out of the package API.
-func computeBackendGeometry(sites []Point) (backendGeometry, error) {
-	if len(sites) == 0 {
-		return backendGeometry{}, fmt.Errorf("at least one site is required")
-	}
-
-	siteIndexes := make(map[Point]int, len(sites))
-	backendSites := make([]voronoi.Vertex, len(sites))
-	for i, site := range sites {
-		if !finitePoint(site) || site.X <= 0 || site.X >= 1 || site.Y <= 0 || site.Y >= 1 {
-			return backendGeometry{}, fmt.Errorf("site %d is outside the open finite unit square: %+v", i, site)
-		}
-		if previous, exists := siteIndexes[site]; exists {
-			return backendGeometry{}, fmt.Errorf("sites %d and %d are duplicates", previous, i)
-		}
-		siteIndexes[site] = i
-		backendSites[i] = voronoi.Vertex{X: site.X, Y: site.Y}
-	}
-
-	if len(sites) == 1 {
-		return oneSiteGeometry(), nil
-	}
-
-	// ComputeDiagram sorts its argument in place. Passing a newly allocated
-	// slice protects caller order and caller-owned storage.
-	diagram := voronoi.ComputeDiagram(backendSites, voronoi.NewBBox(0, 1, 0, 1), true)
-	if len(diagram.Cells) != len(sites) {
-		return backendGeometry{}, fmt.Errorf("backend returned %d cells for %d distinct sites", len(diagram.Cells), len(sites))
-	}
-
-	geometry := backendGeometry{cells: make([]backendCell, len(sites))}
-	seen := make([]bool, len(sites))
-	cellIndexes := make(map[*voronoi.Cell]int, len(diagram.Cells))
-	for _, cell := range diagram.Cells {
-		index, ok := siteIndexes[Point{X: cell.Site.X, Y: cell.Site.Y}]
-		if !ok {
-			return backendGeometry{}, fmt.Errorf("backend returned an unknown site: %+v", cell.Site)
-		}
-		if seen[index] {
-			return backendGeometry{}, fmt.Errorf("backend returned site %d more than once", index)
-		}
-		if len(cell.Halfedges) < 3 {
-			return backendGeometry{}, fmt.Errorf("backend returned only %d edges for site %d", len(cell.Halfedges), index)
-		}
-
-		ring := make([]Point, len(cell.Halfedges))
-		for i, halfedge := range cell.Halfedges {
-			start := backendPoint(halfedge.GetStartpoint())
-			end := backendPoint(halfedge.GetEndpoint())
-			next := backendPoint(cell.Halfedges[(i+1)%len(cell.Halfedges)].GetStartpoint())
-			if !pointsNear(end, next) {
-				return backendGeometry{}, fmt.Errorf("site %d has an open ring between %+v and %+v", index, end, next)
-			}
-			ring[i] = start
-		}
-		if signedArea(ring) < 0 {
-			reversePoints(ring)
-		}
-
-		geometry.cells[index] = backendCell{siteIndex: index, ring: ring}
-		cellIndexes[cell] = index
-		seen[index] = true
-	}
-
-	geometry.edges = make([]backendEdge, 0, len(diagram.Edges))
-	for _, edge := range diagram.Edges {
-		if edge.LeftCell == nil {
-			return backendGeometry{}, fmt.Errorf("backend edge has no incident cell")
-		}
-		leftIndex, ok := cellIndexes[edge.LeftCell]
-		if !ok {
-			return backendGeometry{}, fmt.Errorf("backend edge refers to an unknown left cell")
-		}
-		incidence := []int{leftIndex}
-		if edge.RightCell != nil {
-			rightIndex, ok := cellIndexes[edge.RightCell]
-			if !ok {
-				return backendGeometry{}, fmt.Errorf("backend edge refers to an unknown right cell")
-			}
-			incidence = append(incidence, rightIndex)
-			sort.Ints(incidence)
-		}
-		geometry.edges = append(geometry.edges, backendEdge{
-			ends: [2]Point{
-				backendPoint(edge.Va.Vertex),
-				backendPoint(edge.Vb.Vertex),
-			},
-			siteIndexes: incidence,
-		})
-	}
-
-	return geometry, nil
-}
-
-func oneSiteGeometry() backendGeometry {
-	ring := []Point{{X: 0, Y: 0}, {X: 1, Y: 0}, {X: 1, Y: 1}, {X: 0, Y: 1}}
-	edges := make([]backendEdge, len(ring))
-	for i := range ring {
-		edges[i] = backendEdge{
-			ends:        [2]Point{ring[i], ring[(i+1)%len(ring)]},
-			siteIndexes: []int{0},
-		}
-	}
-	return backendGeometry{
-		cells: []backendCell{{siteIndex: 0, ring: ring}},
-		edges: edges,
-	}
-}
+const backendTolerance = geometryTolerance
 
 func TestGeometryBackendOneSiteUsesClippingSquare(t *testing.T) {
 	geometry := mustComputeBackendGeometry(t, []Point{{X: 0.37, Y: 0.61}})
@@ -433,41 +306,6 @@ func ringHasEdge(ring []Point, ends [2]Point) bool {
 	return false
 }
 
-func backendPoint(vertex voronoi.Vertex) Point {
-	return Point{X: vertex.X, Y: vertex.Y}
-}
-
-func finitePoint(point Point) bool {
-	return !math.IsNaN(point.X) && !math.IsNaN(point.Y) && !math.IsInf(point.X, 0) && !math.IsInf(point.Y, 0)
-}
-
-func pointsNear(first, second Point) bool {
-	return near(first.X, second.X) && near(first.Y, second.Y)
-}
-
-func near(first, second float64) bool {
-	return math.Abs(first-second) <= backendTolerance
-}
-
-func pointDistance(first, second Point) float64 {
-	return math.Hypot(first.X-second.X, first.Y-second.Y)
-}
-
-func signedArea(ring []Point) float64 {
-	twiceArea := 0.0
-	for i, point := range ring {
-		next := ring[(i+1)%len(ring)]
-		twiceArea += point.X*next.Y - next.X*point.Y
-	}
-	return twiceArea / 2
-}
-
 func polygonArea(ring []Point) float64 {
 	return math.Abs(signedArea(ring))
-}
-
-func reversePoints(points []Point) {
-	for left, right := 0, len(points)-1; left < right; left, right = left+1, right-1 {
-		points[left], points[right] = points[right], points[left]
-	}
 }

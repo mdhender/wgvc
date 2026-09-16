@@ -27,9 +27,7 @@ type islandLayout struct {
 }
 
 type tessellation struct {
-	corners []Corner
-	edges   []Edge
-	rings   map[ProvinceID][]CornerID
+	islands []islandMesh
 }
 
 // allocateProvinces reserves one province per island, then apportions the

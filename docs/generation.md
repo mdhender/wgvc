@@ -5,9 +5,11 @@ satisfy `ProvinceCount >= IslandCount >= 1`. The current generation stage
 creates the exact requested number of canonical islands and provinces and
 allocates at least one province to every island. Private island planning now
 provides separated footprints and normalized province centers to the later
-geometry stage. Integration into `Generate`, geometry, and terrain generation
-remain deferred; public centers, corners, edges, and polygon rings therefore
-remain empty for now.
+geometry stage. Private geometry now turns those centers into canonical
+unit-square Voronoi meshes with shared corners, shared edges, and authoritative
+adjacency. Integration into `Generate`, world-space conversion, global ID
+assignment, and terrain generation remain deferred; public centers, corners,
+edges, and polygon rings therefore remain empty for now.
 
 ## Coordinates and topology
 
