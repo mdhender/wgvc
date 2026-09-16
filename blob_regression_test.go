@@ -39,8 +39,8 @@ func TestBlobShapeRegressionFixtures(t *testing.T) {
 		{
 			name:               "asymmetric_multi_island",
 			config:             Config{WorldSeed: 8675309, ProvinceCount: 128, IslandCount: 4},
-			wantCorners:        912,
-			wantEdges:          1360,
+			wantCorners:        906,
+			wantEdges:          1357,
 			wantProvinceCounts: []int{54, 36, 19, 19},
 			wantCoastlineEdges: []int{65, 43, 31, 35},
 			wantConcaveTurns:   []int{31, 20, 13, 14},
@@ -205,8 +205,10 @@ func isCoastlineEdge(world World, edge Edge, islandID IslandID) bool {
 	}
 	first := world.Provinces[edge.ProvinceIDs[0]]
 	second := world.Provinces[edge.ProvinceIDs[1]]
-	return first.IslandID == islandID && second.IslandID == islandID &&
-		(first.Terrain == TerrainWater) != (second.Terrain == TerrainWater)
+	if first.Terrain == TerrainWater {
+		first, second = second, first
+	}
+	return first.IslandID == islandID && first.Terrain != TerrainWater && second.Terrain == TerrainWater
 }
 
 func coastlineConcaveTurns(world World, loop []CornerID) int {
@@ -277,14 +279,14 @@ func renderBlobIslandGallery(t *testing.T) []byte {
 		{WorldSeed: 7, ProvinceCount: 4, IslandCount: 4},
 		{WorldSeed: 42, ProvinceCount: 53, IslandCount: 1},
 		{WorldSeed: 0xdeadbeef, ProvinceCount: 256, IslandCount: 1},
-		{WorldSeed: 8675309, ProvinceCount: 128, IslandCount: 4},
+		{WorldSeed: 0x0123456789abcdef, ProvinceCount: 137, IslandCount: 11},
 	}
 
 	var svg strings.Builder
 	svg.WriteString("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"940\" viewBox=\"0 0 1200 940\">\n")
 	svg.WriteString("<rect width=\"1200\" height=\"940\" fill=\"#f7f5ef\"/>\n")
 	svg.WriteString("<style>text{font-family:ui-monospace,monospace;fill:#17212b}.title{font-size:22px;font-weight:700}.label{font-size:14px}.panel{fill:#dcebf0;stroke:#9babb2;stroke-width:1}.province{stroke:#7b7567;stroke-width:.7;stroke-linejoin:round}.land{fill:#eadfbe}.water{fill:#c6e3ec;stroke:#83aab8}.coast{stroke:#24343d;stroke-width:2.4;stroke-linecap:round}</style>\n")
-	svg.WriteString("<text class=\"title\" x=\"24\" y=\"32\">Deterministic blob-island gallery — issue #15</text>\n")
+	svg.WriteString("<text class=\"title\" x=\"24\" y=\"32\">Deterministic islands in a continuous ocean — issue #16</text>\n")
 	for fixtureIndex, config := range fixtures {
 		world, err := Generate(config)
 		if err != nil {
@@ -319,7 +321,7 @@ func renderBlobIslandGallery(t *testing.T) []byte {
 		}
 		svg.WriteString("</g>\n")
 	}
-	svg.WriteString("<text class=\"label\" x=\"24\" y=\"900\">tan = land · blue = retained water provinces · heavy coastline · no land terrain coloring</text>\n")
+	svg.WriteString("<text class=\"label\" x=\"24\" y=\"900\">tan = land · blue = one world-level ocean mesh · heavy coastline · no land terrain coloring</text>\n")
 	svg.WriteString("<text class=\"label\" x=\"24\" y=\"924\">reproduce: WGVC_UPDATE_BLOB_GALLERY=1 go test -run TestBlobIslandGallery</text>\n")
 	svg.WriteString("</svg>\n")
 	return []byte(svg.String())

@@ -2,9 +2,9 @@ package wgvc
 
 import "fmt"
 
-// Generate constructs a deterministic world with separated islands, clipped
-// Voronoi provinces, and spatially correlated terrain. All IDs equal their
-// indexes in the corresponding world collections.
+// Generate constructs a deterministic world with separated islands, one
+// world-level Voronoi mesh, and spatially correlated terrain. All IDs equal
+// their indexes in the corresponding world collections.
 func Generate(config Config) (World, error) {
 	if err := config.validate(); err != nil {
 		return World{}, err
@@ -26,66 +26,105 @@ func Generate(config Config) (World, error) {
 	if err != nil {
 		return World{}, fmt.Errorf("place islands: %w", err)
 	}
+	mesh, islandIDs, land, err := tessellateWorld(layout)
+	if err != nil {
+		return World{}, fmt.Errorf("tessellate world: %w", err)
+	}
 
 	world := World{
 		Islands: make([]Island, config.IslandCount),
 	}
 	for islandIndex, placed := range layout.islands {
-		mesh := placed.candidateMesh
-		provinceOffset := len(world.Provinces)
-		cornerOffset := len(world.Corners)
-		land := make([]bool, len(mesh.cells))
-		for _, candidateID := range placed.landCandidateIDs {
-			land[candidateID] = true
-		}
-
-		island := Island{
-			ID:          IslandID(islandIndex),
+		world.Islands[islandIndex] = Island{
+			ID:          placed.id,
 			ProvinceIDs: make([]ProvinceID, 0, placed.landProvinceCount),
 		}
-		for localCornerID, point := range mesh.corners {
-			cornerID := CornerID(cornerOffset + localCornerID)
-			world.Corners = append(world.Corners, Corner{
-				ID:    cornerID,
-				Point: point,
-			})
+	}
+	for cornerID, point := range mesh.corners {
+		world.Corners = append(world.Corners, Corner{ID: CornerID(cornerID), Point: point})
+	}
+	for cellID, cell := range mesh.cells {
+		provinceID := ProvinceID(cellID)
+		terrain := TerrainWater
+		if land[cellID] {
+			world.Islands[islandIDs[cellID]].ProvinceIDs = append(world.Islands[islandIDs[cellID]].ProvinceIDs, provinceID)
+			terrain = TerrainPlains
 		}
-		for localProvinceID, cell := range mesh.cells {
-			provinceID := ProvinceID(provinceOffset + localProvinceID)
-			terrain := TerrainWater
-			if land[localProvinceID] {
-				island.ProvinceIDs = append(island.ProvinceIDs, provinceID)
-				terrain = TerrainPlains
-			}
-			cornerIDs := make([]CornerID, len(cell.cornerIDs))
-			for ringIndex, localCornerID := range cell.cornerIDs {
-				cornerIDs[ringIndex] = CornerID(cornerOffset + localCornerID)
-			}
-			world.Provinces = append(world.Provinces, Province{
-				ID:        provinceID,
-				IslandID:  island.ID,
-				Center:    cell.center,
-				CornerIDs: cornerIDs,
-				Terrain:   terrain,
-			})
+		cornerIDs := make([]CornerID, len(cell.cornerIDs))
+		for ringIndex, cornerID := range cell.cornerIDs {
+			cornerIDs[ringIndex] = CornerID(cornerID)
 		}
-		for _, edge := range mesh.edges {
-			provinceIDs := make([]ProvinceID, len(edge.siteIndexes))
-			for incidenceIndex, localProvinceID := range edge.siteIndexes {
-				provinceIDs[incidenceIndex] = ProvinceID(provinceOffset + localProvinceID)
-			}
-			edgeID := EdgeID(len(world.Edges))
-			world.Edges = append(world.Edges, Edge{
-				ID: edgeID,
-				CornerIDs: [2]CornerID{
-					CornerID(cornerOffset + edge.cornerIDs[0]),
-					CornerID(cornerOffset + edge.cornerIDs[1]),
-				},
-				ProvinceIDs: provinceIDs,
-			})
+		world.Provinces = append(world.Provinces, Province{
+			ID:        provinceID,
+			IslandID:  islandIDs[cellID],
+			Center:    cell.center,
+			CornerIDs: cornerIDs,
+			Terrain:   terrain,
+		})
+	}
+	for edgeIndex, edge := range mesh.edges {
+		provinceIDs := make([]ProvinceID, len(edge.siteIndexes))
+		for incidenceIndex, cellID := range edge.siteIndexes {
+			provinceIDs[incidenceIndex] = ProvinceID(cellID)
 		}
-		world.Islands[islandIndex] = island
+		world.Edges = append(world.Edges, Edge{
+			ID:          EdgeID(edgeIndex),
+			CornerIDs:   [2]CornerID{CornerID(edge.cornerIDs[0]), CornerID(edge.cornerIDs[1])},
+			ProvinceIDs: provinceIDs,
+		})
 	}
 	assignTerrain(&world, config.WorldSeed)
 	return world, nil
+}
+
+// tessellateWorld uses every placed candidate site as a generator in one
+// square enclosing the complete layout. Private frame sites still constrain
+// each coastline, while their world-level water cells bridge the former gaps
+// between independently clipped candidate envelopes.
+func tessellateWorld(layout islandLayout) (islandMesh, []IslandID, []bool, error) {
+	bounds := squareBounds(layout.bounds)
+	side := bounds.max.X - bounds.min.X
+	normalize := func(point Point) Point {
+		return Point{X: (point.X - bounds.min.X) / side, Y: (point.Y - bounds.min.Y) / side}
+	}
+
+	count := 0
+	for _, island := range layout.islands {
+		count += len(island.candidateMesh.cells)
+	}
+	sites := make([]Point, 0, count)
+	islandIDs := make([]IslandID, 0, count)
+	land := make([]bool, 0, count)
+	for _, island := range layout.islands {
+		selected := make([]bool, len(island.candidateMesh.cells))
+		for _, candidateID := range island.landCandidateIDs {
+			selected[candidateID] = true
+		}
+		for candidateID, cell := range island.candidateMesh.cells {
+			sites = append(sites, normalize(cell.center))
+			islandIDs = append(islandIDs, island.id)
+			land = append(land, selected[candidateID])
+		}
+	}
+
+	mesh, err := tessellateIsland(0, sites)
+	if err != nil {
+		return islandMesh{}, nil, nil, err
+	}
+	return transformMesh(mesh, uniformTransform{scale: side, translation: bounds.min}), islandIDs, land, nil
+}
+
+func squareBounds(bounds rectangle) rectangle {
+	width := bounds.max.X - bounds.min.X
+	height := bounds.max.Y - bounds.min.Y
+	if width < height {
+		padding := (height - width) / 2
+		bounds.min.X -= padding
+		bounds.max.X += padding
+	} else if height < width {
+		padding := (width - height) / 2
+		bounds.min.Y -= padding
+		bounds.max.Y += padding
+	}
+	return bounds
 }

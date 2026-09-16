@@ -45,10 +45,12 @@ type Island struct {
 	ProvinceIDs []ProvinceID
 }
 
-// Province is one land or water cell. IslandID identifies the candidate map
-// that produced it; only land provinces appear in Island.ProvinceIDs. Center
-// is the generating point used for its Voronoi cell, not the polygon centroid.
-// CornerIDs is a counterclockwise polygon ring without a repeated closing corner.
+// Province is one land or water cell. IslandID identifies the island whose
+// private candidate set supplied its generating site; water cells from
+// different candidate sets share one world mesh. Only land provinces appear
+// in Island.ProvinceIDs. Center is the generating point used for its Voronoi
+// cell, not the polygon centroid. CornerIDs is a counterclockwise polygon ring
+// without a repeated closing corner.
 type Province struct {
 	ID        ProvinceID
 	IslandID  IslandID
@@ -64,9 +66,9 @@ type Corner struct {
 }
 
 // Edge is an undirected geometric boundary, never a route. CornerIDs contains
-// its two endpoints. ProvinceIDs contains one province at the outside of a
-// candidate map or two provinces inside it. A coastline has one land and one
-// water province; incidence is authoritative geometric adjacency.
+// its two endpoints. ProvinceIDs contains one province at the outside of the
+// world or two provinces inside it. A coastline has one land and one water
+// province; incidence is authoritative geometric adjacency.
 type Edge struct {
 	ID          EdgeID
 	CornerIDs   [2]CornerID

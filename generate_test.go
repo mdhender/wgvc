@@ -56,7 +56,7 @@ func TestGenerateValidWorlds(t *testing.T) {
 	}
 }
 
-func TestGeneratePreservesCandidateGeometry(t *testing.T) {
+func TestGenerateUsesPlacedCandidateSitesInOneWorldMesh(t *testing.T) {
 	config := Config{WorldSeed: 42, ProvinceCount: 20, IslandCount: 4}
 	allocations, err := allocateProvinces(config.ProvinceCount, config.IslandCount)
 	if err != nil {
@@ -72,40 +72,40 @@ func TestGeneratePreservesCandidateGeometry(t *testing.T) {
 		t.Fatalf("Generate() error = %v", err)
 	}
 
-	provinceOffset, cornerOffset, edgeOffset := 0, 0, 0
+	provinceOffset := 0
 	for islandIndex, placed := range layout.islands {
-		mesh := placed.candidateMesh
-		for localCornerID, point := range mesh.corners {
-			if got, want := world.Corners[cornerOffset+localCornerID].Point, point; got != want {
-				t.Errorf("island %d corner %d = %+v, want %+v", islandIndex, localCornerID, got, want)
+		selected := make([]bool, len(placed.candidateMesh.cells))
+		for _, candidateID := range placed.landCandidateIDs {
+			selected[candidateID] = true
+		}
+		for candidateID, cell := range placed.candidateMesh.cells {
+			province := world.Provinces[provinceOffset+candidateID]
+			if !pointsNear(province.Center, cell.center) {
+				t.Errorf("island %d candidate %d center = %+v, want %+v", islandIndex, candidateID, province.Center, cell.center)
+			}
+			if province.IslandID != placed.id {
+				t.Errorf("island %d candidate %d owner = %d", islandIndex, candidateID, province.IslandID)
+			}
+			if gotLand := province.Terrain != TerrainWater; gotLand != selected[candidateID] {
+				t.Errorf("island %d candidate %d land = %t, want %t", islandIndex, candidateID, gotLand, selected[candidateID])
 			}
 		}
-		for localProvinceID, cell := range mesh.cells {
-			province := world.Provinces[provinceOffset+localProvinceID]
-			if got, want := province.Center, cell.center; got != want {
-				t.Errorf("island %d province %d center = %+v, want %+v", islandIndex, localProvinceID, got, want)
-			}
-			for ringIndex, localCornerID := range cell.cornerIDs {
-				if got, want := province.CornerIDs[ringIndex], CornerID(cornerOffset+localCornerID); got != want {
-					t.Errorf("island %d province %d corner %d = %d, want %d", islandIndex, localProvinceID, ringIndex, got, want)
-				}
-			}
+		provinceOffset += len(placed.candidateMesh.cells)
+	}
+
+	sharedOcean := false
+	for _, edge := range world.Edges {
+		if len(edge.ProvinceIDs) != 2 {
+			continue
 		}
-		for localEdgeID, meshEdge := range mesh.edges {
-			edge := world.Edges[edgeOffset+localEdgeID]
-			wantCorners := [2]CornerID{CornerID(cornerOffset + meshEdge.cornerIDs[0]), CornerID(cornerOffset + meshEdge.cornerIDs[1])}
-			if edge.CornerIDs != wantCorners {
-				t.Errorf("island %d edge %d corners = %v, want %v", islandIndex, localEdgeID, edge.CornerIDs, wantCorners)
-			}
-			for incidenceIndex, localProvinceID := range meshEdge.siteIndexes {
-				if got, want := edge.ProvinceIDs[incidenceIndex], ProvinceID(provinceOffset+localProvinceID); got != want {
-					t.Errorf("island %d edge %d province %d = %d, want %d", islandIndex, localEdgeID, incidenceIndex, got, want)
-				}
-			}
+		first, second := world.Provinces[edge.ProvinceIDs[0]], world.Provinces[edge.ProvinceIDs[1]]
+		if first.IslandID != second.IslandID && first.Terrain == TerrainWater && second.Terrain == TerrainWater {
+			sharedOcean = true
+			break
 		}
-		provinceOffset += len(mesh.cells)
-		cornerOffset += len(mesh.corners)
-		edgeOffset += len(mesh.edges)
+	}
+	if !sharedOcean {
+		t.Fatal("world mesh has no water edge joining sites from different island candidate maps")
 	}
 }
 
@@ -155,7 +155,7 @@ func TestGenerateConcurrentCallsAreIndependent(t *testing.T) {
 }
 
 func TestGenerateKeepsWaterProvinces(t *testing.T) {
-	config := Config{WorldSeed: 0x0123456789abcdef, ProvinceCount: 128, IslandCount: 11}
+	config := Config{WorldSeed: 0x0123456789abcdef, ProvinceCount: 137, IslandCount: 11}
 	world, err := Generate(config)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
@@ -173,11 +173,8 @@ func TestGenerateKeepsWaterProvinces(t *testing.T) {
 	if land != config.ProvinceCount {
 		t.Errorf("land province count = %d, want %d", land, config.ProvinceCount)
 	}
-	if water != 390 {
-		t.Errorf("water province count = %d, want 390", water)
-	}
-	if got, want := len(world.Provinces), 518; got != want {
-		t.Fatalf("total province count = %d, want %d", got, want)
+	if water == 0 {
+		t.Error("world has no water provinces")
 	}
 }
 
@@ -232,8 +229,10 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 
 	edgesByCorners := make(map[[2]CornerID]EdgeID, len(world.Edges))
 	neighbors := make([][]ProvinceID, len(world.Provinces))
+	waterNeighbors := make([][]ProvinceID, len(world.Provinces))
 	edgeTraversals := make([][][2]CornerID, len(world.Edges))
 	cornerInProvince := make([]bool, len(world.Corners))
+	crossIslandWaterEdge := false
 	for edgeIndex, edge := range world.Edges {
 		if edge.ID != EdgeID(edgeIndex) {
 			t.Errorf("edge at index %d has ID %d", edgeIndex, edge.ID)
@@ -259,16 +258,34 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		if len(edge.ProvinceIDs) == 2 {
 			first, second := edge.ProvinceIDs[0], edge.ProvinceIDs[1]
 			if world.Provinces[first].IslandID != world.Provinces[second].IslandID {
-				t.Errorf("interior edge %d joins islands %d and %d", edge.ID, world.Provinces[first].IslandID, world.Provinces[second].IslandID)
+				if world.Provinces[first].Terrain != TerrainWater || world.Provinces[second].Terrain != TerrainWater {
+					t.Errorf("interior edge %d joins land across island site groups %d and %d", edge.ID, world.Provinces[first].IslandID, world.Provinces[second].IslandID)
+				}
+				crossIslandWaterEdge = true
 			}
 			if world.Provinces[first].Terrain != TerrainWater && world.Provinces[second].Terrain != TerrainWater {
 				neighbors[first] = append(neighbors[first], second)
 				neighbors[second] = append(neighbors[second], first)
 			}
+			if world.Provinces[first].Terrain == TerrainWater && world.Provinces[second].Terrain == TerrainWater {
+				waterNeighbors[first] = append(waterNeighbors[first], second)
+				waterNeighbors[second] = append(waterNeighbors[second], first)
+			}
 		}
+	}
+	if config.IslandCount > 1 && !crossIslandWaterEdge {
+		t.Error("world mesh has no cross-island water adjacency")
 	}
 
 	islandAreas := make([]float64, len(world.Islands))
+	totalArea := 0.0
+	minimum, maximum := world.Corners[0].Point, world.Corners[0].Point
+	for _, corner := range world.Corners[1:] {
+		minimum.X = math.Min(minimum.X, corner.Point.X)
+		minimum.Y = math.Min(minimum.Y, corner.Point.Y)
+		maximum.X = math.Max(maximum.X, corner.Point.X)
+		maximum.Y = math.Max(maximum.Y, corner.Point.Y)
+	}
 	for provinceIndex, province := range world.Provinces {
 		if province.ID != ProvinceID(provinceIndex) {
 			t.Errorf("province at index %d has ID %d", provinceIndex, province.ID)
@@ -311,6 +328,7 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		if area <= 0 {
 			t.Errorf("province %d signed area = %g, want positive", province.ID, area)
 		}
+		totalArea += area
 		if province.Terrain != TerrainWater {
 			islandAreas[province.IslandID] += area
 		}
@@ -320,6 +338,10 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 				break
 			}
 		}
+	}
+	worldArea := (maximum.X - minimum.X) * (maximum.Y - minimum.Y)
+	if math.Abs(totalArea-worldArea) > 1e-8*worldArea {
+		t.Errorf("province area sum = %.17g, world bounds area = %.17g", totalArea, worldArea)
 	}
 	for cornerID, used := range cornerInProvince {
 		if !used {
@@ -343,7 +365,38 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		}
 		assertIslandConnected(t, island, neighbors)
 	}
+	assertWaterConnected(t, world, waterNeighbors)
 	assertIslandsSeparated(t, world)
+}
+
+func assertWaterConnected(t *testing.T, world World, neighbors [][]ProvinceID) {
+	t.Helper()
+	first := ProvinceID(-1)
+	want := 0
+	for provinceID, province := range world.Provinces {
+		if province.Terrain != TerrainWater {
+			continue
+		}
+		want++
+		if first == -1 {
+			first = ProvinceID(provinceID)
+		}
+	}
+	seen := map[ProvinceID]bool{first: true}
+	queue := []ProvinceID{first}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		for _, neighbor := range neighbors[current] {
+			if !seen[neighbor] {
+				seen[neighbor] = true
+				queue = append(queue, neighbor)
+			}
+		}
+	}
+	if len(seen) != want {
+		t.Errorf("water adjacency component contains %d provinces, want %d", len(seen), want)
+	}
 }
 
 func assertIslandConnected(t *testing.T, island Island, neighbors [][]ProvinceID) {

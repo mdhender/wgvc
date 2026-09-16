@@ -43,10 +43,10 @@ ProvinceCount >= IslandCount >= 1
 ```
 
 Every successful call returns exactly the requested number of land provinces
-and islands, with at least one land province per island, plus the surrounding
-water provinces used to shape each island. Water provinces have
-`TerrainWater` and do not appear in `Island.ProvinceIDs`. For a fixed version of this
-generator, identical `Config` values produce deeply identical `World` values.
+and islands, with at least one land province per island, plus a world-level
+ocean mesh covering the space between and around them. Water provinces have
+`TerrainWater` and do not appear in `Island.ProvinceIDs`. For a fixed version
+of this generator, identical `Config` values produce deeply identical `World` values.
 Generation stages use independent deterministic random streams, so consuming
 randomness in terrain generation cannot perturb island placement or province
 tessellation. A newer generator version may intentionally change generated
@@ -63,8 +63,8 @@ The returned geometry is indexed:
   closing corner. `Province.Center` is its original Voronoi generating point,
   not its polygon centroid.
 - Corners and edges are shared objects. An `Edge` references two corners and
-  either one province at the outside of a candidate map or two provinces
-  inside it. A coastline edge joins one land province to one water province.
+  either one province at the outside of the world or two provinces inside it.
+  A coastline edge joins one land province to one water province.
 
 Interior edge incidence is authoritative **undirected geometric adjacency**:
 two provinces are adjacent when they share a boundary. It is not a game route.
@@ -72,8 +72,9 @@ Future routes may be directed, so `A -> B` and `B -> A` will be separate
 decisions rather than consequences of geometric adjacency.
 
 Each island is an irregular blob selected from a larger Voronoi map.
-Frame-touching and unselected cells are returned as water alongside the exact
-requested connected land cells. The coastline can form
+Frame-touching and unselected sites constrain its coastline, then all placed
+sites are tessellated together into one continuous world ocean alongside the
+exact requested connected land cells. The coastline can form
 bays and promontories while every province remains one convex polygon. A
 one-province island is therefore still one convex cell, and coastline detail
 increases with province count rather than adding rendering-only noise.

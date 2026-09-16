@@ -3,8 +3,8 @@
 `Generate` builds irregular Voronoi islands while preserving its original
 public contract: callers provide only `WorldSeed`, `ProvinceCount`, and
 `IslandCount`, and receive exactly those land province and island counts plus
-the water candidates surrounding them. Water provinces use `TerrainWater`.
-Shape parameters, selection order, and placement envelopes remain private.
+one continuous world-level ocean. Water provinces use `TerrainWater`. Shape
+parameters, selection order, and placement envelopes remain private.
 
 The approach is inspired by Amit Patel's
 [Polygonal Map Generation for Games](http://www-cs-students.stanford.edu/~amitp/game-programming/polygon-map-generation/):
@@ -26,20 +26,22 @@ For every successful generation:
 5. Reserve clipping-frame cells as ocean and select exactly the allocated
    number of edge-connected interior cells. Every omitted candidate remains
    connected through omitted cells to frame water, so no lake is enclosed.
-6. Classify selected cells as land and all other candidates as water. All
-   candidate cells and shared topology are retained. A land/water shared edge
-   is the coastline. The selected sites are never retessellated.
+6. Preserve selected candidate identities as land and all other candidates as
+   water. A land/water shared edge is the coastline.
 7. Measure retained polygon area and uniformly scale the island so land area
-   equals its allocation. Place complete candidate envelopes with guaranteed
-   water gaps; using the envelope rather than tight land bounds preserves room
-   for the private surrounding ocean.
-8. Assemble world-global IDs and assign land terrain last, preserving water.
+   equals its allocation. Place private candidate envelopes with guaranteed
+   water gaps.
+8. Tessellate all placed candidate sites once in the complete world bounds.
+   Private frame sites preserve the blob coastlines while their water cells
+   fill every gap and connect between islands.
+9. Assemble world-global IDs and assign land terrain last, preserving water.
 
 Every public province remains finite, convex, counterclockwise, positive-area,
 and center-containing. Every island is one authoritative shared-edge land
 component. Coastlines are canonical single loops with no orphan corners or
-edges, islands do not share adjacency, and total land area remains one world
-area unit per province.
+edges, islands do not share land adjacency, the ocean is connected, the world
+bounds have no uncovered gaps, and total land area remains one world area unit
+per province.
 
 ## Shape resolution
 
@@ -70,9 +72,11 @@ through 12 across three seeds. Fixed medium, asymmetric multi-island, and large
 fixtures additionally lock exact corner, edge, and coastline counts plus
 normalized coastline signatures. Tests independently check frame exclusion,
 exterior-water connectivity, land connectivity, canonical coastline loops,
-complete topology without orphans,
-island separation, area scaling, geometry, terrain, full-world determinism,
-and concurrent race safety. Shape assertions require sufficiently large
+complete topology without orphans, connected world water, complete bounds
+coverage, island separation, area scaling, geometry, terrain, full-world
+determinism, and concurrent race safety. The primary continuous-ocean fixture
+uses seed `0x0123456789abcdef`, 137 land provinces, and 11 islands. Shape
+assertions require sufficiently large
 fixtures to have non-square, concave silhouettes; distinct signatures ensure
 the retained fixtures do not collapse to one repeated outline.
 
