@@ -57,6 +57,7 @@ func TestTessellateIslandCanonicalPartitionCorpus(t *testing.T) {
 	corpus := [][]Point{
 		{{X: 0.1, Y: 0.5}, {X: 0.35, Y: 0.5}, {X: 0.65, Y: 0.5}, {X: 0.9, Y: 0.5}},
 		{{X: 0.13, Y: 0.17}, {X: 0.42, Y: 0.11}, {X: 0.84, Y: 0.23}, {X: 0.27, Y: 0.58}, {X: 0.61, Y: 0.49}, {X: 0.88, Y: 0.76}, {X: 0.38, Y: 0.91}},
+		generateProvinceSeeds(7, provinceRandom(1, 0)),
 		generateProvinceSeeds(31, provinceRandom(8675309, 0)),
 	}
 

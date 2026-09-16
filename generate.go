@@ -1,9 +1,10 @@
 package wgvc
 
-// Generate validates config and constructs the deterministic allocation stage
-// of a world. Islands and provinces are in canonical ID order. Geometry is
-// empty until the deferred planning and tessellation stages are implemented;
-// consequently province generating centers and polygon rings are not yet set.
+import "fmt"
+
+// Generate constructs a deterministic world with separated islands and
+// clipped Voronoi provinces. All IDs equal their indexes in the corresponding
+// world collections.
 func Generate(config Config) (World, error) {
 	if err := config.validate(); err != nil {
 		return World{}, err
@@ -11,25 +12,65 @@ func Generate(config Config) (World, error) {
 
 	allocations, err := allocateProvinces(config.ProvinceCount, config.IslandCount)
 	if err != nil {
-		return World{}, err
+		return World{}, fmt.Errorf("allocate provinces: %w", err)
+	}
+	layout, err := planIslands(config, allocations)
+	if err != nil {
+		return World{}, fmt.Errorf("plan islands: %w", err)
+	}
+	meshes, err := tessellateIslands(layout.islands)
+	if err != nil {
+		return World{}, fmt.Errorf("tessellate islands: %w", err)
 	}
 
 	world := World{
 		Islands:   make([]Island, config.IslandCount),
 		Provinces: make([]Province, 0, config.ProvinceCount),
 	}
-	for islandIndex, count := range allocations {
+	for islandIndex, plan := range layout.islands {
+		mesh := meshes.islands[islandIndex]
+		provinceOffset := len(world.Provinces)
+		cornerOffset := len(world.Corners)
+
 		island := Island{
 			ID:          IslandID(islandIndex),
-			ProvinceIDs: make([]ProvinceID, 0, count),
+			ProvinceIDs: make([]ProvinceID, len(mesh.cells)),
 		}
-		for range count {
-			provinceID := ProvinceID(len(world.Provinces))
-			island.ProvinceIDs = append(island.ProvinceIDs, provinceID)
+		for localCornerID, point := range mesh.corners {
+			cornerID := CornerID(cornerOffset + localCornerID)
+			world.Corners = append(world.Corners, Corner{
+				ID:    cornerID,
+				Point: plan.footprint.pointAt(point),
+			})
+		}
+		for localProvinceID, cell := range mesh.cells {
+			provinceID := ProvinceID(provinceOffset + localProvinceID)
+			island.ProvinceIDs[localProvinceID] = provinceID
+			cornerIDs := make([]CornerID, len(cell.cornerIDs))
+			for ringIndex, localCornerID := range cell.cornerIDs {
+				cornerIDs[ringIndex] = CornerID(cornerOffset + localCornerID)
+			}
 			world.Provinces = append(world.Provinces, Province{
-				ID:       provinceID,
-				IslandID: island.ID,
-				Terrain:  TerrainPlains,
+				ID:        provinceID,
+				IslandID:  island.ID,
+				Center:    plan.footprint.pointAt(cell.center),
+				CornerIDs: cornerIDs,
+				Terrain:   TerrainPlains,
+			})
+		}
+		for _, edge := range mesh.edges {
+			provinceIDs := make([]ProvinceID, len(edge.siteIndexes))
+			for incidenceIndex, localProvinceID := range edge.siteIndexes {
+				provinceIDs[incidenceIndex] = ProvinceID(provinceOffset + localProvinceID)
+			}
+			edgeID := EdgeID(len(world.Edges))
+			world.Edges = append(world.Edges, Edge{
+				ID: edgeID,
+				CornerIDs: [2]CornerID{
+					CornerID(cornerOffset + edge.cornerIDs[0]),
+					CornerID(cornerOffset + edge.cornerIDs[1]),
+				},
+				ProvinceIDs: provinceIDs,
 			})
 		}
 		world.Islands[islandIndex] = island

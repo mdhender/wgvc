@@ -45,18 +45,21 @@ Each island produces a normalized private mesh. Corner IDs are assigned by
 lexicographic coordinate order. Undirected edge endpoints and incident site
 indexes are ascending, and edges are ordered by their endpoint IDs. Cell rings
 are counterclockwise, remain in caller site order, and rotate to begin at their
-lowest corner ID. Coordinates are not rounded or merged. Mesh IDs remain local
-to an island; conversion through its footprint and assignment of public
-world-global IDs belong to the later generation integration stage.
+lowest corner ID. Mesh IDs remain local to an island; `Generate` converts them
+through the footprint and offsets their references into public world-global
+ID ranges.
 
 ## Numerical policy
 
 Geometry is evaluated only after normalization to `[0,1]²`. Comparisons use an
 absolute tolerance of `1e-9`, matching the backend's clipping and cell-closing
 epsilon at that scale. Exact comparisons map unchanged input sites, reject
-exact duplicates, and identify endpoints that the backend reports as shared;
-coordinates are never rounded or tolerance-merged. Output is invalid if it
-contains a non-finite coordinate, an edge of length at most `1e-9`, an open
+exact duplicates, and identify endpoints that the backend reports as shared.
+The backend can report a clipping-boundary vertex with numerically equivalent
+coordinates on separate edges (for example, `0` and a tiny negative value).
+Such endpoints share the first lexicographically ordered coordinate within the
+same tolerance; coordinates are not rounded or averaged. Output is invalid if
+it contains a non-finite coordinate, an edge of length at most `1e-9`, an open
 ring, a non-positive-area cell, a point outside the clipping square by more
 than the tolerance, or total cell area differing from one by more than the
 tolerance.

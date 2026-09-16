@@ -194,7 +194,7 @@ func canonicalizeGeometry(islandID IslandID, sites []Point, geometry backendGeom
 		return islandMesh{}, fmt.Errorf("cell count = %d, want %d", len(geometry.cells), len(sites))
 	}
 
-	cornerSet := make(map[Point]struct{})
+	cornerCandidates := make([]Point, 0, 2*len(geometry.edges))
 	for edgeIndex, edge := range geometry.edges {
 		if !finitePoint(edge.ends[0]) || !finitePoint(edge.ends[1]) {
 			return islandMesh{}, fmt.Errorf("edge %d has a non-finite endpoint", edgeIndex)
@@ -208,17 +208,27 @@ func canonicalizeGeometry(islandID IslandID, sites []Point, geometry backendGeom
 		if len(edge.siteIndexes) < 1 || len(edge.siteIndexes) > 2 {
 			return islandMesh{}, fmt.Errorf("edge %d has %d incident sites", edgeIndex, len(edge.siteIndexes))
 		}
-		cornerSet[edge.ends[0]] = struct{}{}
-		cornerSet[edge.ends[1]] = struct{}{}
+		cornerCandidates = append(cornerCandidates, edge.ends[0], edge.ends[1])
 	}
 
-	corners := make([]Point, 0, len(cornerSet))
-	for point := range cornerSet {
-		corners = append(corners, point)
-	}
-	sort.Slice(corners, func(i, j int) bool { return pointLess(corners[i], corners[j]) })
-	cornerIDs := make(map[Point]int, len(corners))
-	for cornerID, point := range corners {
+	sort.Slice(cornerCandidates, func(i, j int) bool { return pointLess(cornerCandidates[i], cornerCandidates[j]) })
+	corners := make([]Point, 0, len(cornerCandidates))
+	cornerIDs := make(map[Point]int, len(cornerCandidates))
+	for _, point := range cornerCandidates {
+		if _, exists := cornerIDs[point]; exists {
+			continue
+		}
+		cornerID := -1
+		for candidateID := len(corners) - 1; candidateID >= 0 && point.X-corners[candidateID].X <= geometryTolerance; candidateID-- {
+			if pointsNear(point, corners[candidateID]) {
+				cornerID = candidateID
+				break
+			}
+		}
+		if cornerID == -1 {
+			cornerID = len(corners)
+			corners = append(corners, point)
+		}
 		cornerIDs[point] = cornerID
 	}
 

@@ -1,15 +1,14 @@
 # Generation contracts
 
 `Generate` accepts a world seed, province count, and island count. Counts must
-satisfy `ProvinceCount >= IslandCount >= 1`. The current generation stage
-creates the exact requested number of canonical islands and provinces and
-allocates at least one province to every island. Private island planning now
-provides separated footprints and normalized province centers to the later
-geometry stage. Private geometry now turns those centers into canonical
-unit-square Voronoi meshes with shared corners, shared edges, and authoritative
-adjacency. Integration into `Generate`, world-space conversion, global ID
-assignment, and terrain generation remain deferred; public centers, corners,
-edges, and polygon rings therefore remain empty for now.
+satisfy `ProvinceCount >= IslandCount >= 1`. It creates the exact requested
+number of canonical islands and provinces and allocates at least one province
+to every island. Island planning provides separated footprints and normalized
+province centers. Geometry turns those centers into unit-square Voronoi meshes
+with shared corners, shared edges, and authoritative adjacency. `Generate`
+then transforms every mesh into world space, assigns world-global IDs, and
+returns complete province centers and polygon rings. Every province receives
+plains until the correlated terrain stage is implemented.
 
 ## Coordinates and topology
 
@@ -58,3 +57,13 @@ A center is sampled from the middle half of each leaf along both axes, using
 the island's independent random stream. This inset makes centers distinct and
 gives every pair a separation of at least `0.5/n` in normalized coordinates,
 without rejection sampling or retries.
+
+## World assembly
+
+Islands are assembled in island ID order, and each island's provinces retain
+their local seed order. Corners and edges retain canonical mesh order within
+each island. Local province and corner references are offset into their public
+world collections, so every public ID equals its collection index. A uniform
+positive scale and translation map normalized coordinates through the island
+footprint; this preserves polygon orientation, Voronoi generating centers,
+and shared topology. No edge is shared across islands.
