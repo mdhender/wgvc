@@ -5,4 +5,20 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
 printf '%s\n' '==> Preparing wgvc for Amp orbs'
-printf '%s\n' 'No toolchain or dependencies are currently required.'
+
+go_version=1.27.1
+go_root="$HOME/.local/share/go-$go_version"
+if [[ ! -x "$go_root/bin/go" ]]; then
+    archive="$(mktemp)"
+    trap 'rm -f "$archive"' EXIT
+    curl -fsSL "https://go.dev/dl/go${go_version}.linux-amd64.tar.gz" -o "$archive"
+    mkdir -p "$go_root"
+    tar -C "$go_root" --strip-components=1 -xzf "$archive"
+fi
+
+mkdir -p "$HOME/.local/bin"
+ln -sfn "$go_root/bin/go" "$HOME/.local/bin/go"
+ln -sfn "$go_root/bin/gofmt" "$HOME/.local/bin/gofmt"
+
+go version
+go mod download
