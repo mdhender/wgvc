@@ -56,20 +56,13 @@ func TestGenerateValidWorlds(t *testing.T) {
 	}
 }
 
-func TestGeneratePreservesPlannedGeometry(t *testing.T) {
+func TestGeneratePreservesRetainedBlobGeometry(t *testing.T) {
 	config := Config{WorldSeed: 42, ProvinceCount: 20, IslandCount: 4}
 	allocations, err := allocateProvinces(config.ProvinceCount, config.IslandCount)
 	if err != nil {
 		t.Fatalf("allocateProvinces() error = %v", err)
 	}
-	plans, err := planIslands(config, allocations)
-	if err != nil {
-		t.Fatalf("planIslands() error = %v", err)
-	}
-	meshes, err := tessellateIslands(plans)
-	if err != nil {
-		t.Fatalf("tessellateIslands() error = %v", err)
-	}
+	plans, meshes := retainedPlacementFixture(t, config, allocations)
 	layout, err := placeIslands(config, plans, meshes)
 	if err != nil {
 		t.Fatalf("placeIslands() error = %v", err)

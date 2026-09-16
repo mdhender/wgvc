@@ -57,11 +57,19 @@ func tessellateIslands(plans []islandPlan) (tessellation, error) {
 		if plan.id != IslandID(islandIndex) {
 			return tessellation{}, fmt.Errorf("island %d has non-canonical ID %d", islandIndex, plan.id)
 		}
-		mesh, err := tessellateIsland(plan.id, plan.provinceCenters)
+		candidate, err := tessellateIsland(plan.id, plan.candidates.sites)
 		if err != nil {
-			return tessellation{}, err
+			return tessellation{}, fmt.Errorf("island %d tessellate candidates: %w", plan.id, err)
 		}
-		result.islands[islandIndex] = mesh
+		selected, err := selectCandidateCells(plan.landProvinceCount, plan.candidates, candidate, plan.shape)
+		if err != nil {
+			return tessellation{}, fmt.Errorf("island %d select land: %w", plan.id, err)
+		}
+		retained, err := extractRetainedMesh(candidate, selected)
+		if err != nil {
+			return tessellation{}, fmt.Errorf("island %d extract land: %w", plan.id, err)
+		}
+		result.islands[islandIndex] = retained
 	}
 	return result, nil
 }

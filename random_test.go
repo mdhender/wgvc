@@ -16,8 +16,8 @@ func TestSplitMix64ReferenceSequence(t *testing.T) {
 }
 
 func TestRandomStreamCanBeReconstructed(t *testing.T) {
-	first := provinceRandom(42, 7)
-	second := provinceRandom(42, 7)
+	first := candidateRandom(42, 7)
+	second := candidateRandom(42, 7)
 	for i := 0; i < 20; i++ {
 		if got, want := first.Uint64(), second.Uint64(); got != want {
 			t.Fatalf("value %d = %d, want %d", i, got, want)
@@ -41,9 +41,9 @@ func TestTerrainConsumptionDoesNotChangePlacement(t *testing.T) {
 	}
 }
 
-func TestIslandProvinceStreamsAreIndependent(t *testing.T) {
-	firstIsland := provinceRandom(42, 0)
-	secondIsland := provinceRandom(42, 1)
+func TestIslandCandidateStreamsAreIndependent(t *testing.T) {
+	firstIsland := candidateRandom(42, 0)
+	secondIsland := candidateRandom(42, 1)
 	if firstIsland.Uint64() == secondIsland.Uint64() {
 		t.Fatal("different islands unexpectedly started with the same random value")
 	}
@@ -52,7 +52,6 @@ func TestIslandProvinceStreamsAreIndependent(t *testing.T) {
 func TestShapeConsumptionCannotPerturbOtherStreams(t *testing.T) {
 	const seed = 99
 	wantPlacement := placementRandom(seed).Uint64()
-	wantProvinces := provinceRandom(seed, 2).Uint64()
 	wantCandidates, err := planCandidateSites(53, candidateRandom(seed, 2))
 	if err != nil {
 		t.Fatalf("planCandidateSites() error = %v", err)
@@ -67,9 +66,6 @@ func TestShapeConsumptionCannotPerturbOtherStreams(t *testing.T) {
 
 	if got := placementRandom(seed).Uint64(); got != wantPlacement {
 		t.Errorf("placement value = %d after shape consumption, want %d", got, wantPlacement)
-	}
-	if got := provinceRandom(seed, 2).Uint64(); got != wantProvinces {
-		t.Errorf("province value = %d after shape consumption, want %d", got, wantProvinces)
 	}
 	gotCandidates, err := planCandidateSites(53, candidateRandom(seed, 2))
 	if err != nil {

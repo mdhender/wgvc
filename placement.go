@@ -55,7 +55,6 @@ func planIslands(config Config, allocations []int) ([]islandPlan, error) {
 			landProvinceCount: allocation,
 			candidates:        candidates,
 			shape:             generateBlobShape(blobShapeRandom(config.WorldSeed, islandID)),
-			provinceCenters:   generateProvinceSeeds(allocation, provinceRandom(config.WorldSeed, islandID)),
 		}
 	}
 	if total != config.ProvinceCount {

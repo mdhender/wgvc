@@ -24,9 +24,6 @@ type islandPlan struct {
 	landProvinceCount int
 	candidates        candidateSitePlan
 	shape             blobShape
-	// provinceCenters drives the pre-blob tessellation until #14 integrates
-	// retained candidate cells into Generate.
-	provinceCenters []Point
 }
 
 type candidateSitePlan struct {

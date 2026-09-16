@@ -28,9 +28,6 @@ func TestPlanIslandsBuildsShapeInputsBeforePlacement(t *testing.T) {
 		if got := len(plan.candidates.sites); got <= plan.landProvinceCount {
 			t.Errorf("island %d candidate count = %d, want more than requested land count %d", plan.id, got, plan.landProvinceCount)
 		}
-		if got, want := len(plan.provinceCenters), allocations[islandIndex]; got != want {
-			t.Errorf("island %d temporary seed count = %d, want %d", plan.id, got, want)
-		}
 	}
 }
 

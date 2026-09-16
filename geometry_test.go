@@ -57,8 +57,8 @@ func TestTessellateIslandCanonicalPartitionCorpus(t *testing.T) {
 	corpus := [][]Point{
 		{{X: 0.1, Y: 0.5}, {X: 0.35, Y: 0.5}, {X: 0.65, Y: 0.5}, {X: 0.9, Y: 0.5}},
 		{{X: 0.13, Y: 0.17}, {X: 0.42, Y: 0.11}, {X: 0.84, Y: 0.23}, {X: 0.27, Y: 0.58}, {X: 0.61, Y: 0.49}, {X: 0.88, Y: 0.76}, {X: 0.38, Y: 0.91}},
-		generateProvinceSeeds(7, provinceRandom(1, 0)),
-		generateProvinceSeeds(31, provinceRandom(8675309, 0)),
+		generateCandidateSites(3, 3, candidateRandom(1, 0)),
+		generateCandidateSites(6, 6, candidateRandom(8675309, 0)),
 	}
 
 	for corpusIndex, sites := range corpus {
@@ -72,10 +72,12 @@ func TestTessellateIslandCanonicalPartitionCorpus(t *testing.T) {
 	}
 }
 
-func TestTessellateIslandsPreservesPlanOrder(t *testing.T) {
-	plans := []islandPlan{
-		{id: 0, provinceCenters: []Point{{X: 0.2, Y: 0.5}, {X: 0.8, Y: 0.5}}},
-		{id: 1, provinceCenters: []Point{{X: 0.5, Y: 0.5}}},
+func TestTessellateIslandsBuildsRetainedMeshesInPlanOrder(t *testing.T) {
+	config := Config{WorldSeed: 42, ProvinceCount: 7, IslandCount: 2}
+	allocations := []int{4, 3}
+	plans, err := planIslands(config, allocations)
+	if err != nil {
+		t.Fatalf("planIslands() error = %v", err)
 	}
 	wantPlans := cloneIslandPlans(plans)
 
@@ -93,7 +95,12 @@ func TestTessellateIslandsPreservesPlanOrder(t *testing.T) {
 		if mesh.islandID != IslandID(islandIndex) {
 			t.Errorf("mesh %d island ID = %d", islandIndex, mesh.islandID)
 		}
-		assertValidMesh(t, mesh)
+		if got, want := len(mesh.cells), allocations[islandIndex]; got != want {
+			t.Errorf("mesh %d retained cell count = %d, want %d", islandIndex, got, want)
+		}
+		if err := validateRetainedLandMesh(mesh); err != nil {
+			t.Errorf("mesh %d is not valid retained land: %v", islandIndex, err)
+		}
 	}
 }
 
@@ -327,7 +334,7 @@ func meshAdjacencies(mesh islandMesh) [][2]int {
 func cloneIslandPlans(plans []islandPlan) []islandPlan {
 	cloned := append([]islandPlan(nil), plans...)
 	for i := range cloned {
-		cloned[i].provinceCenters = append([]Point(nil), plans[i].provinceCenters...)
+		cloned[i].candidates.sites = append([]Point(nil), plans[i].candidates.sites...)
 	}
 	return cloned
 }

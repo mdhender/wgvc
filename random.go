@@ -7,7 +7,6 @@ import "math/rand/v2"
 // values in one stage cannot perturb another stage.
 const (
 	placementDomain uint64 = 0x706c6163656d656e // "placemen"
-	provinceDomain  uint64 = 0x70726f76696e6365 // "province"
 	candidateDomain uint64 = 0x63616e6469646174 // "candidat"
 	blobShapeDomain uint64 = 0x626c6f6273686170 // "blobshap"
 	terrainDomain   uint64 = 0x7465727261696e00 // "terrain\x00"
@@ -17,10 +16,6 @@ const (
 
 func placementRandom(worldSeed uint64) *rand.Rand {
 	return derivedRandom(worldSeed, placementDomain, 0)
-}
-
-func provinceRandom(worldSeed uint64, islandID IslandID) *rand.Rand {
-	return derivedRandom(worldSeed, provinceDomain, uint64(islandID))
 }
 
 func candidateRandom(worldSeed uint64, islandID IslandID) *rand.Rand {
