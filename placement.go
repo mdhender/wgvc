@@ -49,6 +49,11 @@ func planIslands(config Config, allocations []int) (islandLayout, error) {
 	random := placementRandom(config.WorldSeed)
 	plans := make([]islandPlan, len(allocations))
 	for islandIndex, allocation := range allocations {
+		islandID := IslandID(islandIndex)
+		candidates, err := planCandidateSites(allocation, candidateRandom(config.WorldSeed, islandID))
+		if err != nil {
+			return islandLayout{}, fmt.Errorf("island %d candidate sites: %w", islandID, err)
+		}
 		column := islandIndex % columns
 		row := islandIndex / columns
 		center := Point{
@@ -58,12 +63,15 @@ func planIslands(config Config, allocations []int) (islandLayout, error) {
 		side := math.Sqrt(float64(allocation))
 		halfSide := side / 2
 		plans[islandIndex] = islandPlan{
-			id: IslandID(islandIndex),
+			id:                islandID,
+			landProvinceCount: allocation,
+			candidates:        candidates,
+			shape:             generateBlobShape(blobShapeRandom(config.WorldSeed, islandID)),
 			footprint: rectangle{
 				min: Point{X: center.X - halfSide, Y: center.Y - halfSide},
 				max: Point{X: center.X + halfSide, Y: center.Y + halfSide},
 			},
-			provinceCenters: generateProvinceSeeds(allocation, provinceRandom(config.WorldSeed, IslandID(islandIndex))),
+			provinceCenters: generateProvinceSeeds(allocation, provinceRandom(config.WorldSeed, islandID)),
 		}
 	}
 

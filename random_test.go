@@ -1,6 +1,9 @@
 package wgvc
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestSplitMix64ReferenceSequence(t *testing.T) {
 	state := uint64(0)
@@ -43,5 +46,68 @@ func TestIslandProvinceStreamsAreIndependent(t *testing.T) {
 	secondIsland := provinceRandom(42, 1)
 	if firstIsland.Uint64() == secondIsland.Uint64() {
 		t.Fatal("different islands unexpectedly started with the same random value")
+	}
+}
+
+func TestShapeConsumptionCannotPerturbOtherStreams(t *testing.T) {
+	const seed = 99
+	wantPlacement := placementRandom(seed).Uint64()
+	wantProvinces := provinceRandom(seed, 2).Uint64()
+	wantCandidates, err := planCandidateSites(53, candidateRandom(seed, 2))
+	if err != nil {
+		t.Fatalf("planCandidateSites() error = %v", err)
+	}
+	wantTerrain := terrainRandom(seed).Uint64()
+	wantOtherIsland := blobShapeRandom(seed, 3).Uint64()
+
+	shape := blobShapeRandom(seed, 2)
+	for range 1000 {
+		shape.Uint64()
+	}
+
+	if got := placementRandom(seed).Uint64(); got != wantPlacement {
+		t.Errorf("placement value = %d after shape consumption, want %d", got, wantPlacement)
+	}
+	if got := provinceRandom(seed, 2).Uint64(); got != wantProvinces {
+		t.Errorf("province value = %d after shape consumption, want %d", got, wantProvinces)
+	}
+	gotCandidates, err := planCandidateSites(53, candidateRandom(seed, 2))
+	if err != nil {
+		t.Fatalf("planCandidateSites() after shape consumption error = %v", err)
+	}
+	if !reflect.DeepEqual(gotCandidates, wantCandidates) {
+		t.Error("candidate sites changed after shape consumption")
+	}
+	if got := terrainRandom(seed).Uint64(); got != wantTerrain {
+		t.Errorf("terrain value = %d after shape consumption, want %d", got, wantTerrain)
+	}
+	if got := blobShapeRandom(seed, 3).Uint64(); got != wantOtherIsland {
+		t.Errorf("island 3 shape value = %d after island 2 shape consumption, want %d", got, wantOtherIsland)
+	}
+}
+
+func TestCandidateAndShapeDomainsAndIslandSequencesDiffer(t *testing.T) {
+	const seed = 42
+	candidate := candidateRandom(seed, 0).Uint64()
+	shape := blobShapeRandom(seed, 0).Uint64()
+	otherShape := blobShapeRandom(seed, 1).Uint64()
+	if candidate == shape {
+		t.Fatal("candidate and shape domains unexpectedly started with the same value")
+	}
+	if shape == otherShape {
+		t.Fatal("different island shape sequences unexpectedly started with the same value")
+	}
+}
+
+func TestShapeParametersDoNotDependOnAllocation(t *testing.T) {
+	const seed = 42
+	want := generateBlobShape(blobShapeRandom(seed, 3))
+	for _, allocation := range []int{1, 2, 53, 128} {
+		if _, err := planCandidateSites(allocation, candidateRandom(seed, 3)); err != nil {
+			t.Fatalf("planCandidateSites(%d) error = %v", allocation, err)
+		}
+		if got := generateBlobShape(blobShapeRandom(seed, 3)); got != want {
+			t.Errorf("shape after planning %d candidates = %+v, want %+v", allocation, got, want)
+		}
 	}
 }

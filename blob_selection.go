@@ -6,8 +6,6 @@ import (
 	"sort"
 )
 
-const blobShapeDomain uint64 = 0x626c6f6273686170 // "blobshap"
-
 // candidateBlob is a feasibility prototype for retained-cell islands. It is
 // deliberately not wired into Generate until the remaining #8 stages can
 // preserve and compact the selected geometry.
@@ -36,14 +34,9 @@ func selectCandidateBlob(landCount int, seed uint64) (candidateBlob, error) {
 		return candidateBlob{}, fmt.Errorf("land count must be at least 1: %d", landCount)
 	}
 
-	interiorSide, err := blobInteriorSide(landCount)
+	columns, rows, err := candidateGridDimensions(landCount)
 	if err != nil {
 		return candidateBlob{}, err
-	}
-	columns := interiorSide + 2
-	rows := columns
-	if columns > int(^uint(0)>>1)/rows {
-		return candidateBlob{}, fmt.Errorf("land count %d exceeds candidate indexing capacity", landCount)
 	}
 
 	sites := regularCandidateSites(columns, rows)
@@ -70,17 +63,10 @@ func selectCandidateBlob(landCount int, seed uint64) (candidateBlob, error) {
 		}
 	}
 
-	random := derivedRandom(seed, blobShapeDomain, 0)
-	phase3 := random.Float64() * 2 * math.Pi
-	phase5 := random.Float64() * 2 * math.Pi
+	shape := generateBlobShape(blobShapeRandom(seed, 0))
 	scores := make([]float64, len(sites))
 	for index, site := range sites {
-		dx, dy := site.X-0.5, site.Y-0.5
-		angle := math.Atan2(dy, dx)
-		// The positive bounded multiplier changes the coastline without
-		// overwhelming the low-frequency radial shape.
-		wave := 1 + 0.20*math.Sin(3*angle+phase3) + 0.10*math.Sin(5*angle+phase5)
-		scores[index] = math.Hypot(dx, dy) * wave
+		scores[index] = shape.score(site)
 	}
 
 	root := nearestInteriorCandidate(sites, frame)
@@ -123,7 +109,23 @@ func selectCandidateBlob(landCount int, seed uint64) (candidateBlob, error) {
 	}, nil
 }
 
+func candidateGridDimensions(landCount int) (int, int, error) {
+	interiorSide, err := blobInteriorSide(landCount)
+	if err != nil {
+		return 0, 0, err
+	}
+	columns := interiorSide + 2
+	rows := columns
+	if columns > int(^uint(0)>>1)/rows {
+		return 0, 0, fmt.Errorf("land count %d exceeds candidate indexing capacity", landCount)
+	}
+	return columns, rows, nil
+}
+
 func blobInteriorSide(landCount int) (int, error) {
+	if landCount < 1 {
+		return 0, fmt.Errorf("land count must be at least 1: %d", landCount)
+	}
 	if landCount > int(^uint(0)>>1)/2 {
 		return 0, fmt.Errorf("land count %d exceeds candidate capacity", landCount)
 	}
@@ -139,6 +141,22 @@ func blobInteriorSide(landCount int) (int, error) {
 		return 0, fmt.Errorf("land count %d exceeds candidate dimensions", landCount)
 	}
 	return side, nil
+}
+
+func generateBlobShape(random interface{ Float64() float64 }) blobShape {
+	return blobShape{
+		phase3: random.Float64() * 2 * math.Pi,
+		phase5: random.Float64() * 2 * math.Pi,
+	}
+}
+
+func (shape blobShape) score(site Point) float64 {
+	dx, dy := site.X-0.5, site.Y-0.5
+	angle := math.Atan2(dy, dx)
+	// The positive bounded multiplier changes the coastline without
+	// overwhelming the low-frequency radial shape.
+	wave := 1 + 0.20*math.Sin(3*angle+shape.phase3) + 0.10*math.Sin(5*angle+shape.phase5)
+	return math.Hypot(dx, dy) * wave
 }
 
 func integerSquareLess(value, target int) bool {

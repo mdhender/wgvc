@@ -3,6 +3,7 @@ package wgvc
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -50,17 +51,55 @@ func TestCandidateBlobIsDeterministicIncludingScoreTies(t *testing.T) {
 
 func TestCandidateBlobCapacityPolicy(t *testing.T) {
 	for count := 1; count <= 10_000; count++ {
-		side, err := blobInteriorSide(count)
+		columns, rows, err := candidateGridDimensions(count)
 		if err != nil {
-			t.Fatalf("blobInteriorSide(%d) error = %v", count, err)
+			t.Fatalf("candidateGridDimensions(%d) error = %v", count, err)
 		}
+		side := columns - 2
 		if capacity := side * side; capacity < 2*count {
-			t.Fatalf("blobInteriorSide(%d) capacity = %d, want at least %d", count, capacity, 2*count)
+			t.Fatalf("candidateGridDimensions(%d) capacity = %d, want at least %d", count, capacity, 2*count)
 		}
 		if side > 1 && (side-1)*(side-1) >= 2*count {
-			t.Fatalf("blobInteriorSide(%d) = %d is not minimal", count, side)
+			t.Fatalf("candidateGridDimensions(%d) interior side = %d is not minimal", count, side)
+		}
+		if columns != rows {
+			t.Fatalf("candidateGridDimensions(%d) = %dx%d, want square", count, columns, rows)
 		}
 	}
+}
+
+func TestCandidateGridDimensionsRejectOverflow(t *testing.T) {
+	maximumInt := int(^uint(0) >> 1)
+	for _, count := range []int{maximumInt/2 + 1, maximumInt / 2} {
+		if _, _, err := candidateGridDimensions(count); err == nil || !strings.Contains(err.Error(), "capacity") {
+			t.Errorf("candidateGridDimensions(%d) error = %v, want capacity error", count, err)
+		}
+	}
+}
+
+func TestBlobShapeConsumesFixedRandomPrefix(t *testing.T) {
+	random := &countingFloat64Source{values: []float64{0.25, 0.75, 0.5}}
+	shape := generateBlobShape(random)
+	if got, want := random.consumed, 2; got != want {
+		t.Fatalf("shape random values consumed = %d, want %d", got, want)
+	}
+	if got, want := shape.phase3, 0.5*math.Pi; got != want {
+		t.Errorf("phase3 = %g, want %g", got, want)
+	}
+	if got, want := shape.phase5, 1.5*math.Pi; got != want {
+		t.Errorf("phase5 = %g, want %g", got, want)
+	}
+}
+
+type countingFloat64Source struct {
+	values   []float64
+	consumed int
+}
+
+func (source *countingFloat64Source) Float64() float64 {
+	value := source.values[source.consumed]
+	source.consumed++
+	return value
 }
 
 func TestCandidateBlobRejectsInvalidCount(t *testing.T) {

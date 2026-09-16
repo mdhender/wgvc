@@ -16,9 +16,25 @@ type islandPlanningStage func(Config, []int) (islandLayout, error)
 type tessellationStage func([]islandPlan) (tessellation, error)
 
 type islandPlan struct {
-	id              IslandID
-	footprint       rectangle
+	id                IslandID
+	landProvinceCount int
+	candidates        candidateSitePlan
+	shape             blobShape
+	footprint         rectangle
+	// provinceCenters drives the pre-blob tessellation until #14 integrates
+	// retained candidate cells into Generate.
 	provinceCenters []Point
+}
+
+type candidateSitePlan struct {
+	columns int
+	rows    int
+	sites   []Point
+}
+
+type blobShape struct {
+	phase3 float64
+	phase5 float64
 }
 
 type islandLayout struct {

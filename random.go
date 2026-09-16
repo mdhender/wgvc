@@ -8,6 +8,8 @@ import "math/rand/v2"
 const (
 	placementDomain uint64 = 0x706c6163656d656e // "placemen"
 	provinceDomain  uint64 = 0x70726f76696e6365 // "province"
+	candidateDomain uint64 = 0x63616e6469646174 // "candidat"
+	blobShapeDomain uint64 = 0x626c6f6273686170 // "blobshap"
 	terrainDomain   uint64 = 0x7465727261696e00 // "terrain\x00"
 	splitMixGamma   uint64 = 0x9e3779b97f4a7c15
 	sequenceStride  uint64 = 0xd1b54a32d192ed03
@@ -19,6 +21,14 @@ func placementRandom(worldSeed uint64) *rand.Rand {
 
 func provinceRandom(worldSeed uint64, islandID IslandID) *rand.Rand {
 	return derivedRandom(worldSeed, provinceDomain, uint64(islandID))
+}
+
+func candidateRandom(worldSeed uint64, islandID IslandID) *rand.Rand {
+	return derivedRandom(worldSeed, candidateDomain, uint64(islandID))
+}
+
+func blobShapeRandom(worldSeed uint64, islandID IslandID) *rand.Rand {
+	return derivedRandom(worldSeed, blobShapeDomain, uint64(islandID))
 }
 
 func terrainRandom(worldSeed uint64) *rand.Rand {

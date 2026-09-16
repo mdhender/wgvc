@@ -21,6 +21,12 @@ func TestPlanIslandsProducesSeparatedProportionalFootprints(t *testing.T) {
 		if plan.id != IslandID(islandIndex) {
 			t.Errorf("plan %d ID = %d", islandIndex, plan.id)
 		}
+		if got, want := plan.landProvinceCount, allocations[islandIndex]; got != want {
+			t.Errorf("island %d requested land count = %d, want %d", plan.id, got, want)
+		}
+		if got := len(plan.candidates.sites); got <= plan.landProvinceCount {
+			t.Errorf("island %d candidate count = %d, want more than requested land count %d", plan.id, got, plan.landProvinceCount)
+		}
 		if got, want := len(plan.provinceCenters), allocations[islandIndex]; got != want {
 			t.Errorf("island %d seed count = %d, want %d", plan.id, got, want)
 		}
@@ -72,6 +78,12 @@ func TestPlanIslandsIsDeterministicAndSeedSensitive(t *testing.T) {
 	}
 	if reflect.DeepEqual(first, different) {
 		t.Fatal("different world seeds produced identical layouts")
+	}
+	for islandIndex := range first.islands {
+		if reflect.DeepEqual(first.islands[islandIndex].candidates.sites, different.islands[islandIndex].candidates.sites) &&
+			first.islands[islandIndex].shape == different.islands[islandIndex].shape {
+			t.Errorf("island %d candidate inputs and shape parameters did not change with world seed", islandIndex)
+		}
 	}
 }
 
