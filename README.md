@@ -101,14 +101,6 @@ extension. `-width` and `-height` set both SVG and PNG dimensions in pixels.
 Both formats are rendered from the same scene and include terrain fills, thin
 cell borders, and a heavier coastline.
 
-The legacy issue #23 calibration command remains available for comparison:
-
-```sh
-go run ./cmd/x23
-```
-
-See [Single-mesh growth calibration](docs/x23.md) for its defaults and options.
-
 The production issue #24-#26 algorithm has a calibration command for its
 desirability field, permanent ocean barrier, and optional regional attractants:
 
