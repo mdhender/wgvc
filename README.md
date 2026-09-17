@@ -108,7 +108,8 @@ go run ./cmd/x23
 
 See [Single-mesh growth calibration](docs/x23.md) for its defaults and options.
 
-The issue #24 desirability-field variant is available as an isolated experiment:
+The issue #24/#25 desirability-field and permanent-ocean-barrier variant is
+available as an isolated experiment:
 
 ```sh
 go run ./cmd/x24

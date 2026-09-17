@@ -1,5 +1,5 @@
 // Package x24 implements the desirability-field single-mesh growth experiment
-// described by issue #24.
+// described by issues #24 and #25.
 package x24
 
 import (
@@ -21,7 +21,8 @@ type Config struct {
 	ProvinceCount      int
 	IslandCount        int
 	OceanPercentage    float64
-	EdgeRampDistance   int
+	EdgeBarrierWidth   float64
+	EdgeRamp           []float64
 	AttractantCount    int
 	AttractantRadius   float64
 	SoftmaxTemperature float64
@@ -36,11 +37,12 @@ func DefaultConfig() Config {
 		ProvinceCount:      1_500,
 		IslandCount:        15,
 		OceanPercentage:    0.68,
-		EdgeRampDistance:   4,
+		EdgeBarrierWidth:   0.02,
+		EdgeRamp:           []float64{-1, -0.65, -0.40, -0.22, -0.10, -0.04, 0},
 		AttractantCount:    12,
 		AttractantRadius:   0.18,
 		SoftmaxTemperature: 0.20,
-		ControlPenalty:     -0.95,
+		ControlPenalty:     -0.82,
 		MaxRounds:          10,
 		Relaxations:        2,
 	}
@@ -56,8 +58,22 @@ func (c Config) validate() error {
 	if !(c.OceanPercentage >= 0 && c.OceanPercentage <= maximumOcean) {
 		return fmt.Errorf("ocean percentage must be in [0, %.2f]: %g", maximumOcean, c.OceanPercentage)
 	}
-	if c.EdgeRampDistance < 1 {
-		return fmt.Errorf("edge ramp distance must be at least 1: %d", c.EdgeRampDistance)
+	if math.IsNaN(c.EdgeBarrierWidth) || math.IsInf(c.EdgeBarrierWidth, 0) || c.EdgeBarrierWidth < 0 || c.EdgeBarrierWidth >= 0.5 {
+		return fmt.Errorf("edge barrier width must be finite and in [0, 0.5): %g", c.EdgeBarrierWidth)
+	}
+	if len(c.EdgeRamp) == 0 {
+		return fmt.Errorf("edge ramp must not be empty")
+	}
+	for i, value := range c.EdgeRamp {
+		if math.IsNaN(value) || math.IsInf(value, 0) || value < -1 || value > 0 {
+			return fmt.Errorf("edge ramp value %d must be finite and in [-1, 0]: %g", i, value)
+		}
+		if i > 0 && value < c.EdgeRamp[i-1] {
+			return fmt.Errorf("edge ramp must be nondecreasing: value %d is %g after %g", i, value, c.EdgeRamp[i-1])
+		}
+	}
+	if c.EdgeRamp[len(c.EdgeRamp)-1] != 0 {
+		return fmt.Errorf("edge ramp must end at 0: %g", c.EdgeRamp[len(c.EdgeRamp)-1])
 	}
 	if c.AttractantCount < 0 {
 		return fmt.Errorf("attractant count must not be negative: %d", c.AttractantCount)
@@ -85,6 +101,7 @@ type Cell struct {
 	Site         Point
 	Corners      []Point
 	Neighbors    []int
+	LandEligible bool
 	Desirability float64
 	IslandID     int
 	ControllerID int

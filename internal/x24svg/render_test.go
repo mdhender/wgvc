@@ -29,10 +29,14 @@ func TestRenderIncludesEveryCellAndDiagnostics(t *testing.T) {
 	if got := strings.Count(svg, "class=\"attractant\""); got != len(result.Attractants) {
 		t.Errorf("attractant marker count = %d, want %d", got, len(result.Attractants))
 	}
+	if got := strings.Count(svg, "data-land-eligible=\"false\""); got != barrierCount(result) || got == 0 {
+		t.Errorf("rendered barrier count = %d, want %d nonzero", got, barrierCount(result))
+	}
 	for _, text := range []string{
 		"30 land",
 		fmt.Sprintf("3→%d islands", len(result.Islands)),
-		fmt.Sprintf("%d merges", result.MergeCount),
+		fmt.Sprintf("merges=%d", result.MergeCount),
+		fmt.Sprintf("%d barrier", barrierCount(result)),
 		fmt.Sprintf("%.0f%% ocean", result.FinalOcean*100),
 	} {
 		if !strings.Contains(svg, text) {

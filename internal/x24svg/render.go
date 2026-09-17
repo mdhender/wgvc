@@ -1,4 +1,4 @@
-// Package x24svg renders issue #24 growth experiments and their static field.
+// Package x24svg renders issue #24/#25 growth experiments and their static field.
 package x24svg
 
 import (
@@ -35,13 +35,16 @@ func Render(result x24.Result, width, height int) ([]byte, error) {
 	var svg strings.Builder
 	fmt.Fprintf(&svg, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\">\n", width, height, width, height)
 	svg.WriteString("<rect width=\"100%\" height=\"100%\" fill=\"#f7f5ef\"/>\n")
-	fmt.Fprintf(&svg, "<text x=\"20\" y=\"27\" font-family=\"ui-monospace,monospace\" font-size=\"15\" font-weight=\"700\" fill=\"#17212b\">issue #24 · %d land · %d→%d islands · %d merges · %.0f%% ocean · round %d</text>\n", landCount(result), result.InitialIslandCount, len(result.Islands), result.MergeCount, result.FinalOcean*100, result.RoundsAttempted)
+	fmt.Fprintf(&svg, "<text x=\"20\" y=\"27\" font-family=\"ui-monospace,monospace\" font-size=\"15\" font-weight=\"700\" fill=\"#17212b\">issues #24/#25 · %d land · %d→%d islands · merges=%d · %d barrier · %.0f%% ocean · round %d</text>\n", landCount(result), result.InitialIslandCount, len(result.Islands), result.MergeCount, barrierCount(result), result.FinalOcean*100, result.RoundsAttempted)
 	for _, cell := range result.Cells {
 		fill := fieldColor(cell.Desirability)
+		if !cell.LandEligible {
+			fill = "#8ca8b7"
+		}
 		if cell.IslandID != x24.Water {
 			fill = islandColors[cell.IslandID%len(islandColors)]
 		}
-		fmt.Fprintf(&svg, "<polygon data-cell=\"%d\" data-desirability=\"%.3f\" fill=\"%s\" stroke=\"#60777e\" stroke-width=\"0.7\" stroke-linejoin=\"round\" points=\"", cell.ID, cell.Desirability, fill)
+		fmt.Fprintf(&svg, "<polygon data-cell=\"%d\" data-land-eligible=\"%t\" data-desirability=\"%.3f\" fill=\"%s\" stroke=\"#60777e\" stroke-width=\"0.7\" stroke-linejoin=\"round\" points=\"", cell.ID, cell.LandEligible, cell.Desirability, fill)
 		for _, point := range cell.Corners {
 			x, y := transform(point)
 			fmt.Fprintf(&svg, "%.2f,%.2f ", x, y)
@@ -93,6 +96,16 @@ func landCount(result x24.Result) int {
 	count := 0
 	for _, island := range result.Islands {
 		count += len(island.CellIDs)
+	}
+	return count
+}
+
+func barrierCount(result x24.Result) int {
+	count := 0
+	for _, cell := range result.Cells {
+		if !cell.LandEligible {
+			count++
+		}
 	}
 	return count
 }

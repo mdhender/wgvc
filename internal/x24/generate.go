@@ -28,8 +28,9 @@ func Generate(config Config) (Result, error) {
 			return Result{}, fmt.Errorf("round %d mesh: %w", round+1, err)
 		}
 		attractants := makeAttractants(config.AttractantCount, random)
-		desirability := desirabilityField(mesh, attractants, config.EdgeRampDistance, config.AttractantRadius)
-		state := newGrowthState(mesh, desirability, config.ControlPenalty)
+		edgeValues, landEligible := edgeField(mesh, config.EdgeBarrierWidth, config.EdgeRamp)
+		desirability := desirabilityField(mesh, edgeValues, landEligible, attractants, config.AttractantRadius)
+		state := newGrowthState(mesh, desirability, landEligible, config.ControlPenalty)
 		if state.seedAndGrow(config.IslandCount, config.ProvinceCount, config.SoftmaxTemperature, random) {
 			result := state.result(attractants, config.IslandCount)
 			result.RoundsAttempted = round + 1
@@ -48,32 +49,34 @@ func makeAttractants(count int, random *rand.Rand) []Point {
 	return points
 }
 
-func desirabilityField(cells []singlemesh.Cell, attractants []Point, edgeRampDistance int, attractantRadius float64) []float64 {
-	boundaryDistance := distancesFromBoundary(cells)
-	values := make([]float64, len(cells))
+func desirabilityField(cells []singlemesh.Cell, edgeValues []float64, landEligible []bool, attractants []Point, attractantRadius float64) []float64 {
+	values := append([]float64(nil), edgeValues...)
 	for cellID, cell := range cells {
-		value := math.Min(float64(boundaryDistance[cellID])/float64(edgeRampDistance), 1) - 1
+		if !landEligible[cellID] {
+			continue
+		}
 		for _, attractant := range attractants {
 			distance := math.Hypot(cell.Site.X-attractant.X, cell.Site.Y-attractant.Y)
-			value += math.Max(0, 1-distance/attractantRadius)
+			values[cellID] += math.Max(0, 1-distance/attractantRadius)
 		}
-		values[cellID] = max(-1, min(1, value))
+		values[cellID] = max(-1, min(1, values[cellID]))
 	}
 	return values
 }
 
-func distancesFromBoundary(cells []singlemesh.Cell) []int {
+func edgeField(cells []singlemesh.Cell, barrierWidth float64, ramp []float64) ([]float64, []bool) {
+	values := make([]float64, len(cells))
+	landEligible := make([]bool, len(cells))
 	distances := make([]int, len(cells))
 	queue := make([]int, 0)
 	for cellID, cell := range cells {
 		distances[cellID] = -1
-		for _, point := range cell.Corners {
-			if point.X <= boundaryEpsilon || point.X >= 1-boundaryEpsilon ||
-				point.Y <= boundaryEpsilon || point.Y >= 1-boundaryEpsilon {
-				distances[cellID] = 0
-				queue = append(queue, cellID)
-				break
-			}
+		landEligible[cellID] = true
+		if cellInBarrier(cell, barrierWidth) {
+			values[cellID] = -1
+			landEligible[cellID] = false
+			distances[cellID] = 0
+			queue = append(queue, cellID)
 		}
 	}
 	for head := 0; head < len(queue); head++ {
@@ -86,7 +89,26 @@ func distancesFromBoundary(cells []singlemesh.Cell) []int {
 			queue = append(queue, neighbor)
 		}
 	}
-	return distances
+	for cellID, distance := range distances {
+		if distance <= 0 {
+			continue
+		}
+		step := distance - 1
+		if step < len(ramp) {
+			values[cellID] = ramp[step]
+		}
+	}
+	return values, landEligible
+}
+
+func cellInBarrier(cell singlemesh.Cell, width float64) bool {
+	for _, point := range cell.Corners {
+		if point.X <= width+boundaryEpsilon || point.X >= 1-width-boundaryEpsilon ||
+			point.Y <= width+boundaryEpsilon || point.Y >= 1-width-boundaryEpsilon {
+			return true
+		}
+	}
+	return false
 }
 
 type islandState struct {
@@ -98,6 +120,7 @@ type islandState struct {
 type growthState struct {
 	cells          []singlemesh.Cell
 	desirability   []float64
+	landEligible   []bool
 	controlPenalty float64
 	owners         []int
 	controllers    []int
@@ -106,7 +129,7 @@ type growthState struct {
 	mergeCount     int
 }
 
-func newGrowthState(cells []singlemesh.Cell, desirability []float64, controlPenalty float64) *growthState {
+func newGrowthState(cells []singlemesh.Cell, desirability []float64, landEligible []bool, controlPenalty float64) *growthState {
 	owners := make([]int, len(cells))
 	controllers := make([]int, len(cells))
 	for i := range cells {
@@ -116,6 +139,7 @@ func newGrowthState(cells []singlemesh.Cell, desirability []float64, controlPena
 	return &growthState{
 		cells:          cells,
 		desirability:   desirability,
+		landEligible:   landEligible,
 		controlPenalty: controlPenalty,
 		owners:         owners,
 		controllers:    controllers,
@@ -129,9 +153,12 @@ func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature fl
 	for _, islandID := range seedOrder {
 		unclaimed := make([]int, 0, len(s.cells))
 		for cellID, owner := range s.owners {
-			if owner == Water {
+			if owner == Water && s.landEligible[cellID] {
 				unclaimed = append(unclaimed, cellID)
 			}
+		}
+		if len(unclaimed) == 0 {
+			return false
 		}
 		seedID := unclaimed[random.IntN(len(unclaimed))]
 		s.islands[islandID] = islandState{seedID: seedID, active: true}
@@ -208,7 +235,7 @@ func (s *growthState) claim(cellID, islandID int) int {
 		s.frontiers[i].remove(cellID)
 	}
 	for _, neighbor := range s.cells[cellID].Neighbors {
-		if s.owners[neighbor] != Water {
+		if s.owners[neighbor] != Water || !s.landEligible[neighbor] {
 			continue
 		}
 		s.frontiers[islandID].add(neighbor)
@@ -280,6 +307,7 @@ func (s *growthState) result(attractants []Point, initialIslandCount int) Result
 			Site:         cell.Site,
 			Corners:      cell.Corners,
 			Neighbors:    cell.Neighbors,
+			LandEligible: s.landEligible[cellID],
 			Desirability: s.desirability[cellID],
 			IslandID:     owner,
 			ControllerID: controller,

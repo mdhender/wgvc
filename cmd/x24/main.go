@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/mdhender/wgvc/internal/x24"
 	"github.com/mdhender/wgvc/internal/x24svg"
@@ -17,6 +19,35 @@ type options struct {
 	width  int
 	height int
 	output string
+}
+
+type rampFlag struct {
+	values *[]float64
+}
+
+func (f rampFlag) String() string {
+	if f.values == nil {
+		return ""
+	}
+	parts := make([]string, len(*f.values))
+	for i, value := range *f.values {
+		parts[i] = strconv.FormatFloat(value, 'g', -1, 64)
+	}
+	return strings.Join(parts, ",")
+}
+
+func (f rampFlag) Set(input string) error {
+	parts := strings.Split(input, ",")
+	values := make([]float64, len(parts))
+	for i, part := range parts {
+		value, err := strconv.ParseFloat(strings.TrimSpace(part), 64)
+		if err != nil {
+			return fmt.Errorf("parse edge ramp value %q: %w", part, err)
+		}
+		values[i] = value
+	}
+	*f.values = values
+	return nil
 }
 
 func main() {
@@ -37,7 +68,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.IntVar(&options.config.ProvinceCount, "provinces", options.config.ProvinceCount, "number of land provinces")
 	flags.IntVar(&options.config.IslandCount, "islands", options.config.IslandCount, "number of initial islands")
 	flags.Float64Var(&options.config.OceanPercentage, "ocean", options.config.OceanPercentage, "initial ocean fraction")
-	flags.IntVar(&options.config.EdgeRampDistance, "edge-ramp", options.config.EdgeRampDistance, "edge repulsion ramp in mesh hops")
+	flags.Float64Var(&options.config.EdgeBarrierWidth, "edge-barrier", options.config.EdgeBarrierWidth, "permanent ocean strip width in unit-map coordinates")
+	flags.Var(rampFlag{values: &options.config.EdgeRamp}, "edge-ramp", "comma-separated desirability values by hop past the barrier")
 	flags.IntVar(&options.config.AttractantCount, "attractants", options.config.AttractantCount, "number of static-field attractants")
 	flags.Float64Var(&options.config.AttractantRadius, "attractant-radius", options.config.AttractantRadius, "attractant fade radius in unit-map coordinates")
 	flags.Float64Var(&options.config.SoftmaxTemperature, "temperature", options.config.SoftmaxTemperature, "softmax temperature for frontier selection")
@@ -68,7 +100,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if err := os.WriteFile(options.output, svg, 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", options.output, err)
 	}
-	fmt.Fprintf(stdout, "wrote %s: %d cells, %d land, %d→%d islands, %d merges, %.0f%% ocean, %d round(s)\n",
+	fmt.Fprintf(stdout, "wrote %s: %d cells, %d land, %d→%d islands, merges=%d, %.0f%% ocean, %d round(s)\n",
 		options.output, len(result.Cells), options.config.ProvinceCount, result.InitialIslandCount,
 		len(result.Islands), result.MergeCount, result.FinalOcean*100, result.RoundsAttempted)
 	return nil

@@ -16,6 +16,8 @@ func TestRunWritesSVG(t *testing.T) {
 		"-provinces", "30",
 		"-islands", "3",
 		"-attractants", "2",
+		"-edge-barrier", "0.03",
+		"-edge-ramp=-1,-0.5,0",
 		"-output", output,
 	}, &stdout, &stderr)
 	if err != nil {
