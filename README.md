@@ -108,6 +108,15 @@ go run ./cmd/x23
 
 See [Single-mesh growth calibration](docs/x23.md) for its defaults and options.
 
+The issue #24 desirability-field variant is available as an isolated experiment:
+
+```sh
+go run ./cmd/x24
+```
+
+See [Desirability-field growth experiment](docs/x24.md) for its rules, defaults,
+and calibration controls. It does not change the public generator.
+
 ## Terrain
 
 Terrain is generated from a seeded two-dimensional value-noise field in world

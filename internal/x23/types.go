@@ -6,6 +6,8 @@ package x23
 import (
 	"errors"
 	"fmt"
+
+	"github.com/mdhender/wgvc/internal/singlemesh"
 )
 
 const Water = -1
@@ -14,10 +16,7 @@ const Water = -1
 // its legal growth frontier.
 var ErrUnsatisfiable = errors.New("growth constraints are unsatisfiable")
 
-type Point struct {
-	X float64
-	Y float64
-}
+type Point = singlemesh.Point
 
 type Config struct {
 	WorldSeed         uint64
