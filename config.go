@@ -6,7 +6,7 @@ import (
 	"github.com/mdhender/wgvc/internal/aspectratio"
 )
 
-// AspectRatio names a map shape using familiar width:height notation.
+// AspectRatio names a map shape using an alias or width:height notation.
 type AspectRatio string
 
 const (
@@ -28,8 +28,8 @@ type Config struct {
 	// IslandCount is the number of islands seeded before growth. Islands may
 	// merge, so the generated world can contain fewer connected land components.
 	IslandCount int
-	// AspectRatio controls the map's width:height shape without changing its
-	// area or point budget. The zero value defaults to AspectRatioSquare.
+	// AspectRatio controls the map's shape without changing its area or point
+	// budget. The zero value defaults to AspectRatioSquare.
 	AspectRatio AspectRatio
 }
 

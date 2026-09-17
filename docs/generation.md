@@ -1,7 +1,7 @@
 # Generation contracts
 
-`Generate` accepts a world seed, province count, island count, and named
-width:height aspect ratio. Counts must
+`Generate` accepts a world seed, province count, island count, and an aspect
+ratio expressed as a named alias or width:height value. Counts must
 satisfy `ProvinceCount >= IslandCount >= 1`. It returns exactly the requested
 number of land provinces. `IslandCount` specifies initial seeds; growth can
 merge them, so the returned canonical island count is between one and the

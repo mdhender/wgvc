@@ -44,9 +44,10 @@ ProvinceCount >= IslandCount >= 1
 ```
 
 Every successful call returns exactly the requested number of land provinces.
-`AspectRatio` accepts width:height names such as `1:1`, `4:3`, `16:9`,
-`2.39:1`, and their portrait counterparts. The zero value is `1:1`. Changing
-the ratio changes the map bounds but not their area or the point budget.
+`AspectRatio` accepts width:height values such as `1:1`, `4:3`, `16:9`, and
+`2.39:1`. It also accepts the aliases `landscape` (`4:3`), `portrait` (`3:4`),
+`widescreen` (`16:9`), and `cinematic` (`2.39:1`). The zero value is `1:1`.
+Changing the ratio changes the map bounds but not their area or point budget.
 `IslandCount` is the number of initial seeds; directly connected islands merge,
 so the returned world may contain fewer islands. A world-level ocean mesh covers
 the space between and around land and can include interior lakes. Water provinces
@@ -105,6 +106,8 @@ Use `-format png` for `world.png`, or `-format both` to write both
 extension. SVG and PNG dimensions are derived from the requested land-province
 count, the effective ocean percentage, and the aspect ratio. Both formats use
 the same terrain fills, thin cell borders, and heavier coastline.
+The `-aspect` flag accepts `landscape`, `portrait`, `widescreen`, and
+`cinematic` as aliases for their corresponding numeric ratios.
 
 Attractants are disabled by default. Use `-attractors` with 1 through 6 to
 select regions in the familiar die-face pattern, or 9 to select every region

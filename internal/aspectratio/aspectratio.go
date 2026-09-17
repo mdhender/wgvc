@@ -1,4 +1,4 @@
-// Package aspectratio converts width:height names into fixed-area dimensions.
+// Package aspectratio converts named or numeric aspect ratios into fixed-area dimensions.
 package aspectratio
 
 import (
@@ -15,9 +15,19 @@ func Dimensions(value string) (width, height float64, err error) {
 	if value == "" {
 		value = Default
 	}
+	switch value {
+	case "widescreen":
+		value = "16:9"
+	case "cinematic":
+		value = "2.39:1"
+	case "landscape":
+		value = "4:3"
+	case "portrait":
+		value = "3:4"
+	}
 	parts := strings.Split(value, ":")
 	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
-		return 0, 0, fmt.Errorf("aspect ratio must use width:height notation: %q", value)
+		return 0, 0, fmt.Errorf("aspect ratio must be landscape, portrait, widescreen, cinematic, or use width:height notation: %q", value)
 	}
 	widthRatio, widthErr := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
 	heightRatio, heightErr := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
