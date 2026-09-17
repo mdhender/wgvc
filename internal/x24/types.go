@@ -1,5 +1,5 @@
 // Package x24 implements the desirability-field single-mesh growth experiment
-// described by issues #24 and #25.
+// described by issues #24 through #26.
 package x24
 
 import (
@@ -23,8 +23,8 @@ type Config struct {
 	OceanPercentage    float64
 	EdgeBarrierWidth   float64
 	EdgeRamp           []float64
-	AttractantCount    int
-	AttractantRadius   float64
+	AttractantRamp     []float64
+	AttractantJitter   float64
 	SoftmaxTemperature float64
 	ControlPenalty     float64
 	MaxRounds          int
@@ -39,8 +39,8 @@ func DefaultConfig() Config {
 		OceanPercentage:    0.68,
 		EdgeBarrierWidth:   0.02,
 		EdgeRamp:           []float64{-1, -0.65, -0.40, -0.22, -0.10, -0.04, 0},
-		AttractantCount:    12,
-		AttractantRadius:   0.18,
+		AttractantRamp:     []float64{1, 0.78, 0.58, 0.42, 0.29, 0.18, 0.10, 0.04, 0.01, 0},
+		AttractantJitter:   0.65,
 		SoftmaxTemperature: 0.20,
 		ControlPenalty:     -0.82,
 		MaxRounds:          10,
@@ -75,11 +75,25 @@ func (c Config) validate() error {
 	if c.EdgeRamp[len(c.EdgeRamp)-1] != 0 {
 		return fmt.Errorf("edge ramp must end at 0: %g", c.EdgeRamp[len(c.EdgeRamp)-1])
 	}
-	if c.AttractantCount < 0 {
-		return fmt.Errorf("attractant count must not be negative: %d", c.AttractantCount)
+	if len(c.AttractantRamp) == 0 {
+		return fmt.Errorf("attractant ramp must not be empty")
 	}
-	if c.AttractantCount > 0 && !(c.AttractantRadius > 0) {
-		return fmt.Errorf("attractant radius must be positive: %g", c.AttractantRadius)
+	if !(c.AttractantRamp[0] > 0) {
+		return fmt.Errorf("attractant ramp must start above 0: %g", c.AttractantRamp[0])
+	}
+	for i, value := range c.AttractantRamp {
+		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > 1 {
+			return fmt.Errorf("attractant ramp value %d must be finite and in [0, 1]: %g", i, value)
+		}
+		if i > 0 && value > c.AttractantRamp[i-1] {
+			return fmt.Errorf("attractant ramp must be nonincreasing: value %d is %g after %g", i, value, c.AttractantRamp[i-1])
+		}
+	}
+	if c.AttractantRamp[len(c.AttractantRamp)-1] != 0 {
+		return fmt.Errorf("attractant ramp must end at 0: %g", c.AttractantRamp[len(c.AttractantRamp)-1])
+	}
+	if math.IsNaN(c.AttractantJitter) || math.IsInf(c.AttractantJitter, 0) || c.AttractantJitter < 0 || c.AttractantJitter > 1 {
+		return fmt.Errorf("attractant jitter must be finite and in [0, 1]: %g", c.AttractantJitter)
 	}
 	if !(c.SoftmaxTemperature > 0) || math.IsInf(c.SoftmaxTemperature, 0) {
 		return fmt.Errorf("softmax temperature must be finite and positive: %g", c.SoftmaxTemperature)
@@ -113,10 +127,24 @@ type Island struct {
 	CellIDs []int
 }
 
+type Attractant struct {
+	CellID  int
+	Point   Point
+	RegionX int
+	RegionY int
+}
+
+type AttractantSkip struct {
+	RegionX int
+	RegionY int
+	Reason  string
+}
+
 type Result struct {
 	Cells              []Cell
 	Islands            []Island
-	Attractants        []Point
+	Attractants        []Attractant
+	AttractantSkips    []AttractantSkip
 	InitialIslandCount int
 	MergeCount         int
 	RoundsAttempted    int

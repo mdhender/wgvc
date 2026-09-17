@@ -1,4 +1,4 @@
-// Package x24svg renders issue #24/#25 growth experiments and their static field.
+// Package x24svg renders issue #24-#26 growth experiments and their static field.
 package x24svg
 
 import (
@@ -35,7 +35,7 @@ func Render(result x24.Result, width, height int) ([]byte, error) {
 	var svg strings.Builder
 	fmt.Fprintf(&svg, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\">\n", width, height, width, height)
 	svg.WriteString("<rect width=\"100%\" height=\"100%\" fill=\"#f7f5ef\"/>\n")
-	fmt.Fprintf(&svg, "<text x=\"20\" y=\"27\" font-family=\"ui-monospace,monospace\" font-size=\"15\" font-weight=\"700\" fill=\"#17212b\">issues #24/#25 · %d land · %d→%d islands · merges=%d · %d barrier · %.0f%% ocean · round %d</text>\n", landCount(result), result.InitialIslandCount, len(result.Islands), result.MergeCount, barrierCount(result), result.FinalOcean*100, result.RoundsAttempted)
+	fmt.Fprintf(&svg, "<text x=\"20\" y=\"27\" font-family=\"ui-monospace,monospace\" font-size=\"15\" font-weight=\"700\" fill=\"#17212b\">issues #24-#26 · %d land · %d→%d islands · merges=%d · attr=%d/9 · %d barrier · %.0f%% ocean · round %d</text>\n", landCount(result), result.InitialIslandCount, len(result.Islands), result.MergeCount, len(result.Attractants), barrierCount(result), result.FinalOcean*100, result.RoundsAttempted)
 	for _, cell := range result.Cells {
 		fill := fieldColor(cell.Desirability)
 		if !cell.LandEligible {
@@ -69,7 +69,7 @@ func Render(result x24.Result, width, height int) ([]byte, error) {
 		}
 	}
 	for _, attractant := range result.Attractants {
-		x, y := transform(attractant)
+		x, y := transform(attractant.Point)
 		fmt.Fprintf(&svg, "<circle class=\"attractant\" cx=\"%.2f\" cy=\"%.2f\" r=\"6\" fill=\"#fdf4ff\" fill-opacity=\"0.85\" stroke=\"#d000d8\" stroke-width=\"2\"/>\n", x, y)
 	}
 	for _, island := range result.Islands {

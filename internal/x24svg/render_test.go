@@ -12,7 +12,6 @@ func TestRenderIncludesEveryCellAndDiagnostics(t *testing.T) {
 	config := x24.DefaultConfig()
 	config.ProvinceCount = 30
 	config.IslandCount = 3
-	config.AttractantCount = 2
 	result, err := x24.Generate(config)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
@@ -36,6 +35,7 @@ func TestRenderIncludesEveryCellAndDiagnostics(t *testing.T) {
 		"30 land",
 		fmt.Sprintf("3→%d islands", len(result.Islands)),
 		fmt.Sprintf("merges=%d", result.MergeCount),
+		fmt.Sprintf("attr=%d/9", len(result.Attractants)),
 		fmt.Sprintf("%d barrier", barrierCount(result)),
 		fmt.Sprintf("%.0f%% ocean", result.FinalOcean*100),
 	} {

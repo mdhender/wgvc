@@ -27,12 +27,12 @@ func Generate(config Config) (Result, error) {
 		if err != nil {
 			return Result{}, fmt.Errorf("round %d mesh: %w", round+1, err)
 		}
-		attractants := makeAttractants(config.AttractantCount, random)
-		edgeValues, landEligible := edgeField(mesh, config.EdgeBarrierWidth, config.EdgeRamp)
-		desirability := desirabilityField(mesh, edgeValues, landEligible, attractants, config.AttractantRadius)
+		edgeValues, landEligible, edgeDistances := edgeField(mesh, config.EdgeBarrierWidth, config.EdgeRamp)
+		attractants, skips := makeAttractants(mesh, edgeDistances, config.EdgeRamp, config.AttractantRamp, config.AttractantJitter, random)
+		desirability := desirabilityField(mesh, edgeValues, landEligible, attractants, config.AttractantRamp)
 		state := newGrowthState(mesh, desirability, landEligible, config.ControlPenalty)
 		if state.seedAndGrow(config.IslandCount, config.ProvinceCount, config.SoftmaxTemperature, random) {
-			result := state.result(attractants, config.IslandCount)
+			result := state.result(attractants, skips, config.IslandCount)
 			result.RoundsAttempted = round + 1
 			result.FinalOcean = ocean
 			return result, nil
@@ -41,30 +41,103 @@ func Generate(config Config) (Result, error) {
 	return Result{}, fmt.Errorf("%w after %d rounds", ErrStarved, config.MaxRounds)
 }
 
-func makeAttractants(count int, random *rand.Rand) []Point {
-	points := make([]Point, count)
-	for i := range points {
-		points[i] = Point{X: random.Float64(), Y: random.Float64()}
+func makeAttractants(cells []singlemesh.Cell, edgeDistances []int, edgeRamp, attractantRamp []float64, jitter float64, random *rand.Rand) ([]Attractant, []AttractantSkip) {
+	const regions = 3
+	clearance := edgeRampReach(edgeRamp) + attractantRampReach(attractantRamp)
+	attractants := make([]Attractant, 0, regions*regions)
+	skips := make([]AttractantSkip, 0)
+	for regionY := 0; regionY < regions; regionY++ {
+		for regionX := 0; regionX < regions; regionX++ {
+			center := Point{X: (float64(regionX) + 0.5) / regions, Y: (float64(regionY) + 0.5) / regions}
+			maximumJitter := jitter / (2 * regions)
+			target := Point{
+				X: center.X + (2*random.Float64()-1)*maximumJitter,
+				Y: center.Y + (2*random.Float64()-1)*maximumJitter,
+			}
+			bestCell, bestDistance := -1, math.Inf(1)
+			for cellID, cell := range cells {
+				cellRegionX := min(int(cell.Site.X*regions), regions-1)
+				cellRegionY := min(int(cell.Site.Y*regions), regions-1)
+				if cellRegionX != regionX || cellRegionY != regionY || edgeDistances[cellID] <= clearance {
+					continue
+				}
+				dx, dy := cell.Site.X-target.X, cell.Site.Y-target.Y
+				distance := dx*dx + dy*dy
+				if distance < bestDistance {
+					bestCell, bestDistance = cellID, distance
+				}
+			}
+			if bestCell == -1 {
+				skips = append(skips, AttractantSkip{
+					RegionX: regionX,
+					RegionY: regionY,
+					Reason:  fmt.Sprintf("no cell is more than %d hops from the edge barrier", clearance),
+				})
+				continue
+			}
+			attractants = append(attractants, Attractant{
+				CellID:  bestCell,
+				Point:   cells[bestCell].Site,
+				RegionX: regionX,
+				RegionY: regionY,
+			})
+		}
 	}
-	return points
+	return attractants, skips
 }
 
-func desirabilityField(cells []singlemesh.Cell, edgeValues []float64, landEligible []bool, attractants []Point, attractantRadius float64) []float64 {
+func edgeRampReach(ramp []float64) int {
+	return lastNonzeroIndex(ramp) + 1
+}
+
+func attractantRampReach(ramp []float64) int {
+	return max(lastNonzeroIndex(ramp), 0)
+}
+
+func lastNonzeroIndex(ramp []float64) int {
+	last := -1
+	for i, value := range ramp {
+		if value != 0 {
+			last = i
+		}
+	}
+	return last
+}
+
+func desirabilityField(cells []singlemesh.Cell, edgeValues []float64, landEligible []bool, attractants []Attractant, attractantRamp []float64) []float64 {
 	values := append([]float64(nil), edgeValues...)
-	for cellID, cell := range cells {
-		if !landEligible[cellID] {
-			continue
+	reach := attractantRampReach(attractantRamp)
+	for _, attractant := range attractants {
+		distances := make([]int, len(cells))
+		for i := range distances {
+			distances[i] = -1
 		}
-		for _, attractant := range attractants {
-			distance := math.Hypot(cell.Site.X-attractant.X, cell.Site.Y-attractant.Y)
-			values[cellID] += math.Max(0, 1-distance/attractantRadius)
+		distances[attractant.CellID] = 0
+		queue := []int{attractant.CellID}
+		for head := 0; head < len(queue); head++ {
+			cellID := queue[head]
+			distance := distances[cellID]
+			if landEligible[cellID] {
+				values[cellID] += attractantRamp[distance]
+			}
+			if distance >= reach {
+				continue
+			}
+			for _, neighbor := range cells[cellID].Neighbors {
+				if distances[neighbor] == -1 {
+					distances[neighbor] = distance + 1
+					queue = append(queue, neighbor)
+				}
+			}
 		}
+	}
+	for cellID := range values {
 		values[cellID] = max(-1, min(1, values[cellID]))
 	}
 	return values
 }
 
-func edgeField(cells []singlemesh.Cell, barrierWidth float64, ramp []float64) ([]float64, []bool) {
+func edgeField(cells []singlemesh.Cell, barrierWidth float64, ramp []float64) ([]float64, []bool, []int) {
 	values := make([]float64, len(cells))
 	landEligible := make([]bool, len(cells))
 	distances := make([]int, len(cells))
@@ -98,7 +171,7 @@ func edgeField(cells []singlemesh.Cell, barrierWidth float64, ramp []float64) ([
 			values[cellID] = ramp[step]
 		}
 	}
-	return values, landEligible
+	return values, landEligible, distances
 }
 
 func cellInBarrier(cell singlemesh.Cell, width float64) bool {
@@ -278,7 +351,7 @@ func (s *growthState) absorb(winner, loser int) {
 	s.mergeCount++
 }
 
-func (s *growthState) result(attractants []Point, initialIslandCount int) Result {
+func (s *growthState) result(attractants []Attractant, skips []AttractantSkip, initialIslandCount int) Result {
 	canonicalIDs := make([]int, len(s.islands))
 	for i := range canonicalIDs {
 		canonicalIDs[i] = Water
@@ -316,7 +389,8 @@ func (s *growthState) result(attractants []Point, initialIslandCount int) Result
 	return Result{
 		Cells:              cells,
 		Islands:            islands,
-		Attractants:        append([]Point(nil), attractants...),
+		Attractants:        append([]Attractant(nil), attractants...),
+		AttractantSkips:    append([]AttractantSkip(nil), skips...),
 		InitialIslandCount: initialIslandCount,
 		MergeCount:         s.mergeCount,
 	}

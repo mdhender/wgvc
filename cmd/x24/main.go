@@ -70,8 +70,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Float64Var(&options.config.OceanPercentage, "ocean", options.config.OceanPercentage, "initial ocean fraction")
 	flags.Float64Var(&options.config.EdgeBarrierWidth, "edge-barrier", options.config.EdgeBarrierWidth, "permanent ocean strip width in unit-map coordinates")
 	flags.Var(rampFlag{values: &options.config.EdgeRamp}, "edge-ramp", "comma-separated desirability values by hop past the barrier")
-	flags.IntVar(&options.config.AttractantCount, "attractants", options.config.AttractantCount, "number of static-field attractants")
-	flags.Float64Var(&options.config.AttractantRadius, "attractant-radius", options.config.AttractantRadius, "attractant fade radius in unit-map coordinates")
+	flags.Var(rampFlag{values: &options.config.AttractantRamp}, "attractant-ramp", "comma-separated attractant values by hop from its source")
+	flags.Float64Var(&options.config.AttractantJitter, "attractant-jitter", options.config.AttractantJitter, "maximum placement jitter as a fraction of half a region")
 	flags.Float64Var(&options.config.SoftmaxTemperature, "temperature", options.config.SoftmaxTemperature, "softmax temperature for frontier selection")
 	flags.Float64Var(&options.config.ControlPenalty, "control-penalty", options.config.ControlPenalty, "value rivals see for a controlled cell")
 	flags.IntVar(&options.config.MaxRounds, "rounds", options.config.MaxRounds, "maximum generation rounds")
@@ -89,6 +89,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	result, err := x24.Generate(options.config)
 	if err != nil {
 		return fmt.Errorf("generate: %w", err)
+	}
+	for _, skip := range result.AttractantSkips {
+		fmt.Fprintf(stderr, "x24: skipped attractant region (%d,%d): %s\n", skip.RegionX, skip.RegionY, skip.Reason)
 	}
 	svg, err := x24svg.Render(result, options.width, options.height)
 	if err != nil {
