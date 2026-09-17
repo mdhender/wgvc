@@ -70,9 +70,11 @@ type Corner struct {
 // Edge is an undirected geometric boundary, never a route. CornerIDs contains
 // its two endpoints. ProvinceIDs contains one province at the outside of the
 // world or two provinces inside it. A coastline has one land and one water
-// province; incidence is authoritative geometric adjacency.
+// province; incidence is authoritative geometric adjacency. Elevation is
+// normalized to [-1, 1], with zero representing sea level.
 type Edge struct {
 	ID          EdgeID
 	CornerIDs   [2]CornerID
 	ProvinceIDs []ProvinceID
+	Elevation   float64
 }

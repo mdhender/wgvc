@@ -298,6 +298,15 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 				neighbors[second] = append(neighbors[second], first)
 			}
 		}
+		wantElevation := 0.0
+		if len(edge.ProvinceIDs) == 2 &&
+			world.Provinces[edge.ProvinceIDs[0]].Terrain != TerrainWater &&
+			world.Provinces[edge.ProvinceIDs[1]].Terrain != TerrainWater {
+			wantElevation = 0.1
+		}
+		if edge.Elevation != wantElevation {
+			t.Errorf("edge %d elevation = %g, want %g", edge.ID, edge.Elevation, wantElevation)
+		}
 	}
 
 	landArea := 0.0

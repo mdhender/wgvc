@@ -62,6 +62,21 @@ func assignTerrain(world *World, worldSeed uint64) {
 	}
 }
 
+func assignEdgeElevations(world *World) {
+	for edgeID := range world.Edges {
+		edge := &world.Edges[edgeID]
+		edge.Elevation = 0
+		if len(edge.ProvinceIDs) != 2 {
+			continue
+		}
+		first := world.Provinces[edge.ProvinceIDs[0]]
+		second := world.Provinces[edge.ProvinceIDs[1]]
+		if first.Terrain != TerrainWater && second.Terrain != TerrainWater {
+			edge.Elevation = 0.1
+		}
+	}
+}
+
 func terrainFromCorners(province Province, cornerValues []float64) Terrain {
 	total := 0.0
 	for _, cornerID := range province.CornerIDs {

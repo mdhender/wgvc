@@ -88,9 +88,11 @@ func GenerateForRender(growthConfig x24.Config) (World, x24.Result, error) {
 			ID:          EdgeID(edgeIndex),
 			CornerIDs:   [2]CornerID{CornerID(edge.cornerIDs[0]), CornerID(edge.cornerIDs[1])},
 			ProvinceIDs: provinceIDs,
+			Elevation:   0,
 		})
 	}
 	assignTerrain(&world, growthConfig.WorldSeed)
+	assignEdgeElevations(&world)
 	return world, result, nil
 }
 

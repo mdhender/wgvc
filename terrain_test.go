@@ -82,6 +82,32 @@ func TestAssignTerrainChangesOnlyTerrain(t *testing.T) {
 	}
 }
 
+func TestAssignEdgeElevations(t *testing.T) {
+	world := World{
+		Provinces: []Province{
+			{Terrain: TerrainPlains},
+			{Terrain: TerrainMountains},
+			{Terrain: TerrainWater},
+			{Terrain: TerrainWater},
+		},
+		Edges: []Edge{
+			{ProvinceIDs: []ProvinceID{0, 1}, Elevation: -1},
+			{ProvinceIDs: []ProvinceID{0, 2}, Elevation: -1},
+			{ProvinceIDs: []ProvinceID{2}, Elevation: -1},
+			{ProvinceIDs: []ProvinceID{2, 3}, Elevation: -1},
+		},
+	}
+
+	assignEdgeElevations(&world)
+
+	want := []float64{0.1, 0, 0, 0}
+	for edgeID, edge := range world.Edges {
+		if edge.Elevation != want[edgeID] {
+			t.Errorf("edge %d elevation = %g, want %g", edgeID, edge.Elevation, want[edgeID])
+		}
+	}
+}
+
 func TestGenerateLargerWorldHasMultipleTerrainClasses(t *testing.T) {
 	world, err := Generate(Config{WorldSeed: 42, ProvinceCount: 128, IslandCount: 7})
 	if err != nil {
