@@ -98,6 +98,16 @@ extension. `-width` and `-height` set both SVG and PNG dimensions in pixels.
 Both formats are rendered from the same scene and include terrain fills, thin
 cell borders, and a heavier coastline.
 
+The experimental single-mesh island-growth algorithm from issue #23 has its
+own command and does not alter `Generate`:
+
+```sh
+go run ./cmd/x23
+```
+
+See [Issue #23 single-mesh growth experiment](docs/x23.md) for its defaults,
+algorithm, and calibration options.
+
 ## Terrain
 
 Terrain is generated from a seeded two-dimensional value-noise field in world
