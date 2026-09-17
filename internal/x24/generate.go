@@ -252,8 +252,7 @@ func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature fl
 			deck.remove(islandID)
 			continue
 		}
-		loser := s.claim(cellID, islandID)
-		if loser != Water {
+		for _, loser := range s.claim(cellID, islandID) {
 			deck.remove(loser)
 		}
 		remaining--
@@ -296,10 +295,18 @@ func (s *growthState) visibleValue(cellID, islandID int) float64 {
 	return s.desirability[cellID]
 }
 
-// claim returns the absorbed island ID, or Water when no merger occurred.
-func (s *growthState) claim(cellID, islandID int) int {
-	controller := s.controllers[cellID]
-	merge := controller != Water && controller != islandID && s.adjacentToIsland(cellID, controller)
+// claim returns every island absorbed because its claimed land directly
+// touches cellID. Control affects desirability, but never decides connectivity.
+func (s *growthState) claim(cellID, islandID int) []int {
+	losers := make([]int, 0)
+	seen := make(map[int]bool)
+	for _, neighbor := range s.cells[cellID].Neighbors {
+		owner := s.owners[neighbor]
+		if owner != Water && owner != islandID && !seen[owner] {
+			seen[owner] = true
+			losers = append(losers, owner)
+		}
+	}
 
 	s.owners[cellID] = islandID
 	s.controllers[cellID] = Water
@@ -316,20 +323,10 @@ func (s *growthState) claim(cellID, islandID int) int {
 			s.controllers[neighbor] = islandID
 		}
 	}
-	if !merge {
-		return Water
+	for _, loser := range losers {
+		s.absorb(islandID, loser)
 	}
-	s.absorb(islandID, controller)
-	return controller
-}
-
-func (s *growthState) adjacentToIsland(cellID, islandID int) bool {
-	for _, neighbor := range s.cells[cellID].Neighbors {
-		if s.owners[neighbor] == islandID {
-			return true
-		}
-	}
-	return false
+	return losers
 }
 
 func (s *growthState) absorb(winner, loser int) {

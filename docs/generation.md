@@ -2,8 +2,9 @@
 
 `Generate` accepts a world seed, province count, and island count. Counts must
 satisfy `ProvinceCount >= IslandCount >= 1`. It returns exactly the requested
-number of canonical islands and land provinces, with at least one land province
-per island, plus a connected world-level ocean.
+number of land provinces. `IslandCount` specifies initial seeds; growth can
+merge them, so the returned canonical island count is between one and the
+requested count. Water can contain interior components such as lakes.
 
 ## Coordinates and topology
 
@@ -24,17 +25,24 @@ point count is derived from the requested land count and an initial 68% ocean
 fraction. Two Lloyd relaxation passes even the spacing without introducing a
 grid, and one Voronoi diagram supplies every eventual land and water cell.
 
-Each island receives one seed cell at least three graph hops from the map
-boundary and other islands. Islands then grow concurrently: an island is drawn
-from a deterministic random deck and claims a random legal frontier cell. A
-claim cannot violate that spacing or disconnect the remaining water graph.
-Growth stops after exactly the requested number of land cells has been claimed.
-Tiny valid configurations that cannot satisfy three-hop spacing retry with one
-edge hop and two island hops.
+Cells entering the outer permanent barrier are ineligible for land. A graph-hop
+edge ramp raises desirability from strongly negative near that barrier to
+neutral in the interior. Up to nine jittered regional attractants add positive
+influence where the configured edge and attractant ramps leave enough clearance.
 
-If a round cannot place or grow every island, the complete attempt is discarded.
+Each island receives one uniformly selected seed. Claims give the island
+one-hop control over neighboring cells, making those cells less desirable to
+rivals while preserving their original value for the controller. Islands are
+drawn from a deterministic deck and choose frontier cells through a softmax
+weighted by the visible desirability. When a claim directly connects rival
+land, all connected rivals merge immediately. Growth stops after exactly the
+requested number of land cells has been claimed. No water-connectivity filter
+is applied, so interior lakes are valid.
+
+If a round cannot seed the islands and claim the requested land, the complete
+attempt is discarded.
 The next deterministic round adds three percentage points of ocean, up to 95%,
-and creates a fresh point set. Production allows twenty rounds. A round is a
+and creates a fresh point set. Production allows ten rounds. A round is a
 separate derived random stream, so retries remain reproducible rather than
 depending on mutable global state.
 

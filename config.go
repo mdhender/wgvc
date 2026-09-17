@@ -9,7 +9,8 @@ type Config struct {
 	// ProvinceCount is the number of land provinces. Generate also returns the
 	// surrounding water provinces used to shape the islands.
 	ProvinceCount int
-	// IslandCount is the number of connected land components.
+	// IslandCount is the number of islands seeded before growth. Islands may
+	// merge, so the generated world can contain fewer connected land components.
 	IslandCount int
 }
 

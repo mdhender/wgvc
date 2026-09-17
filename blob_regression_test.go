@@ -29,27 +29,22 @@ func TestSingleMeshGrowthRegressionFixtures(t *testing.T) {
 		{
 			name:               "medium",
 			config:             Config{WorldSeed: 42, ProvinceCount: 53, IslandCount: 1},
-			wantCorners:        368,
-			wantEdges:          550,
+			wantCorners:        334,
+			wantEdges:          499,
 			wantProvinceCounts: []int{53},
-			wantCoastlineEdges: []int{75},
-			wantConcaveTurns:   []int{38},
-			wantSilhouettes:    []string{"17a0a803fbb6e2c7"},
+			wantCoastlineEdges: []int{69},
+			wantConcaveTurns:   []int{32},
+			wantSilhouettes:    []string{"b602f27b7c249e61"},
 		},
 		{
 			name:               "asymmetric_multi_island",
 			config:             Config{WorldSeed: 8675309, ProvinceCount: 128, IslandCount: 4},
 			wantCorners:        804,
 			wantEdges:          1204,
-			wantProvinceCounts: []int{25, 30, 30, 43},
-			wantCoastlineEdges: []int{40, 58, 46, 58},
-			wantConcaveTurns:   []int{20, 26, 23, 26},
-			wantSilhouettes: []string{
-				"1998251163ecf24a",
-				"313c8c3fbeab6c51",
-				"71e0840e84113102",
-				"4633546beed1df79",
-			},
+			wantProvinceCounts: []int{128},
+			wantCoastlineEdges: []int{169},
+			wantConcaveTurns:   []int{83},
+			wantSilhouettes:    []string{"04c74027ee27330f"},
 		},
 		{
 			name:               "large",
@@ -57,9 +52,9 @@ func TestSingleMeshGrowthRegressionFixtures(t *testing.T) {
 			wantCorners:        1604,
 			wantEdges:          2404,
 			wantProvinceCounts: []int{256},
-			wantCoastlineEdges: []int{378},
-			wantConcaveTurns:   []int{184},
-			wantSilhouettes:    []string{"7ba41e5542525b90"},
+			wantCoastlineEdges: []int{189},
+			wantConcaveTurns:   []int{94},
+			wantSilhouettes:    []string{"bfb2ee037beb8687"},
 		},
 	}
 
@@ -126,40 +121,66 @@ func canonicalCoastlineLoop(t *testing.T, world World, island Island) []CornerID
 	if len(coastline) < 3 {
 		t.Fatalf("island %d coastline has only %d edges", island.ID, len(coastline))
 	}
-	start := coastline[0].CornerIDs[0]
 	for cornerID, adjacent := range neighbors {
 		if len(adjacent) != 2 {
 			t.Fatalf("island %d coastline corner %d has degree %d, want 2", island.ID, cornerID, len(adjacent))
 		}
-		if cornerID < start {
-			start = cornerID
+		sort.Slice(adjacent, func(i, j int) bool { return adjacent[i] < adjacent[j] })
+	}
+	seen := make(map[CornerID]bool, len(neighbors))
+	loops := make([][]CornerID, 0)
+	for len(seen) < len(neighbors) {
+		start := CornerID(-1)
+		for cornerID := range neighbors {
+			if !seen[cornerID] && (start == -1 || cornerID < start) {
+				start = cornerID
+			}
+		}
+		loop := []CornerID{start}
+		seen[start] = true
+		previous, current := start, neighbors[start][0]
+		for current != start {
+			if seen[current] {
+				t.Fatalf("island %d coastline repeats corner %d before closing", island.ID, current)
+			}
+			loop = append(loop, current)
+			seen[current] = true
+			adjacent := neighbors[current]
+			next := adjacent[0]
+			if next == previous {
+				next = adjacent[1]
+			}
+			previous, current = current, next
+			if len(loop) > len(coastline) {
+				t.Fatalf("island %d coastline does not close", island.ID)
+			}
+		}
+		if loop[0] != minimumCornerID(loop) || loop[1] >= loop[len(loop)-1] {
+			t.Fatalf("island %d coastline loop is not canonical: %v", island.ID, loop)
+		}
+		loops = append(loops, loop)
+	}
+	traversed := 0
+	outer := loops[0]
+	outerArea := math.Abs(coastlineLoopArea(world, outer))
+	for _, loop := range loops {
+		traversed += len(loop)
+		if area := math.Abs(coastlineLoopArea(world, loop)); area > outerArea {
+			outer, outerArea = loop, area
 		}
 	}
-	sort.Slice(neighbors[start], func(i, j int) bool { return neighbors[start][i] < neighbors[start][j] })
-	loop := []CornerID{start}
-	previous, current := start, neighbors[start][0]
-	for current != start {
-		loop = append(loop, current)
-		adjacent := neighbors[current]
-		if len(adjacent) != 2 {
-			t.Fatalf("island %d coastline corner %d has degree %d, want 2", island.ID, current, len(adjacent))
-		}
-		next := adjacent[0]
-		if next == previous {
-			next = adjacent[1]
-		}
-		previous, current = current, next
-		if len(loop) > len(coastline) {
-			t.Fatalf("island %d coastline does not close", island.ID)
-		}
+	if traversed != len(coastline) {
+		t.Fatalf("island %d coastline loops use %d of %d edges", island.ID, traversed, len(coastline))
 	}
-	if len(loop) != len(coastline) {
-		t.Fatalf("island %d coastline loop uses %d of %d edges", island.ID, len(loop), len(coastline))
+	return outer
+}
+
+func coastlineLoopArea(world World, loop []CornerID) float64 {
+	points := make([]Point, len(loop))
+	for index, cornerID := range loop {
+		points[index] = world.Corners[cornerID].Point
 	}
-	if loop[0] != minimumCornerID(loop) || loop[1] >= loop[len(loop)-1] {
-		t.Fatalf("island %d coastline loop is not canonical: %v", island.ID, loop)
-	}
-	return loop
+	return signedArea(points)
 }
 
 func isCoastlineEdge(world World, edge Edge, islandID IslandID) bool {
@@ -249,7 +270,7 @@ func renderBlobIslandGallery(t *testing.T) []byte {
 	svg.WriteString("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"940\" viewBox=\"0 0 1200 940\">\n")
 	svg.WriteString("<rect width=\"1200\" height=\"940\" fill=\"#f7f5ef\"/>\n")
 	svg.WriteString("<style>text{font-family:ui-monospace,monospace;fill:#17212b}.title{font-size:22px;font-weight:700}.label{font-size:14px}.panel{fill:#dcebf0;stroke:#9babb2;stroke-width:1}.province{stroke:#7b7567;stroke-width:.7;stroke-linejoin:round}.land{fill:#eadfbe}.water{fill:#c6e3ec;stroke:#83aab8}.coast{stroke:#24343d;stroke-width:2.4;stroke-linecap:round}</style>\n")
-	svg.WriteString("<text class=\"title\" x=\"24\" y=\"32\">Islands grown on one continuous mesh — issue #23</text>\n")
+	svg.WriteString("<text class=\"title\" x=\"24\" y=\"32\">Desirability-field islands on one mesh — issues #24-#26</text>\n")
 	for fixtureIndex, config := range fixtures {
 		world, err := Generate(config)
 		if err != nil {
@@ -259,7 +280,7 @@ func renderBlobIslandGallery(t *testing.T) []byte {
 		panelY := 52.0 + float64(fixtureIndex/2)*422
 		const panelWidth, panelHeight = 564.0, 386.0
 		fmt.Fprintf(&svg, "<g transform=\"translate(%.0f %.0f)\">\n", panelX, panelY)
-		fmt.Fprintf(&svg, "<text class=\"label\" x=\"0\" y=\"15\">seed=%d provinces=%d islands=%d</text>\n", config.WorldSeed, config.ProvinceCount, config.IslandCount)
+		fmt.Fprintf(&svg, "<text class=\"label\" x=\"0\" y=\"15\">seed=%d provinces=%d islands=%d→%d</text>\n", config.WorldSeed, config.ProvinceCount, config.IslandCount, len(world.Islands))
 		fmt.Fprintf(&svg, "<rect class=\"panel\" x=\"0\" y=\"28\" width=\"%.0f\" height=\"%.0f\"/>\n", panelWidth, panelHeight-28)
 		transform := galleryTransform(world, panelWidth, panelHeight-28, 18)
 		for _, province := range world.Provinces {
@@ -284,7 +305,7 @@ func renderBlobIslandGallery(t *testing.T) []byte {
 		}
 		svg.WriteString("</g>\n")
 	}
-	svg.WriteString("<text class=\"label\" x=\"24\" y=\"900\">tan = land · blue = one world-level ocean mesh · heavy coastline · no land terrain coloring</text>\n")
+	svg.WriteString("<text class=\"label\" x=\"24\" y=\"900\">tan = land · blue = water on one world-level mesh · heavy coastline · no land terrain coloring</text>\n")
 	svg.WriteString("<text class=\"label\" x=\"24\" y=\"924\">reproduce: WGVC_UPDATE_SINGLE_MESH_GALLERY=1 go test -run TestSingleMeshIslandGallery</text>\n")
 	svg.WriteString("</svg>\n")
 	return []byte(svg.String())

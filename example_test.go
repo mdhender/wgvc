@@ -25,5 +25,5 @@ func ExampleGenerate() {
 		}
 	}
 	fmt.Println(len(world.Islands), land, water)
-	// Output: 4 20 162
+	// Output: 1 20 43
 }

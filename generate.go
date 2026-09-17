@@ -1,47 +1,25 @@
 package wgvc
 
 import (
-	"errors"
 	"fmt"
 	"math"
 
-	"github.com/mdhender/wgvc/internal/x23"
+	"github.com/mdhender/wgvc/internal/x24"
 )
 
-const (
-	productionOceanPercentage  = 0.68
-	preferredEdgeDistance      = 3
-	preferredIslandDistance    = 3
-	fallbackEdgeDistance       = 1
-	fallbackIslandDistance     = 2
-	productionMaximumRounds    = 20
-	productionLloydRelaxations = 2
-)
-
-// Generate constructs a deterministic world by growing separated islands on
-// one world-level Voronoi mesh. All IDs equal their indexes in the
-// corresponding world collections.
+// Generate constructs a deterministic world by growing and merging islands on
+// one world-level Voronoi mesh. All IDs equal their indexes in the corresponding
+// world collections.
 func Generate(config Config) (World, error) {
 	if err := config.validate(); err != nil {
 		return World{}, err
 	}
 
-	growthConfig := x23.Config{
-		WorldSeed:         config.WorldSeed,
-		ProvinceCount:     config.ProvinceCount,
-		IslandCount:       config.IslandCount,
-		OceanPercentage:   productionOceanPercentage,
-		MinEdgeDistance:   preferredEdgeDistance,
-		MinIslandDistance: preferredIslandDistance,
-		MaxRounds:         productionMaximumRounds,
-		Relaxations:       productionLloydRelaxations,
-	}
-	result, err := x23.Generate(growthConfig)
-	if errors.Is(err, x23.ErrUnsatisfiable) {
-		growthConfig.MinEdgeDistance = fallbackEdgeDistance
-		growthConfig.MinIslandDistance = fallbackIslandDistance
-		result, err = x23.Generate(growthConfig)
-	}
+	growthConfig := x24.DefaultConfig()
+	growthConfig.WorldSeed = config.WorldSeed
+	growthConfig.ProvinceCount = config.ProvinceCount
+	growthConfig.IslandCount = config.IslandCount
+	result, err := x24.Generate(growthConfig)
 	if err != nil {
 		return World{}, fmt.Errorf("grow islands: %w", err)
 	}
@@ -61,7 +39,7 @@ func Generate(config Config) (World, error) {
 	scale := math.Sqrt(float64(config.ProvinceCount) / landArea)
 	mesh = transformMesh(mesh, uniformTransform{scale: scale})
 
-	world := World{Islands: make([]Island, config.IslandCount)}
+	world := World{Islands: make([]Island, len(result.Islands))}
 	for islandID := range world.Islands {
 		world.Islands[islandID].ID = IslandID(islandID)
 	}
@@ -72,7 +50,7 @@ func Generate(config Config) (World, error) {
 		provinceID := ProvinceID(cellID)
 		islandID := IslandID(result.Cells[cellID].IslandID)
 		terrain := TerrainPlains
-		if result.Cells[cellID].IslandID == x23.Water {
+		if result.Cells[cellID].IslandID == x24.Water {
 			islandID = NoIslandID
 			terrain = TerrainWater
 		} else {
@@ -105,13 +83,13 @@ func Generate(config Config) (World, error) {
 	return world, nil
 }
 
-func grownLandArea(mesh islandMesh, result x23.Result) (float64, error) {
+func grownLandArea(mesh islandMesh, result x24.Result) (float64, error) {
 	if len(mesh.cells) != len(result.Cells) {
 		return 0, fmt.Errorf("mesh has %d cells for %d growth cells", len(mesh.cells), len(result.Cells))
 	}
 	area := 0.0
 	for cellID, cell := range mesh.cells {
-		if result.Cells[cellID].IslandID == x23.Water {
+		if result.Cells[cellID].IslandID == x24.Water {
 			continue
 		}
 		ring := make([]Point, len(cell.cornerIDs))

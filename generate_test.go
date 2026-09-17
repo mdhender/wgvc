@@ -82,6 +82,20 @@ func TestGenerateUsesOneMeshForLandAndWater(t *testing.T) {
 	}
 }
 
+func TestGenerateMergesDirectlyConnectedIslands(t *testing.T) {
+	config := Config{WorldSeed: 42, ProvinceCount: 20, IslandCount: 4}
+	world, err := Generate(config)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if got := len(world.Islands); got != 1 {
+		t.Fatalf("surviving island count = %d, want 1 after mergers", got)
+	}
+	if got := len(world.Islands[0].ProvinceIDs); got != config.ProvinceCount {
+		t.Fatalf("merged island has %d land provinces, want %d", got, config.ProvinceCount)
+	}
+}
+
 func TestGenerateIsDeterministic(t *testing.T) {
 	config := Config{WorldSeed: 1234, ProvinceCount: 40, IslandCount: 6}
 	first, err := Generate(config)
@@ -153,8 +167,8 @@ func TestGenerateKeepsWaterProvinces(t *testing.T) {
 
 func assertValidWorld(t *testing.T, world World, config Config) {
 	t.Helper()
-	if got := len(world.Islands); got != config.IslandCount {
-		t.Fatalf("island count = %d, want %d", got, config.IslandCount)
+	if got := len(world.Islands); got < 1 || got > config.IslandCount {
+		t.Fatalf("surviving island count = %d, want between 1 and %d", got, config.IslandCount)
 	}
 	if got := len(world.Provinces); got <= config.ProvinceCount {
 		t.Fatalf("total province count = %d, want more than %d land provinces", got, config.ProvinceCount)
@@ -202,7 +216,6 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 
 	edgesByCorners := make(map[[2]CornerID]EdgeID, len(world.Edges))
 	neighbors := make([][]ProvinceID, len(world.Provinces))
-	waterNeighbors := make([][]ProvinceID, len(world.Provinces))
 	edgeTraversals := make([][][2]CornerID, len(world.Edges))
 	cornerInProvince := make([]bool, len(world.Corners))
 	for edgeIndex, edge := range world.Edges {
@@ -237,13 +250,9 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 			if !firstWater && !secondWater && world.Provinces[first].IslandID != world.Provinces[second].IslandID {
 				t.Errorf("interior edge %d joins islands %d and %d", edge.ID, world.Provinces[first].IslandID, world.Provinces[second].IslandID)
 			}
-			if !firstWater && !secondWater {
+			if !firstWater && !secondWater && world.Provinces[first].IslandID == world.Provinces[second].IslandID {
 				neighbors[first] = append(neighbors[first], second)
 				neighbors[second] = append(neighbors[second], first)
-			}
-			if firstWater && secondWater {
-				waterNeighbors[first] = append(waterNeighbors[first], second)
-				waterNeighbors[second] = append(waterNeighbors[second], first)
 			}
 		}
 	}
@@ -339,37 +348,6 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 	}
 	for _, island := range world.Islands {
 		assertIslandConnected(t, island, neighbors)
-	}
-	assertWaterConnected(t, world, waterNeighbors)
-}
-
-func assertWaterConnected(t *testing.T, world World, neighbors [][]ProvinceID) {
-	t.Helper()
-	first := ProvinceID(-1)
-	want := 0
-	for provinceID, province := range world.Provinces {
-		if province.Terrain != TerrainWater {
-			continue
-		}
-		want++
-		if first == -1 {
-			first = ProvinceID(provinceID)
-		}
-	}
-	seen := map[ProvinceID]bool{first: true}
-	queue := []ProvinceID{first}
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-		for _, neighbor := range neighbors[current] {
-			if !seen[neighbor] {
-				seen[neighbor] = true
-				queue = append(queue, neighbor)
-			}
-		}
-	}
-	if len(seen) != want {
-		t.Errorf("water adjacency component contains %d provinces, want %d", len(seen), want)
 	}
 }
 

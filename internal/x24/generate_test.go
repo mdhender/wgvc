@@ -44,17 +44,17 @@ func TestGenerateDefaultIsDeterministicAndValid(t *testing.T) {
 	}
 }
 
-func TestClaimMergesOnlyWhenControlledCellTouchesControllerLand(t *testing.T) {
+func TestClaimMergesOnlyWithDirectlyAdjacentLand(t *testing.T) {
 	cells := lineCells(4)
 	state := newGrowthState(cells, []float64{0, 0, 0, 0}, allEligible(4), -0.82)
 	state.islands = []islandState{{seedID: 0, active: true}, {seedID: 1, active: true}}
 	state.frontiers = make([]randomSet, 2)
 
-	if loser := state.claim(0, 0); loser != Water {
-		t.Fatalf("first claim absorbed island %d", loser)
+	if losers := state.claim(0, 0); len(losers) != 0 {
+		t.Fatalf("first claim absorbed islands %v", losers)
 	}
-	if loser := state.claim(1, 1); loser != 0 {
-		t.Fatalf("adjacent controlled claim absorbed %d, want 0", loser)
+	if losers := state.claim(1, 1); !reflect.DeepEqual(losers, []int{0}) {
+		t.Fatalf("adjacent controlled claim absorbed %v, want [0]", losers)
 	}
 	if state.islands[0].active || state.owners[0] != 1 || state.controllers[1] != Water {
 		t.Fatalf("merge did not transfer loser state: islands=%+v owners=%v controllers=%v", state.islands, state.owners, state.controllers)
@@ -65,11 +65,32 @@ func TestClaimMergesOnlyWhenControlledCellTouchesControllerLand(t *testing.T) {
 	state.frontiers = make([]randomSet, 2)
 	state.claim(0, 0)
 	state.controllers[2] = 0 // Simulate a future multi-hop control ripple.
-	if loser := state.claim(2, 1); loser != Water {
-		t.Fatalf("non-adjacent controlled claim absorbed island %d", loser)
+	if losers := state.claim(2, 1); len(losers) != 0 {
+		t.Fatalf("non-adjacent controlled claim absorbed islands %v", losers)
 	}
 	if !state.islands[0].active || state.mergeCount != 0 {
 		t.Fatalf("non-adjacent control caused a merge: islands=%+v merges=%d", state.islands, state.mergeCount)
+	}
+}
+
+func TestClaimAbsorbsEveryAdjacentIslandRegardlessOfController(t *testing.T) {
+	cells := []singlemesh.Cell{
+		{ID: 0, Neighbors: []int{2}},
+		{ID: 1, Neighbors: []int{2}},
+		{ID: 2, Neighbors: []int{0, 1}},
+	}
+	state := newGrowthState(cells, []float64{0, 0, 0}, allEligible(3), -0.82)
+	state.islands = []islandState{{seedID: 0, active: true}, {seedID: 1, active: true}, {seedID: 2, active: true}}
+	state.frontiers = make([]randomSet, 3)
+	state.claim(0, 0)
+	state.claim(1, 1)
+	state.controllers[2] = 0
+
+	if losers := state.claim(2, 2); !reflect.DeepEqual(losers, []int{0, 1}) {
+		t.Fatalf("claim absorbed islands %v, want [0 1]", losers)
+	}
+	if state.islands[0].active || state.islands[1].active || state.mergeCount != 2 {
+		t.Fatalf("adjacent islands were not absorbed: islands=%+v merges=%d", state.islands, state.mergeCount)
 	}
 }
 

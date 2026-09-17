@@ -1,4 +1,4 @@
-// Package x24 implements the desirability-field single-mesh growth experiment
+// Package x24 implements the desirability-field single-mesh growth algorithm
 // described by issues #24 through #26.
 package x24
 
