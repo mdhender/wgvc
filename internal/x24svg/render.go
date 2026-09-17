@@ -35,7 +35,7 @@ func Render(result x24.Result, width, height int) ([]byte, error) {
 	var svg strings.Builder
 	fmt.Fprintf(&svg, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\">\n", width, height, width, height)
 	svg.WriteString("<rect width=\"100%\" height=\"100%\" fill=\"#f7f5ef\"/>\n")
-	fmt.Fprintf(&svg, "<text x=\"20\" y=\"27\" font-family=\"ui-monospace,monospace\" font-size=\"15\" font-weight=\"700\" fill=\"#17212b\">issues #24-#26 · %d land · %d→%d islands · merges=%d · attr=%d/9 · %d barrier · %.0f%% ocean · round %d</text>\n", landCount(result), result.InitialIslandCount, len(result.Islands), result.MergeCount, len(result.Attractants), barrierCount(result), result.FinalOcean*100, result.RoundsAttempted)
+	fmt.Fprintf(&svg, "<text x=\"20\" y=\"27\" font-family=\"ui-monospace,monospace\" font-size=\"15\" font-weight=\"700\" fill=\"#17212b\">issues #24-#26 · %d land · %d→%d islands · merges=%d · attr=%d/%d · %d barrier · %.0f%% ocean · round %d</text>\n", landCount(result), result.InitialIslandCount, len(result.Islands), result.MergeCount, len(result.Attractants), len(result.Attractants)+len(result.AttractantSkips), barrierCount(result), result.FinalOcean*100, result.RoundsAttempted)
 	for _, cell := range result.Cells {
 		fill := fieldColor(cell.Desirability)
 		if !cell.LandEligible {

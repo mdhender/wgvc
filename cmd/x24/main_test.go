@@ -15,6 +15,7 @@ func TestRunWritesSVG(t *testing.T) {
 		"-seed", "0x0123456789abcdef",
 		"-provinces", "30",
 		"-islands", "3",
+		"-attractors", "5",
 		"-edge-barrier", "0.03",
 		"-edge-ramp=-1,-0.5,0",
 		"-attractant-ramp=1,0.5,0",
@@ -43,6 +44,7 @@ func TestRunLogsSkippedAttractantRegions(t *testing.T) {
 	err := run([]string{
 		"-provinces", "30",
 		"-islands", "3",
+		"-attractors", "9",
 		"-attractant-ramp=" + longRamp,
 		"-output", output,
 	}, &stdout, &stderr)
@@ -51,5 +53,12 @@ func TestRunLogsSkippedAttractantRegions(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "skipped attractant region") || !strings.Contains(stderr.String(), "hops from the edge barrier") {
 		t.Errorf("stderr = %q, want skipped-region reason", stderr.String())
+	}
+}
+
+func TestRunRejectsUnsupportedAttractorCount(t *testing.T) {
+	err := run([]string{"-attractors", "7"}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "attractant count must be one of") {
+		t.Fatalf("run() error = %v, want unsupported attractor count", err)
 	}
 }

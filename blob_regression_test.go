@@ -32,9 +32,9 @@ func TestSingleMeshGrowthRegressionFixtures(t *testing.T) {
 			wantCorners:        334,
 			wantEdges:          499,
 			wantProvinceCounts: []int{53},
-			wantCoastlineEdges: []int{69},
-			wantConcaveTurns:   []int{32},
-			wantSilhouettes:    []string{"b602f27b7c249e61"},
+			wantCoastlineEdges: []int{74},
+			wantConcaveTurns:   []int{33},
+			wantSilhouettes:    []string{"d7ed82b447db075c"},
 		},
 		{
 			name:               "asymmetric_multi_island",
@@ -42,9 +42,9 @@ func TestSingleMeshGrowthRegressionFixtures(t *testing.T) {
 			wantCorners:        804,
 			wantEdges:          1204,
 			wantProvinceCounts: []int{128},
-			wantCoastlineEdges: []int{169},
-			wantConcaveTurns:   []int{83},
-			wantSilhouettes:    []string{"04c74027ee27330f"},
+			wantCoastlineEdges: []int{148},
+			wantConcaveTurns:   []int{70},
+			wantSilhouettes:    []string{"21c44b6847aaf057"},
 		},
 		{
 			name:               "large",
@@ -52,9 +52,9 @@ func TestSingleMeshGrowthRegressionFixtures(t *testing.T) {
 			wantCorners:        1604,
 			wantEdges:          2404,
 			wantProvinceCounts: []int{256},
-			wantCoastlineEdges: []int{189},
-			wantConcaveTurns:   []int{94},
-			wantSilhouettes:    []string{"bfb2ee037beb8687"},
+			wantCoastlineEdges: []int{165},
+			wantConcaveTurns:   []int{80},
+			wantSilhouettes:    []string{"13a8f892563d1cb5"},
 		},
 	}
 

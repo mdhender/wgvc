@@ -23,6 +23,7 @@ type Config struct {
 	OceanPercentage    float64
 	EdgeBarrierWidth   float64
 	EdgeRamp           []float64
+	AttractantCount    int
 	AttractantRamp     []float64
 	AttractantJitter   float64
 	SoftmaxTemperature float64
@@ -39,6 +40,7 @@ func DefaultConfig() Config {
 		OceanPercentage:    0.68,
 		EdgeBarrierWidth:   0.02,
 		EdgeRamp:           []float64{-1, -0.65, -0.40, -0.22, -0.10, -0.04, 0},
+		AttractantCount:    0,
 		AttractantRamp:     []float64{1, 0.78, 0.58, 0.42, 0.29, 0.18, 0.10, 0.04, 0.01, 0},
 		AttractantJitter:   0.65,
 		SoftmaxTemperature: 0.20,
@@ -74,6 +76,9 @@ func (c Config) validate() error {
 	}
 	if c.EdgeRamp[len(c.EdgeRamp)-1] != 0 {
 		return fmt.Errorf("edge ramp must end at 0: %g", c.EdgeRamp[len(c.EdgeRamp)-1])
+	}
+	if !validAttractantCount(c.AttractantCount) {
+		return fmt.Errorf("attractant count must be one of 0, 1, 2, 3, 4, 5, 6, or 9: %d", c.AttractantCount)
 	}
 	if len(c.AttractantRamp) == 0 {
 		return fmt.Errorf("attractant ramp must not be empty")

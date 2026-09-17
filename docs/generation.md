@@ -27,8 +27,9 @@ grid, and one Voronoi diagram supplies every eventual land and water cell.
 
 Cells entering the outer permanent barrier are ineligible for land. A graph-hop
 edge ramp raises desirability from strongly negative near that barrier to
-neutral in the interior. Up to nine jittered regional attractants add positive
-influence where the configured edge and attractant ramps leave enough clearance.
+neutral in the interior. The default configuration has no attractants; calibration
+can add up to nine jittered regional attractants where the configured edge and
+attractant ramps leave enough clearance.
 
 Each island receives one uniformly selected seed. Claims give the island
 one-hop control over neighboring cells, making those cells less desirable to

@@ -70,6 +70,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Float64Var(&options.config.OceanPercentage, "ocean", options.config.OceanPercentage, "initial ocean fraction")
 	flags.Float64Var(&options.config.EdgeBarrierWidth, "edge-barrier", options.config.EdgeBarrierWidth, "permanent ocean strip width in unit-map coordinates")
 	flags.Var(rampFlag{values: &options.config.EdgeRamp}, "edge-ramp", "comma-separated desirability values by hop past the barrier")
+	flags.IntVar(&options.config.AttractantCount, "attractors", options.config.AttractantCount, "number of attractors: 0, 1, 2, 3, 4, 5, 6, or 9")
 	flags.Var(rampFlag{values: &options.config.AttractantRamp}, "attractant-ramp", "comma-separated attractant values by hop from its source")
 	flags.Float64Var(&options.config.AttractantJitter, "attractant-jitter", options.config.AttractantJitter, "maximum placement jitter as a fraction of half a region")
 	flags.Float64Var(&options.config.SoftmaxTemperature, "temperature", options.config.SoftmaxTemperature, "softmax temperature for frontier selection")

@@ -17,7 +17,7 @@ func TestDefaultConfig(t *testing.T) {
 	if got.EdgeBarrierWidth != 0.02 || !reflect.DeepEqual(got.EdgeRamp, []float64{-1, -0.65, -0.40, -0.22, -0.10, -0.04, 0}) || got.ControlPenalty != -0.82 {
 		t.Fatalf("DefaultConfig() issue #25 values = %+v", got)
 	}
-	if !reflect.DeepEqual(got.AttractantRamp, []float64{1, 0.78, 0.58, 0.42, 0.29, 0.18, 0.10, 0.04, 0.01, 0}) || got.AttractantJitter != 0.65 {
+	if got.AttractantCount != 0 || !reflect.DeepEqual(got.AttractantRamp, []float64{1, 0.78, 0.58, 0.42, 0.29, 0.18, 0.10, 0.04, 0.01, 0}) || got.AttractantJitter != 0.65 {
 		t.Fatalf("DefaultConfig() issue #26 values = %+v", got)
 	}
 	if err := got.validate(); err != nil {
@@ -135,20 +135,36 @@ func TestEdgeFieldKeepsHarsherValueFromMultiplePaths(t *testing.T) {
 	}
 }
 
-func TestMakeAttractantsPlacesOnePerRegionWithClearance(t *testing.T) {
+func TestMakeAttractantsUsesDiePipRegions(t *testing.T) {
 	cells := regionalCells()
 	edgeDistances := make([]int, len(cells))
 	for i := range edgeDistances {
 		edgeDistances[i] = 20
 	}
-	attractants, skips := makeAttractants(cells, edgeDistances, []float64{-1, 0}, []float64{1, 0}, 0.65, roundRandom(1, 0))
-	if len(attractants) != 9 || len(skips) != 0 {
-		t.Fatalf("attractants=%d skips=%+v, want 9 and none", len(attractants), skips)
+	tests := []struct {
+		count   int
+		regions []int
+	}{
+		{0, nil},
+		{1, []int{4}},
+		{2, []int{0, 8}},
+		{3, []int{0, 4, 8}},
+		{4, []int{0, 2, 6, 8}},
+		{5, []int{0, 2, 4, 6, 8}},
+		{6, []int{0, 2, 3, 5, 6, 8}},
+		{9, []int{0, 1, 2, 3, 4, 5, 6, 7, 8}},
 	}
-	for i, attractant := range attractants {
-		wantX, wantY := i%3, i/3
-		if attractant.RegionX != wantX || attractant.RegionY != wantY || attractant.CellID != i || attractant.Point != cells[i].Site {
-			t.Errorf("attractant %d = %+v, want region (%d,%d) at cell %d", i, attractant, wantX, wantY, i)
+	for _, test := range tests {
+		attractants, skips := makeAttractants(cells, edgeDistances, []float64{-1, 0}, []float64{1, 0}, test.count, 0.65, roundRandom(1, 0))
+		if len(attractants) != len(test.regions) || len(skips) != 0 {
+			t.Fatalf("count %d: attractants=%d skips=%+v, want %d and none", test.count, len(attractants), skips, len(test.regions))
+		}
+		for i, attractant := range attractants {
+			regionID := test.regions[i]
+			wantX, wantY := regionID%3, regionID/3
+			if attractant.RegionX != wantX || attractant.RegionY != wantY || attractant.CellID != regionID || attractant.Point != cells[regionID].Site {
+				t.Errorf("count %d attractant %d = %+v, want region (%d,%d) at cell %d", test.count, i, attractant, wantX, wantY, regionID)
+			}
 		}
 	}
 }
@@ -162,7 +178,7 @@ func TestMakeAttractantsSkipsRegionWithoutClearance(t *testing.T) {
 	edgeRamp := []float64{-1, -0.5, 0}
 	attractantRamp := []float64{1, 0.5, 0}
 	edgeDistances[0] = edgeRampReach(edgeRamp) + attractantRampReach(attractantRamp)
-	attractants, skips := makeAttractants(cells, edgeDistances, edgeRamp, attractantRamp, 0.65, roundRandom(1, 0))
+	attractants, skips := makeAttractants(cells, edgeDistances, edgeRamp, attractantRamp, 9, 0.65, roundRandom(1, 0))
 	if len(attractants) != 8 || len(skips) != 1 || skips[0].RegionX != 0 || skips[0].RegionY != 0 || skips[0].Reason == "" {
 		t.Fatalf("attractants=%d skips=%+v, want region (0,0) skipped with a reason", len(attractants), skips)
 	}
@@ -188,6 +204,7 @@ func TestGenerateRejectsInvalidConfig(t *testing.T) {
 		withConfig(valid, func(c *Config) { c.EdgeRamp = nil }),
 		withConfig(valid, func(c *Config) { c.EdgeRamp = []float64{-1, -0.5} }),
 		withConfig(valid, func(c *Config) { c.EdgeRamp = []float64{-1, -0.4, -0.6, 0} }),
+		withConfig(valid, func(c *Config) { c.AttractantCount = 7 }),
 		withConfig(valid, func(c *Config) { c.AttractantRamp = nil }),
 		withConfig(valid, func(c *Config) { c.AttractantRamp = []float64{0} }),
 		withConfig(valid, func(c *Config) { c.AttractantRamp = []float64{1, 0.5} }),
@@ -229,8 +246,8 @@ func assertValidResult(t *testing.T, result Result, config Config) {
 	if result.InitialIslandCount != config.IslandCount || result.MergeCount != config.IslandCount-len(result.Islands) {
 		t.Errorf("islands=%d initial=%d merges=%d", len(result.Islands), result.InitialIslandCount, result.MergeCount)
 	}
-	if len(result.Attractants)+len(result.AttractantSkips) != 9 {
-		t.Errorf("attractants=%d skips=%d, want 9 regions", len(result.Attractants), len(result.AttractantSkips))
+	if len(result.Attractants)+len(result.AttractantSkips) != config.AttractantCount {
+		t.Errorf("attractants=%d skips=%d, want %d regions", len(result.Attractants), len(result.AttractantSkips), config.AttractantCount)
 	}
 	assertAttractantCoverage(t, result, config)
 	landCount := 0
@@ -351,7 +368,7 @@ func assertAttractantCoverage(t *testing.T, result Result, config Config) {
 		}
 	}
 	clearance := edgeRampReach(config.EdgeRamp) + attractantRampReach(config.AttractantRamp)
-	regions := make(map[[2]int]bool, 9)
+	regions := make(map[[2]int]bool, config.AttractantCount)
 	for _, attractant := range result.Attractants {
 		region := [2]int{attractant.RegionX, attractant.RegionY}
 		if regions[region] {
@@ -377,7 +394,7 @@ func assertAttractantCoverage(t *testing.T, result Result, config Config) {
 		}
 		regions[region] = true
 	}
-	if len(regions) != 9 {
-		t.Errorf("attractant diagnostics cover %d regions, want 9", len(regions))
+	if len(regions) != config.AttractantCount {
+		t.Errorf("attractant diagnostics cover %d regions, want %d", len(regions), config.AttractantCount)
 	}
 }

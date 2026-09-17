@@ -28,7 +28,7 @@ func Generate(config Config) (Result, error) {
 			return Result{}, fmt.Errorf("round %d mesh: %w", round+1, err)
 		}
 		edgeValues, landEligible, edgeDistances := edgeField(mesh, config.EdgeBarrierWidth, config.EdgeRamp)
-		attractants, skips := makeAttractants(mesh, edgeDistances, config.EdgeRamp, config.AttractantRamp, config.AttractantJitter, random)
+		attractants, skips := makeAttractants(mesh, edgeDistances, config.EdgeRamp, config.AttractantRamp, config.AttractantCount, config.AttractantJitter, random)
 		desirability := desirabilityField(mesh, edgeValues, landEligible, attractants, config.AttractantRamp)
 		state := newGrowthState(mesh, desirability, landEligible, config.ControlPenalty)
 		if state.seedAndGrow(config.IslandCount, config.ProvinceCount, config.SoftmaxTemperature, random) {
@@ -41,49 +41,81 @@ func Generate(config Config) (Result, error) {
 	return Result{}, fmt.Errorf("%w after %d rounds", ErrStarved, config.MaxRounds)
 }
 
-func makeAttractants(cells []singlemesh.Cell, edgeDistances []int, edgeRamp, attractantRamp []float64, jitter float64, random *rand.Rand) ([]Attractant, []AttractantSkip) {
+func makeAttractants(cells []singlemesh.Cell, edgeDistances []int, edgeRamp, attractantRamp []float64, count int, jitter float64, random *rand.Rand) ([]Attractant, []AttractantSkip) {
 	const regions = 3
 	clearance := edgeRampReach(edgeRamp) + attractantRampReach(attractantRamp)
-	attractants := make([]Attractant, 0, regions*regions)
+	regionIDs := attractantRegionIDs(count)
+	attractants := make([]Attractant, 0, len(regionIDs))
 	skips := make([]AttractantSkip, 0)
-	for regionY := 0; regionY < regions; regionY++ {
-		for regionX := 0; regionX < regions; regionX++ {
-			center := Point{X: (float64(regionX) + 0.5) / regions, Y: (float64(regionY) + 0.5) / regions}
-			maximumJitter := jitter / (2 * regions)
-			target := Point{
-				X: center.X + (2*random.Float64()-1)*maximumJitter,
-				Y: center.Y + (2*random.Float64()-1)*maximumJitter,
-			}
-			bestCell, bestDistance := -1, math.Inf(1)
-			for cellID, cell := range cells {
-				cellRegionX := min(int(cell.Site.X*regions), regions-1)
-				cellRegionY := min(int(cell.Site.Y*regions), regions-1)
-				if cellRegionX != regionX || cellRegionY != regionY || edgeDistances[cellID] <= clearance {
-					continue
-				}
-				dx, dy := cell.Site.X-target.X, cell.Site.Y-target.Y
-				distance := dx*dx + dy*dy
-				if distance < bestDistance {
-					bestCell, bestDistance = cellID, distance
-				}
-			}
-			if bestCell == -1 {
-				skips = append(skips, AttractantSkip{
-					RegionX: regionX,
-					RegionY: regionY,
-					Reason:  fmt.Sprintf("no cell is more than %d hops from the edge barrier", clearance),
-				})
+	for _, regionID := range regionIDs {
+		regionX, regionY := regionID%regions, regionID/regions
+		center := Point{X: (float64(regionX) + 0.5) / regions, Y: (float64(regionY) + 0.5) / regions}
+		maximumJitter := jitter / (2 * regions)
+		target := Point{
+			X: center.X + (2*random.Float64()-1)*maximumJitter,
+			Y: center.Y + (2*random.Float64()-1)*maximumJitter,
+		}
+		bestCell, bestDistance := -1, math.Inf(1)
+		for cellID, cell := range cells {
+			cellRegionX := min(int(cell.Site.X*regions), regions-1)
+			cellRegionY := min(int(cell.Site.Y*regions), regions-1)
+			if cellRegionX != regionX || cellRegionY != regionY || edgeDistances[cellID] <= clearance {
 				continue
 			}
-			attractants = append(attractants, Attractant{
-				CellID:  bestCell,
-				Point:   cells[bestCell].Site,
+			dx, dy := cell.Site.X-target.X, cell.Site.Y-target.Y
+			distance := dx*dx + dy*dy
+			if distance < bestDistance {
+				bestCell, bestDistance = cellID, distance
+			}
+		}
+		if bestCell == -1 {
+			skips = append(skips, AttractantSkip{
 				RegionX: regionX,
 				RegionY: regionY,
+				Reason:  fmt.Sprintf("no cell is more than %d hops from the edge barrier", clearance),
 			})
+			continue
 		}
+		attractants = append(attractants, Attractant{
+			CellID:  bestCell,
+			Point:   cells[bestCell].Site,
+			RegionX: regionX,
+			RegionY: regionY,
+		})
 	}
 	return attractants, skips
+}
+
+func validAttractantCount(count int) bool {
+	switch count {
+	case 0, 1, 2, 3, 4, 5, 6, 9:
+		return true
+	default:
+		return false
+	}
+}
+
+func attractantRegionIDs(count int) []int {
+	switch count {
+	case 0:
+		return nil
+	case 1:
+		return []int{4}
+	case 2:
+		return []int{0, 8}
+	case 3:
+		return []int{0, 4, 8}
+	case 4:
+		return []int{0, 2, 6, 8}
+	case 5:
+		return []int{0, 2, 4, 6, 8}
+	case 6:
+		return []int{0, 2, 3, 5, 6, 8}
+	case 9:
+		return []int{0, 1, 2, 3, 4, 5, 6, 7, 8}
+	default:
+		return nil
+	}
 }
 
 func edgeRampReach(ramp []float64) int {
