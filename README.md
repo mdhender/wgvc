@@ -76,9 +76,10 @@ decisions rather than consequences of geometric adjacency.
 
 The generator creates and Lloyd-relaxes one point set for the entire world,
 then plants one seed per island and grows all islands concurrently across that
-mesh using a static edge-and-attractant desirability field. Directly connected
-islands merge, a permanent ocean barrier keeps land off the map boundary, and
-interior lakes are valid. The coastline can form bays and promontories while
+mesh using a static desirability field. A permanent ocean barrier keeps land
+off the map boundary, while optional regional attractants can bias growth
+toward selected parts of the interior. Directly connected islands merge, and
+interior lakes remain valid. The coastline can form bays and promontories while
 every province remains one convex polygon.
 
 The deterministic [single-mesh island gallery](docs/blob-islands.svg) shows tiny,
@@ -109,14 +110,27 @@ go run ./cmd/x23
 See [Single-mesh growth calibration](docs/x23.md) for its defaults and options.
 
 The production issue #24-#26 algorithm has a calibration command for its
-desirability field, permanent ocean barrier, and regional attractants:
+desirability field, permanent ocean barrier, and optional regional attractants:
 
 ```sh
 go run ./cmd/x24
 ```
 
+Attractants are disabled by default. Use `-attractors` with 1 through 6 to
+select regions in the familiar die-face pattern, or 9 to select every region
+of the 3×3 grid. Zero disables them. For example:
+
+```sh
+go run ./cmd/x24 -attractors 5 -output five-attractors.svg
+```
+
+The calibration command also accepts `-attractant-ramp` and
+`-attractant-jitter` to control the influence and placement of those targets.
+Run `go run ./cmd/x24 -h` for the complete set of growth controls.
+
 See [Desirability-field growth](docs/x24.md) for its rules, defaults,
-and calibration controls. The public generator uses those defaults.
+and calibration controls. The public `Generate` API uses those defaults,
+including zero attractants; these tuning flags do not expand its `Config`.
 
 ## Terrain
 
