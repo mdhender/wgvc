@@ -12,7 +12,7 @@ For every successful generation:
 
 1. Validate `ProvinceCount >= IslandCount >= 1`.
 2. Derive a deterministic random stream for the first generation round.
-3. Scatter sites across the unit square and apply two Lloyd relaxation passes.
+3. Scatter sites across the configured fixed-area rectangle and apply two Lloyd relaxation passes.
 4. Build one Voronoi adjacency graph for the complete world.
 5. Mark a permanent ocean barrier, propagate the configured edge ramp, and add
    jittered regional attractants wherever their edge clearance can be met.

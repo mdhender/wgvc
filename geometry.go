@@ -93,18 +93,58 @@ func tessellateIsland(islandID IslandID, sites []Point) (islandMesh, error) {
 	return mesh, nil
 }
 
+func tessellateRectangle(islandID IslandID, sites []Point, width, height float64) (islandMesh, error) {
+	geometry, err := computeBackendGeometryInBounds(sites, width, height)
+	if err != nil {
+		return islandMesh{}, fmt.Errorf("island %d: %w", islandID, err)
+	}
+
+	normalizedSites := make([]Point, len(sites))
+	for i, site := range sites {
+		normalizedSites[i] = Point{X: site.X / width, Y: site.Y / height}
+	}
+	for i := range geometry.cells {
+		for j, point := range geometry.cells[i].ring {
+			geometry.cells[i].ring[j] = Point{X: point.X / width, Y: point.Y / height}
+		}
+	}
+	for i := range geometry.edges {
+		for j, point := range geometry.edges[i].ends {
+			geometry.edges[i].ends[j] = Point{X: point.X / width, Y: point.Y / height}
+		}
+	}
+	mesh, err := canonicalizeGeometry(islandID, normalizedSites, geometry)
+	if err != nil {
+		return islandMesh{}, fmt.Errorf("island %d: %w", islandID, err)
+	}
+	for i, point := range mesh.corners {
+		mesh.corners[i] = Point{X: point.X * width, Y: point.Y * height}
+	}
+	for i, cell := range mesh.cells {
+		mesh.cells[i].center = Point{X: cell.center.X * width, Y: cell.center.Y * height}
+	}
+	return mesh, nil
+}
+
 // computeBackendGeometry isolates dependency-specific types and restores the
 // caller's site order after the backend sorts its copied input.
 func computeBackendGeometry(sites []Point) (backendGeometry, error) {
+	return computeBackendGeometryInBounds(sites, 1, 1)
+}
+
+func computeBackendGeometryInBounds(sites []Point, width, height float64) (backendGeometry, error) {
 	if len(sites) == 0 {
 		return backendGeometry{}, fmt.Errorf("at least one site is required")
+	}
+	if !(width > 0) || math.IsNaN(width) || math.IsInf(width, 0) || !(height > 0) || math.IsNaN(height) || math.IsInf(height, 0) {
+		return backendGeometry{}, fmt.Errorf("bounds must be finite and positive: %gx%g", width, height)
 	}
 
 	siteIndexes := make(map[Point]int, len(sites))
 	backendSites := make([]voronoi.Vertex, len(sites))
 	for i, site := range sites {
-		if !finitePoint(site) || site.X <= 0 || site.X >= 1 || site.Y <= 0 || site.Y >= 1 {
-			return backendGeometry{}, fmt.Errorf("site %d is outside the open finite unit square: %+v", i, site)
+		if !finitePoint(site) || site.X <= 0 || site.X >= width || site.Y <= 0 || site.Y >= height {
+			return backendGeometry{}, fmt.Errorf("site %d is outside the open finite bounds %gx%g: %+v", i, width, height, site)
 		}
 		if previous, exists := siteIndexes[site]; exists {
 			return backendGeometry{}, fmt.Errorf("sites %d and %d are duplicates", previous, i)
@@ -114,12 +154,12 @@ func computeBackendGeometry(sites []Point) (backendGeometry, error) {
 	}
 
 	if len(sites) == 1 {
-		return oneSiteGeometry(), nil
+		return oneSiteGeometry(width, height), nil
 	}
 
 	// ComputeDiagram sorts its argument in place. A fresh slice protects both
 	// caller order and caller-owned storage.
-	diagram := voronoi.ComputeDiagram(backendSites, voronoi.NewBBox(0, 1, 0, 1), true)
+	diagram := voronoi.ComputeDiagram(backendSites, voronoi.NewBBox(0, width, 0, height), true)
 	if len(diagram.Cells) != len(sites) {
 		return backendGeometry{}, fmt.Errorf("backend returned %d cells for %d distinct sites", len(diagram.Cells), len(sites))
 	}
@@ -188,8 +228,8 @@ func computeBackendGeometry(sites []Point) (backendGeometry, error) {
 	return geometry, nil
 }
 
-func oneSiteGeometry() backendGeometry {
-	ring := []Point{{X: 0, Y: 0}, {X: 1, Y: 0}, {X: 1, Y: 1}, {X: 0, Y: 1}}
+func oneSiteGeometry(width, height float64) backendGeometry {
+	ring := []Point{{X: 0, Y: 0}, {X: width, Y: 0}, {X: width, Y: height}, {X: 0, Y: height}}
 	edges := make([]backendEdge, len(ring))
 	for i := range ring {
 		edges[i] = backendEdge{

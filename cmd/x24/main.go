@@ -67,6 +67,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Uint64Var(&options.config.WorldSeed, "seed", options.config.WorldSeed, "world seed (decimal or 0x-prefixed hexadecimal)")
 	flags.IntVar(&options.config.ProvinceCount, "provinces", options.config.ProvinceCount, "number of land provinces")
 	flags.IntVar(&options.config.IslandCount, "islands", options.config.IslandCount, "number of initial islands")
+	flags.StringVar(&options.config.AspectRatio, "aspect", options.config.AspectRatio, "map aspect ratio in width:height notation")
 	flags.Float64Var(&options.config.OceanPercentage, "ocean", options.config.OceanPercentage, "initial ocean fraction")
 	flags.Float64Var(&options.config.EdgeBarrierWidth, "edge-barrier", options.config.EdgeBarrierWidth, "permanent ocean strip width in unit-map coordinates")
 	flags.Var(rampFlag{values: &options.config.EdgeRamp}, "edge-ramp", "comma-separated desirability values by hop past the barrier")

@@ -6,12 +6,13 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/mdhender/wgvc/internal/aspectratio"
 	"github.com/mdhender/wgvc/internal/singlemesh"
 )
 
 func TestDefaultConfig(t *testing.T) {
 	got := DefaultConfig()
-	if got.WorldSeed != 0x0123456789abcdef || got.ProvinceCount != 1_500 || got.IslandCount != 15 || got.OceanPercentage != 0.68 {
+	if got.WorldSeed != 0x0123456789abcdef || got.ProvinceCount != 1_500 || got.IslandCount != 15 || got.AspectRatio != "1:1" || got.OceanPercentage != 0.68 {
 		t.Fatalf("DefaultConfig() required values = %+v", got)
 	}
 	if got.EdgeBarrierWidth != 0.02 || !reflect.DeepEqual(got.EdgeRamp, []float64{-1, -0.65, -0.40, -0.22, -0.10, -0.04, 0}) || got.ControlPenalty != -0.82 {
@@ -113,7 +114,7 @@ func TestEdgeFieldCreatesBarrierAndConfiguredRamp(t *testing.T) {
 		{ID: 3, Corners: []Point{{X: 0.6, Y: 0.4}}, Neighbors: []int{2, 4}},
 		{ID: 4, Corners: []Point{{X: 0.8, Y: 0.4}}, Neighbors: []int{3}},
 	}
-	values, eligible, _ := edgeField(cells, 0.01, []float64{-1, -0.5, 0})
+	values, eligible, _ := edgeField(cells, singlemesh.Bounds{Width: 1, Height: 1}, 0.01, []float64{-1, -0.5, 0})
 	if !reflect.DeepEqual(values, []float64{-1, -1, -0.5, 0, 0}) {
 		t.Fatalf("edge values = %v, want [-1 -1 -0.5 0 0]", values)
 	}
@@ -129,7 +130,7 @@ func TestEdgeFieldKeepsHarsherValueFromMultiplePaths(t *testing.T) {
 		{ID: 2, Corners: []Point{{X: 0.3, Y: 0.8}}, Neighbors: []int{1, 3}},
 		{ID: 3, Corners: []Point{{X: 0.3, Y: 0.3}}, Neighbors: []int{0, 2}},
 	}
-	values, _, _ := edgeField(cells, 0.01, []float64{-1, -0.4, 0})
+	values, _, _ := edgeField(cells, singlemesh.Bounds{Width: 1, Height: 1}, 0.01, []float64{-1, -0.4, 0})
 	if values[3] != -1 {
 		t.Fatalf("cell reached in one and two hops has value %g, want harsher one-hop value -1", values[3])
 	}
@@ -155,7 +156,7 @@ func TestMakeAttractantsUsesDiePipRegions(t *testing.T) {
 		{9, []int{0, 1, 2, 3, 4, 5, 6, 7, 8}},
 	}
 	for _, test := range tests {
-		attractants, skips := makeAttractants(cells, edgeDistances, []float64{-1, 0}, []float64{1, 0}, test.count, 0.65, roundRandom(1, 0))
+		attractants, skips := makeAttractants(cells, singlemesh.Bounds{Width: 1, Height: 1}, edgeDistances, []float64{-1, 0}, []float64{1, 0}, test.count, 0.65, roundRandom(1, 0))
 		if len(attractants) != len(test.regions) || len(skips) != 0 {
 			t.Fatalf("count %d: attractants=%d skips=%+v, want %d and none", test.count, len(attractants), skips, len(test.regions))
 		}
@@ -164,6 +165,32 @@ func TestMakeAttractantsUsesDiePipRegions(t *testing.T) {
 			wantX, wantY := regionID%3, regionID/3
 			if attractant.RegionX != wantX || attractant.RegionY != wantY || attractant.CellID != regionID || attractant.Point != cells[regionID].Site {
 				t.Errorf("count %d attractant %d = %+v, want region (%d,%d) at cell %d", test.count, i, attractant, wantX, wantY, regionID)
+			}
+		}
+	}
+}
+
+func TestGenerateRectangleUsesFixedAreaBoundsAndPointBudget(t *testing.T) {
+	const ocean = 0.5
+	for _, aspect := range []string{"16:9", "9:16"} {
+		config := DefaultConfig()
+		config.WorldSeed = 42
+		config.ProvinceCount = 40
+		config.IslandCount = 4
+		config.AspectRatio = aspect
+		config.OceanPercentage = ocean
+		config.MaxRounds = 1
+		result, err := Generate(config)
+		if err != nil {
+			t.Fatalf("Generate(%s) error = %v", aspect, err)
+		}
+		if got, want := len(result.Cells), int(math.Ceil(float64(config.ProvinceCount)/(1-ocean))); got != want {
+			t.Errorf("Generate(%s) created %d cells, want unchanged budget %d", aspect, got, want)
+		}
+		width, height, _ := aspectratio.Dimensions(aspect)
+		for _, cell := range result.Cells {
+			if !(cell.Site.X > 0 && cell.Site.X < width && cell.Site.Y > 0 && cell.Site.Y < height) {
+				t.Errorf("Generate(%s) site is outside rectangle %gx%g: %+v", aspect, width, height, cell.Site)
 			}
 		}
 	}
@@ -178,7 +205,7 @@ func TestMakeAttractantsSkipsRegionWithoutClearance(t *testing.T) {
 	edgeRamp := []float64{-1, -0.5, 0}
 	attractantRamp := []float64{1, 0.5, 0}
 	edgeDistances[0] = edgeRampReach(edgeRamp) + attractantRampReach(attractantRamp)
-	attractants, skips := makeAttractants(cells, edgeDistances, edgeRamp, attractantRamp, 9, 0.65, roundRandom(1, 0))
+	attractants, skips := makeAttractants(cells, singlemesh.Bounds{Width: 1, Height: 1}, edgeDistances, edgeRamp, attractantRamp, 9, 0.65, roundRandom(1, 0))
 	if len(attractants) != 8 || len(skips) != 1 || skips[0].RegionX != 0 || skips[0].RegionY != 0 || skips[0].Reason == "" {
 		t.Fatalf("attractants=%d skips=%+v, want region (0,0) skipped with a reason", len(attractants), skips)
 	}
@@ -199,6 +226,7 @@ func TestGenerateRejectsInvalidConfig(t *testing.T) {
 		{},
 		withConfig(valid, func(c *Config) { c.IslandCount = 0 }),
 		withConfig(valid, func(c *Config) { c.ProvinceCount = c.IslandCount - 1 }),
+		withConfig(valid, func(c *Config) { c.AspectRatio = "16/9" }),
 		withConfig(valid, func(c *Config) { c.OceanPercentage = math.NaN() }),
 		withConfig(valid, func(c *Config) { c.EdgeBarrierWidth = -0.01 }),
 		withConfig(valid, func(c *Config) { c.EdgeRamp = nil }),

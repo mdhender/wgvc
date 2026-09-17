@@ -1,4 +1,4 @@
-// Package x24svg renders issue #24-#26 growth experiments and their static field.
+// Package x24svg renders issue #24-#27 growth experiments and their static field.
 package x24svg
 
 import (
@@ -25,17 +25,25 @@ func Render(result x24.Result, width, height int) ([]byte, error) {
 
 	const margin = 20.0
 	mapHeight := float64(height) - 44
-	scale := min(float64(width)-2*margin, mapHeight-2*margin)
-	xOffset := (float64(width) - scale) / 2
-	yOffset := 44 + (mapHeight-scale)/2
+	minimum, maximum := result.Cells[0].Corners[0], result.Cells[0].Corners[0]
+	for _, cell := range result.Cells {
+		for _, point := range cell.Corners {
+			minimum.X, minimum.Y = min(minimum.X, point.X), min(minimum.Y, point.Y)
+			maximum.X, maximum.Y = max(maximum.X, point.X), max(maximum.Y, point.Y)
+		}
+	}
+	worldWidth, worldHeight := maximum.X-minimum.X, maximum.Y-minimum.Y
+	scale := min((float64(width)-2*margin)/worldWidth, (mapHeight-2*margin)/worldHeight)
+	xOffset := (float64(width) - worldWidth*scale) / 2
+	yOffset := 44 + (mapHeight-worldHeight*scale)/2
 	transform := func(point x24.Point) (float64, float64) {
-		return xOffset + point.X*scale, yOffset + (1-point.Y)*scale
+		return xOffset + (point.X-minimum.X)*scale, yOffset + (maximum.Y-point.Y)*scale
 	}
 
 	var svg strings.Builder
 	fmt.Fprintf(&svg, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\">\n", width, height, width, height)
 	svg.WriteString("<rect width=\"100%\" height=\"100%\" fill=\"#f7f5ef\"/>\n")
-	fmt.Fprintf(&svg, "<text x=\"20\" y=\"27\" font-family=\"ui-monospace,monospace\" font-size=\"15\" font-weight=\"700\" fill=\"#17212b\">issues #24-#26 · %d land · %d→%d islands · merges=%d · attr=%d/%d · %d barrier · %.0f%% ocean · round %d</text>\n", landCount(result), result.InitialIslandCount, len(result.Islands), result.MergeCount, len(result.Attractants), len(result.Attractants)+len(result.AttractantSkips), barrierCount(result), result.FinalOcean*100, result.RoundsAttempted)
+	fmt.Fprintf(&svg, "<text x=\"20\" y=\"27\" font-family=\"ui-monospace,monospace\" font-size=\"15\" font-weight=\"700\" fill=\"#17212b\">issues #24-#27 · %d land · %d→%d islands · merges=%d · attr=%d/%d · %d barrier · %.0f%% ocean · round %d</text>\n", landCount(result), result.InitialIslandCount, len(result.Islands), result.MergeCount, len(result.Attractants), len(result.Attractants)+len(result.AttractantSkips), barrierCount(result), result.FinalOcean*100, result.RoundsAttempted)
 	for _, cell := range result.Cells {
 		fill := fieldColor(cell.Desirability)
 		if !cell.LandEligible {

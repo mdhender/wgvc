@@ -19,6 +19,7 @@ func Generate(config Config) (World, error) {
 	growthConfig.WorldSeed = config.WorldSeed
 	growthConfig.ProvinceCount = config.ProvinceCount
 	growthConfig.IslandCount = config.IslandCount
+	growthConfig.AspectRatio = string(config.AspectRatio)
 	result, err := x24.Generate(growthConfig)
 	if err != nil {
 		return World{}, fmt.Errorf("grow islands: %w", err)
@@ -28,7 +29,8 @@ func Generate(config Config) (World, error) {
 	for cellID, cell := range result.Cells {
 		sites[cellID] = Point{X: cell.Site.X, Y: cell.Site.Y}
 	}
-	mesh, err := tessellateIsland(NoIslandID, sites)
+	width, height, _ := config.aspectDimensions()
+	mesh, err := tessellateRectangle(NoIslandID, sites, width, height)
 	if err != nil {
 		return World{}, fmt.Errorf("tessellate world: %w", err)
 	}

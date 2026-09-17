@@ -1,6 +1,7 @@
 # Generation contracts
 
-`Generate` accepts a world seed, province count, and island count. Counts must
+`Generate` accepts a world seed, province count, island count, and named
+width:height aspect ratio. Counts must
 satisfy `ProvinceCount >= IslandCount >= 1`. It returns exactly the requested
 number of land provinces. `IslandCount` specifies initial seeds; growth can
 merge them, so the returned canonical island count is between one and the
@@ -20,16 +21,18 @@ requested count. Water can contain interior components such as lakes.
 
 ## Single-mesh generation
 
-Generation begins with one deterministic point set over the unit square. The
-point count is derived from the requested land count and an initial 68% ocean
+Generation begins with one deterministic point set over a fixed-area rectangle.
+Its width and height come from the configured aspect ratio; `1:1` is the
+zero-value default. The point count is derived from the requested land count
+and an initial 68% ocean
 fraction. Two Lloyd relaxation passes even the spacing without introducing a
 grid, and one Voronoi diagram supplies every eventual land and water cell.
 
 Cells entering the outer permanent barrier are ineligible for land. A graph-hop
 edge ramp raises desirability from strongly negative near that barrier to
-neutral in the interior. The default configuration has no attractants; calibration
-can add up to nine jittered regional attractants where the configured edge and
-attractant ramps leave enough clearance.
+neutral in the interior. The default configuration has no attractants;
+calibration can add up to nine jittered regional attractants where the
+configured edge and attractant ramps leave enough clearance.
 
 Each island receives one uniformly selected seed. Claims give the island
 one-hop control over neighboring cells, making those cells less desirable to

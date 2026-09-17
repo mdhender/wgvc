@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"sort"
 
+	"github.com/mdhender/wgvc/internal/aspectratio"
 	"github.com/mdhender/wgvc/internal/singlemesh"
 )
 
@@ -19,16 +20,18 @@ func Generate(config Config) (Result, error) {
 	if err := config.validate(); err != nil {
 		return Result{}, err
 	}
+	width, height, _ := aspectratio.Dimensions(config.AspectRatio)
+	bounds := singlemesh.Bounds{Width: width, Height: height}
 	for round := 0; round < config.MaxRounds; round++ {
 		ocean := math.Min(config.OceanPercentage+float64(round)*oceanEscalation, maximumOcean)
 		cellCount := int(math.Ceil(float64(config.ProvinceCount) / (1 - ocean)))
 		random := roundRandom(config.WorldSeed, round)
-		mesh, err := singlemesh.Build(cellCount, config.Relaxations, random)
+		mesh, err := singlemesh.Build(cellCount, config.Relaxations, bounds, random)
 		if err != nil {
 			return Result{}, fmt.Errorf("round %d mesh: %w", round+1, err)
 		}
-		edgeValues, landEligible, edgeDistances := edgeField(mesh, config.EdgeBarrierWidth, config.EdgeRamp)
-		attractants, skips := makeAttractants(mesh, edgeDistances, config.EdgeRamp, config.AttractantRamp, config.AttractantCount, config.AttractantJitter, random)
+		edgeValues, landEligible, edgeDistances := edgeField(mesh, bounds, config.EdgeBarrierWidth, config.EdgeRamp)
+		attractants, skips := makeAttractants(mesh, bounds, edgeDistances, config.EdgeRamp, config.AttractantRamp, config.AttractantCount, config.AttractantJitter, random)
 		desirability := desirabilityField(mesh, edgeValues, landEligible, attractants, config.AttractantRamp)
 		state := newGrowthState(mesh, desirability, landEligible, config.ControlPenalty)
 		if state.seedAndGrow(config.IslandCount, config.ProvinceCount, config.SoftmaxTemperature, random) {
@@ -41,7 +44,7 @@ func Generate(config Config) (Result, error) {
 	return Result{}, fmt.Errorf("%w after %d rounds", ErrStarved, config.MaxRounds)
 }
 
-func makeAttractants(cells []singlemesh.Cell, edgeDistances []int, edgeRamp, attractantRamp []float64, count int, jitter float64, random *rand.Rand) ([]Attractant, []AttractantSkip) {
+func makeAttractants(cells []singlemesh.Cell, bounds singlemesh.Bounds, edgeDistances []int, edgeRamp, attractantRamp []float64, count int, jitter float64, random *rand.Rand) ([]Attractant, []AttractantSkip) {
 	const regions = 3
 	clearance := edgeRampReach(edgeRamp) + attractantRampReach(attractantRamp)
 	regionIDs := attractantRegionIDs(count)
@@ -49,16 +52,16 @@ func makeAttractants(cells []singlemesh.Cell, edgeDistances []int, edgeRamp, att
 	skips := make([]AttractantSkip, 0)
 	for _, regionID := range regionIDs {
 		regionX, regionY := regionID%regions, regionID/regions
-		center := Point{X: (float64(regionX) + 0.5) / regions, Y: (float64(regionY) + 0.5) / regions}
-		maximumJitter := jitter / (2 * regions)
+		regionWidth, regionHeight := bounds.Width/regions, bounds.Height/regions
+		center := Point{X: (float64(regionX) + 0.5) * regionWidth, Y: (float64(regionY) + 0.5) * regionHeight}
 		target := Point{
-			X: center.X + (2*random.Float64()-1)*maximumJitter,
-			Y: center.Y + (2*random.Float64()-1)*maximumJitter,
+			X: center.X + (2*random.Float64()-1)*jitter*regionWidth/2,
+			Y: center.Y + (2*random.Float64()-1)*jitter*regionHeight/2,
 		}
 		bestCell, bestDistance := -1, math.Inf(1)
 		for cellID, cell := range cells {
-			cellRegionX := min(int(cell.Site.X*regions), regions-1)
-			cellRegionY := min(int(cell.Site.Y*regions), regions-1)
+			cellRegionX := min(int(cell.Site.X/bounds.Width*regions), regions-1)
+			cellRegionY := min(int(cell.Site.Y/bounds.Height*regions), regions-1)
 			if cellRegionX != regionX || cellRegionY != regionY || edgeDistances[cellID] <= clearance {
 				continue
 			}
@@ -169,7 +172,7 @@ func desirabilityField(cells []singlemesh.Cell, edgeValues []float64, landEligib
 	return values
 }
 
-func edgeField(cells []singlemesh.Cell, barrierWidth float64, ramp []float64) ([]float64, []bool, []int) {
+func edgeField(cells []singlemesh.Cell, bounds singlemesh.Bounds, barrierWidth float64, ramp []float64) ([]float64, []bool, []int) {
 	values := make([]float64, len(cells))
 	landEligible := make([]bool, len(cells))
 	distances := make([]int, len(cells))
@@ -177,7 +180,7 @@ func edgeField(cells []singlemesh.Cell, barrierWidth float64, ramp []float64) ([
 	for cellID, cell := range cells {
 		distances[cellID] = -1
 		landEligible[cellID] = true
-		if cellInBarrier(cell, barrierWidth) {
+		if cellInBarrier(cell, bounds, barrierWidth) {
 			values[cellID] = -1
 			landEligible[cellID] = false
 			distances[cellID] = 0
@@ -206,10 +209,10 @@ func edgeField(cells []singlemesh.Cell, barrierWidth float64, ramp []float64) ([
 	return values, landEligible, distances
 }
 
-func cellInBarrier(cell singlemesh.Cell, width float64) bool {
+func cellInBarrier(cell singlemesh.Cell, bounds singlemesh.Bounds, width float64) bool {
 	for _, point := range cell.Corners {
-		if point.X <= width+boundaryEpsilon || point.X >= 1-width-boundaryEpsilon ||
-			point.Y <= width+boundaryEpsilon || point.Y >= 1-width-boundaryEpsilon {
+		if point.X <= width+boundaryEpsilon || point.X >= bounds.Width-width-boundaryEpsilon ||
+			point.Y <= width+boundaryEpsilon || point.Y >= bounds.Height-width-boundaryEpsilon {
 			return true
 		}
 	}

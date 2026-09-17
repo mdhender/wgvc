@@ -21,6 +21,7 @@ type cliOptions struct {
 	seed       uint64
 	provinces  int
 	islands    int
+	aspect     string
 	width      int
 	height     int
 	format     string
@@ -43,6 +44,7 @@ func run(args []string, stderr io.Writer) error {
 	flags.Uint64Var(&options.seed, "seed", 42, "world generation seed")
 	flags.IntVar(&options.provinces, "provinces", 137, "number of land provinces")
 	flags.IntVar(&options.islands, "islands", 11, "number of islands")
+	flags.StringVar(&options.aspect, "aspect", string(wgvc.AspectRatioSquare), "map aspect ratio in width:height notation")
 	flags.IntVar(&options.width, "width", 1200, "output width in pixels")
 	flags.IntVar(&options.height, "height", 800, "output height in pixels")
 	flags.StringVar(&options.format, "format", formatSVG, "output format: svg, png, or both")
@@ -67,6 +69,7 @@ func run(args []string, stderr io.Writer) error {
 		WorldSeed:     options.seed,
 		ProvinceCount: options.provinces,
 		IslandCount:   options.islands,
+		AspectRatio:   wgvc.AspectRatio(options.aspect),
 	})
 	if err != nil {
 		return fmt.Errorf("generate world: %w", err)

@@ -1,4 +1,4 @@
-// Package singlemesh builds the relaxed unit-square Voronoi mesh shared by
+// Package singlemesh builds the relaxed rectangular Voronoi mesh shared by
 // single-mesh growth experiments.
 package singlemesh
 
@@ -15,6 +15,11 @@ type Point struct {
 	Y float64
 }
 
+type Bounds struct {
+	Width  float64
+	Height float64
+}
+
 type Cell struct {
 	ID        int
 	Site      Point
@@ -22,17 +27,20 @@ type Cell struct {
 	Neighbors []int
 }
 
-func Build(count, relaxations int, random interface{ Float64() float64 }) ([]Cell, error) {
+func Build(count, relaxations int, bounds Bounds, random interface{ Float64() float64 }) ([]Cell, error) {
 	const siteInset = 1e-12
+	if !validBounds(bounds) {
+		return nil, fmt.Errorf("bounds must be finite and positive: %+v", bounds)
+	}
 	points := make([]Point, count)
 	for i := range points {
 		points[i] = Point{
-			X: siteInset + (1-2*siteInset)*random.Float64(),
-			Y: siteInset + (1-2*siteInset)*random.Float64(),
+			X: siteInset + (bounds.Width-2*siteInset)*random.Float64(),
+			Y: siteInset + (bounds.Height-2*siteInset)*random.Float64(),
 		}
 	}
 	for range relaxations {
-		diagram, indexes, err := computeDiagram(points)
+		diagram, indexes, err := computeDiagram(points, bounds)
 		if err != nil {
 			return nil, err
 		}
@@ -48,7 +56,7 @@ func Build(count, relaxations int, random interface{ Float64() float64 }) ([]Cel
 		points = relaxed
 	}
 
-	diagram, indexes, err := computeDiagram(points)
+	diagram, indexes, err := computeDiagram(points, bounds)
 	if err != nil {
 		return nil, err
 	}
@@ -85,12 +93,12 @@ func Build(count, relaxations int, random interface{ Float64() float64 }) ([]Cel
 }
 
 // ComputeDiagram sorts its input, so it always receives a disposable copy.
-func computeDiagram(points []Point) (*voronoi.Diagram, map[Point]int, error) {
+func computeDiagram(points []Point, bounds Bounds) (*voronoi.Diagram, map[Point]int, error) {
 	backend := make([]voronoi.Vertex, len(points))
 	indexes := make(map[Point]int, len(points))
 	for i, point := range points {
-		if !finitePoint(point) || point.X <= 0 || point.X >= 1 || point.Y <= 0 || point.Y >= 1 {
-			return nil, nil, fmt.Errorf("site %d is outside the open unit square: %+v", i, point)
+		if !finitePoint(point) || point.X <= 0 || point.X >= bounds.Width || point.Y <= 0 || point.Y >= bounds.Height {
+			return nil, nil, fmt.Errorf("site %d is outside the open bounds %+v: %+v", i, bounds, point)
 		}
 		if previous, exists := indexes[point]; exists {
 			return nil, nil, fmt.Errorf("sites %d and %d are duplicates", previous, i)
@@ -98,7 +106,7 @@ func computeDiagram(points []Point) (*voronoi.Diagram, map[Point]int, error) {
 		indexes[point] = i
 		backend[i] = voronoi.Vertex{X: point.X, Y: point.Y}
 	}
-	diagram := voronoi.ComputeDiagram(backend, voronoi.NewBBox(0, 1, 0, 1), true)
+	diagram := voronoi.ComputeDiagram(backend, voronoi.NewBBox(0, bounds.Width, 0, bounds.Height), true)
 	if len(diagram.Cells) != len(points) {
 		return nil, nil, fmt.Errorf("Voronoi backend returned %d cells for %d sites", len(diagram.Cells), len(points))
 	}
@@ -145,4 +153,10 @@ func signedArea(ring []Point) float64 {
 
 func finitePoint(point Point) bool {
 	return !math.IsNaN(point.X) && !math.IsInf(point.X, 0) && !math.IsNaN(point.Y) && !math.IsInf(point.Y, 0)
+}
+
+func validBounds(bounds Bounds) bool {
+	return bounds.Width > 2e-12 && bounds.Height > 2e-12 &&
+		!math.IsNaN(bounds.Width) && !math.IsInf(bounds.Width, 0) &&
+		!math.IsNaN(bounds.Height) && !math.IsInf(bounds.Height, 0)
 }

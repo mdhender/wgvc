@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/mdhender/wgvc/internal/aspectratio"
 	"github.com/mdhender/wgvc/internal/singlemesh"
 )
 
@@ -20,6 +21,7 @@ type Config struct {
 	WorldSeed          uint64
 	ProvinceCount      int
 	IslandCount        int
+	AspectRatio        string
 	OceanPercentage    float64
 	EdgeBarrierWidth   float64
 	EdgeRamp           []float64
@@ -37,6 +39,7 @@ func DefaultConfig() Config {
 		WorldSeed:          0x0123456789abcdef,
 		ProvinceCount:      1_500,
 		IslandCount:        15,
+		AspectRatio:        aspectratio.Default,
 		OceanPercentage:    0.68,
 		EdgeBarrierWidth:   0.02,
 		EdgeRamp:           []float64{-1, -0.65, -0.40, -0.22, -0.10, -0.04, 0},
@@ -56,6 +59,9 @@ func (c Config) validate() error {
 	}
 	if c.ProvinceCount < c.IslandCount {
 		return fmt.Errorf("province count must be at least island count: provinces=%d islands=%d", c.ProvinceCount, c.IslandCount)
+	}
+	if _, _, err := aspectratio.Dimensions(c.AspectRatio); err != nil {
+		return err
 	}
 	if !(c.OceanPercentage >= 0 && c.OceanPercentage <= maximumOcean) {
 		return fmt.Errorf("ocean percentage must be in [0, %.2f]: %g", maximumOcean, c.OceanPercentage)

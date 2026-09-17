@@ -21,6 +21,7 @@ func main() {
 		WorldSeed:     42,
 		ProvinceCount: 100,
 		IslandCount:   8,
+		AspectRatio:   wgvc.AspectRatioWidescreen,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -43,6 +44,9 @@ ProvinceCount >= IslandCount >= 1
 ```
 
 Every successful call returns exactly the requested number of land provinces.
+`AspectRatio` accepts width:height names such as `1:1`, `4:3`, `16:9`,
+`2.39:1`, and their portrait counterparts. The zero value is `1:1`. Changing
+the ratio changes the map bounds but not their area or the point budget.
 `IslandCount` is the number of initial seeds; directly connected islands merge,
 so the returned world may contain fewer islands. A world-level ocean mesh covers
 the space between and around land and can include interior lakes. Water provinces
@@ -92,7 +96,7 @@ resolution limits, regression fixtures, and reproduction command.
 The `wgvc-render` command generates a world and writes an SVG map by default:
 
 ```sh
-go run ./cmd/wgvc-render -seed 42 -provinces 137 -islands 11 -output world
+go run ./cmd/wgvc-render -seed 42 -provinces 137 -islands 11 -aspect 16:9 -output world
 ```
 
 Use `-format png` for `world.png`, or `-format both` to write both

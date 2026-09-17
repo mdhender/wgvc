@@ -14,6 +14,8 @@ func TestGenerateRejectsInvalidConfigWithoutPartialWorld(t *testing.T) {
 		{ProvinceCount: 0, IslandCount: 1},
 		{ProvinceCount: -1, IslandCount: 1},
 		{ProvinceCount: 2, IslandCount: 3},
+		{ProvinceCount: 2, IslandCount: 1, AspectRatio: "16/9"},
+		{ProvinceCount: 2, IslandCount: 1, AspectRatio: "0:1"},
 	} {
 		world, err := Generate(config)
 		if err == nil {
@@ -108,6 +110,47 @@ func TestGenerateIsDeterministic(t *testing.T) {
 	}
 	if !reflect.DeepEqual(first, second) {
 		t.Fatal("Generate() results differ for identical inputs")
+	}
+}
+
+func TestGenerateUsesFixedAreaAspectRatioBounds(t *testing.T) {
+	for _, aspect := range []AspectRatio{AspectRatioStandard, AspectRatioWidescreen, AspectRatioCinema, AspectRatioPortrait} {
+		t.Run(string(aspect), func(t *testing.T) {
+			config := Config{WorldSeed: 42, ProvinceCount: 60, IslandCount: 5, AspectRatio: aspect}
+			world, err := Generate(config)
+			if err != nil {
+				t.Fatalf("Generate() error = %v", err)
+			}
+			assertValidWorld(t, world, config)
+
+			minimum, maximum := world.Corners[0].Point, world.Corners[0].Point
+			for _, corner := range world.Corners[1:] {
+				minimum.X, minimum.Y = math.Min(minimum.X, corner.Point.X), math.Min(minimum.Y, corner.Point.Y)
+				maximum.X, maximum.Y = math.Max(maximum.X, corner.Point.X), math.Max(maximum.Y, corner.Point.Y)
+			}
+			widthRatio, heightRatio, _ := config.aspectDimensions()
+			wantRatio := widthRatio / heightRatio
+			gotRatio := (maximum.X - minimum.X) / (maximum.Y - minimum.Y)
+			if math.Abs(gotRatio-wantRatio) > geometryTolerance*wantRatio {
+				t.Errorf("world bounds ratio = %.17g, want %.17g", gotRatio, wantRatio)
+			}
+		})
+	}
+}
+
+func TestGenerateZeroAspectRatioMatchesSquare(t *testing.T) {
+	config := Config{WorldSeed: 1234, ProvinceCount: 40, IslandCount: 6}
+	zero, err := Generate(config)
+	if err != nil {
+		t.Fatalf("zero-value aspect Generate() error = %v", err)
+	}
+	config.AspectRatio = AspectRatioSquare
+	square, err := Generate(config)
+	if err != nil {
+		t.Fatalf("square Generate() error = %v", err)
+	}
+	if !reflect.DeepEqual(zero, square) {
+		t.Fatal("zero-value aspect ratio does not produce the square default")
 	}
 }
 
