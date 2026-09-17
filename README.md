@@ -93,40 +93,34 @@ resolution limits, regression fixtures, and reproduction command.
 
 ## Render a map
 
-The `wgvc-render` command generates a world and writes an SVG map by default:
+The `wgvc-render` command runs the desirability-field generator and writes an
+SVG map:
 
 ```sh
-go run ./cmd/wgvc-render -seed 42 -provinces 137 -islands 11 -aspect 16:9 -output world
+go run ./cmd/wgvc-render -seed 42 -provinces 137 -islands 11 -aspect 16:9 -output world.svg
 ```
 
-Use `-format png` for `world.png`, or `-format both` to write both
-`world.svg` and `world.png`. The `-output` value is a path without an
-extension. `-width` and `-height` set both SVG and PNG dimensions in pixels.
-Both formats are rendered from the same scene and include terrain fills, thin
-cell borders, and a heavier coastline.
-
-The production issue #24-#26 algorithm has a calibration command for its
-desirability field, permanent ocean barrier, and optional regional attractants:
-
-```sh
-go run ./cmd/x24
-```
+The SVG dimensions are derived from the requested land-province count, the
+effective ocean percentage, and the aspect ratio. Water cells are shaded by
+static desirability; purple rings mark attractants, dark dots mark surviving
+island seeds, and the darker outer band is the permanent ocean barrier.
 
 Attractants are disabled by default. Use `-attractors` with 1 through 6 to
 select regions in the familiar die-face pattern, or 9 to select every region
 of the 3×3 grid. Zero disables them. For example:
 
 ```sh
-go run ./cmd/x24 -attractors 5 -output five-attractors.svg
+go run ./cmd/wgvc-render -attractors 5 -output five-attractors.svg
 ```
 
-The calibration command also accepts `-attractant-ramp` and
-`-attractant-jitter` to control the influence and placement of those targets.
-Run `go run ./cmd/x24 -h` for the complete set of growth controls.
+The command exposes all growth controls, including `-ocean`, `-edge-barrier`,
+`-edge-ramp`, `-attractant-ramp`, `-attractant-jitter`, `-temperature`,
+`-control-penalty`, `-rounds`, and `-relaxations`. Run
+`go run ./cmd/wgvc-render -h` for their defaults and descriptions.
 
-See [Desirability-field growth](docs/x24.md) for its rules, defaults,
-and calibration controls. The public `Generate` API uses those defaults,
-including zero attractants; these tuning flags do not expand its `Config`.
+See [Desirability-field growth](docs/x24.md) for the rules and defaults. The
+public `Generate` API uses those defaults, including zero attractants; these
+tuning flags do not expand its `Config`.
 
 ## Terrain
 
