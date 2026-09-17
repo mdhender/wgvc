@@ -1,98 +1,55 @@
-# Blob-island generation
+# Single-mesh island generation
 
-`Generate` builds irregular Voronoi islands while preserving its original
-public contract: callers provide only `WorldSeed`, `ProvinceCount`, and
-`IslandCount`, and receive exactly those land province and island counts plus
-one continuous world-level ocean. Water provinces use `TerrainWater`. Shape
-parameters, selection order, and placement envelopes remain private.
-
-The approach is inspired by Amit Patel's
-[Polygonal Map Generation for Games](http://www-cs-students.stanford.edu/~amitp/game-programming/polygon-map-generation/):
-generate a complete polygon map, classify land against surrounding ocean, and
-retain shared topology. This package does **not** implement the article's
-elevation, hydrology, moisture, climate, biome, or noisy-rendering systems.
-Lakes, rivers, routes, and rendering-only edge subdivision are also outside
-this generator.
+`Generate` builds irregular Voronoi islands from one point set shared by the
+whole world. Callers provide only `WorldSeed`, `ProvinceCount`, and
+`IslandCount`, and receive exactly those land and island counts plus one
+continuous ocean. Water provinces use `TerrainWater` and `NoIslandID`.
 
 ## Stage order
 
 For every successful generation:
 
 1. Validate `ProvinceCount >= IslandCount >= 1`.
-2. Allocate the exact land count with descending Fibonacci weights.
-3. Build each island's deterministic candidate sites and independent blob
-   shape phases.
-4. Tessellate and canonicalize the complete candidate map in `[0,1]²`.
-5. Reserve clipping-frame cells as ocean and select exactly the allocated
-   number of edge-connected interior cells. Every omitted candidate remains
-   connected through omitted cells to frame water, so no lake is enclosed.
-6. Preserve selected candidate identities as land and all other candidates as
-   water. A land/water shared edge is the coastline.
-7. Measure retained polygon area and uniformly scale the island so land area
-   equals its allocation. Scatter private candidate envelopes with seeded
-   rejection packing and guaranteed water gaps.
-8. Tessellate all placed candidate sites once in the complete world bounds.
-   Private frame sites preserve the blob coastlines while their water cells
-   fill every gap and connect between islands.
-9. Assemble world-global IDs and assign land terrain last, preserving water.
+2. Derive a deterministic random stream for the first generation round.
+3. Scatter sites across the unit square and apply two Lloyd relaxation passes.
+4. Build one Voronoi adjacency graph for the complete world.
+5. Plant one legal seed cell per island at least three graph hops from the map
+   boundary and other islands, with reduced spacing only when a tiny valid
+   configuration cannot satisfy the preferred distances.
+6. Draw islands and legal frontier cells randomly, growing all islands until
+   exactly the requested land count has been claimed. Reject claims that would
+   join different islands or disconnect the remaining ocean.
+7. Retry from a fresh deterministic mesh with more ocean if a round cannot
+   finish.
+8. Scale the complete mesh so total land area equals the requested province
+   count, canonicalize shared corners and edges, and assign land terrain.
 
 Every public province remains finite, convex, counterclockwise, positive-area,
 and center-containing. Every island is one authoritative shared-edge land
-component. Coastlines are canonical single loops with no orphan corners or
-edges, islands do not share land adjacency, the ocean is connected, the world
-bounds have no uncovered gaps, and total land area remains one world area unit
-per province.
-
-## Shape resolution
-
-The coastline follows whole retained Voronoi cells. This makes bays,
-promontories, and seed-dependent outline variation visible on medium and large
-islands without changing polygon edges only for rendering. It also imposes a
-deliberate resolution limit: a one-province island is one convex polygon, and
-very small islands have only a few cells with which to express their outline.
-Coastline complexity increases with province count.
-
-Candidate capacity is bounded rather than retry-based. For `n` land cells, the
-smallest interior square side `s` satisfying `s² >= 2n` is surrounded by a
-one-cell frame. Sites are sampled inside those slots. Selection remains
-row-convex, which guarantees progress, land connectivity, and an exterior path
-for all omitted water.
+component. Islands never share land adjacency or touch the world boundary, the
+ocean is connected, the world bounds have no uncovered gaps, and average land
+province area is one world area unit.
 
 ## Determinism and regression coverage
 
-Random stages use locally constructed `math/rand/v2` PCG streams derived from
-the world seed and separate domains for candidate sites, each island's shape,
-placement, and terrain. Random consumption in one domain cannot perturb any
-other domain. Identical configurations produce deeply identical worlds for a
-fixed generator version; a later generator version may intentionally update
-the fixtures and output.
+Growth and terrain use locally constructed `math/rand/v2` PCG streams derived
+from the world seed in separate domains. Identical configurations produce
+deeply identical worlds for a fixed generator version; a later version may
+intentionally update fixtures and output.
 
 The exhaustive small-world matrix covers every valid province/island count
 through 12 across three seeds. Fixed medium, asymmetric multi-island, and large
-fixtures additionally lock exact corner, edge, and coastline counts plus
-normalized coastline signatures. Tests independently check frame exclusion,
-exterior-water connectivity, land connectivity, canonical coastline loops,
-complete topology without orphans, connected world water, complete bounds
-coverage, island separation, area scaling, geometry, terrain, full-world
-determinism, and concurrent race safety. The primary continuous-ocean fixture
-uses seed `0x0123456789abcdef`, 137 land provinces, and 11 islands. Shape
-assertions require sufficiently large
-fixtures to have non-square, concave silhouettes; distinct signatures ensure
-the retained fixtures do not collapse to one repeated outline.
-
-The SVG gallery is generated by test-only code and is not part of the public
-rendering API. It uses a uniform land fill, thin province boundaries, and a
-heavy coastline so terrain does not obscure shape. Tests compare deterministic
-SVG source, not screenshots or raster pixels; structural regressions do not
-depend on the image comparison.
+fixtures lock exact corner, edge, coastline, allocation, and normalized
+coastline signatures. Tests also check connected land and water, canonical
+topology without orphans, complete bounds coverage, area scaling, terrain,
+determinism, and concurrent race safety.
 
 ![Deterministic tiny, medium, large, and multi-island fixtures](blob-islands.svg)
 
-Regenerate the labeled gallery, including its recorded seed and count inputs,
-with one command from the repository root:
+Regenerate the gallery with:
 
 ```sh
-WGVC_UPDATE_BLOB_GALLERY=1 go test -run TestBlobIslandGallery
+WGVC_UPDATE_SINGLE_MESH_GALLERY=1 go test -run TestSingleMeshIslandGallery
 ```
 
 Run all structural and race checks with:

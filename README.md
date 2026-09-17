@@ -1,8 +1,8 @@
 # wgvc
 
-`wgvc` generates deterministic, province-first game worlds composed of
-Fibonacci-weighted islands, clipped Voronoi provinces, shared polygon topology,
-and spatially correlated terrain.
+`wgvc` generates deterministic, province-first game worlds on one relaxed
+Voronoi mesh, with concurrently grown islands, shared polygon topology, a
+continuous ocean, and spatially correlated terrain.
 
 ## Usage
 
@@ -45,8 +45,8 @@ ProvinceCount >= IslandCount >= 1
 Every successful call returns exactly the requested number of land provinces
 and islands, with at least one land province per island, plus a world-level
 ocean mesh covering the space between and around them. Water provinces have
-`TerrainWater` and do not appear in `Island.ProvinceIDs`. For a fixed version
-of this generator, identical `Config` values produce deeply identical `World` values.
+`TerrainWater`, use `NoIslandID`, and do not appear in `Island.ProvinceIDs`.
+For a fixed version of this generator, identical `Config` values produce deeply identical `World` values.
 Generation stages use independent deterministic random streams, so consuming
 randomness in terrain generation cannot perturb island placement or province
 tessellation. A newer generator version may intentionally change generated
@@ -59,6 +59,8 @@ The returned geometry is indexed:
 - Each `Island`, `Province`, `Corner`, and `Edge` has an ID equal to its index
   in the corresponding `World` slice.
 - `Island.ProvinceIDs` lists the island's land provinces in canonical order.
+- `Province.IslandID` identifies its island for land and is `NoIslandID` for
+  water.
 - `Province.CornerIDs` is a counterclockwise polygon ring without a repeated
   closing corner. `Province.Center` is its original Voronoi generating point,
   not its polygon centroid.
@@ -71,17 +73,15 @@ two provinces are adjacent when they share a boundary. It is not a game route.
 Future routes may be directed, so `A -> B` and `B -> A` will be separate
 decisions rather than consequences of geometric adjacency.
 
-Each island is an irregular blob selected from a larger Voronoi map.
-Frame-touching and unselected sites constrain its coastline, then all placed
-sites are tessellated together into one continuous world ocean alongside the
-exact requested connected land cells. The coastline can form
-bays and promontories while every province remains one convex polygon. A
-one-province island is therefore still one convex cell, and coastline detail
-increases with province count rather than adding rendering-only noise.
+The generator creates and Lloyd-relaxes one point set for the entire world,
+then plants one seed per island and grows all islands concurrently across that
+mesh. Different islands never share a land edge, no island touches the map
+boundary, and claims preserve one connected ocean. The coastline can form bays
+and promontories while every province remains one convex polygon.
 
-The deterministic [blob-island gallery](docs/blob-islands.svg) shows tiny,
+The deterministic [single-mesh island gallery](docs/blob-islands.svg) shows tiny,
 medium, large, and multi-island fixtures without terrain colors. See
-[Blob-island generation](docs/blob-islands.md) for the pipeline, guarantees,
+[Single-mesh island generation](docs/blob-islands.md) for the pipeline, guarantees,
 resolution limits, regression fixtures, and reproduction command.
 
 ## Render a map
@@ -98,15 +98,15 @@ extension. `-width` and `-height` set both SVG and PNG dimensions in pixels.
 Both formats are rendered from the same scene and include terrain fills, thin
 cell borders, and a heavier coastline.
 
-The experimental single-mesh island-growth algorithm from issue #23 has its
-own command and does not alter `Generate`:
+The calibration command for the single-mesh growth algorithm accepts additional
+ocean, distance, retry, and relaxation controls without expanding the public
+`Config` API:
 
 ```sh
 go run ./cmd/x23
 ```
 
-See [Issue #23 single-mesh growth experiment](docs/x23.md) for its defaults,
-algorithm, and calibration options.
+See [Single-mesh growth calibration](docs/x23.md) for its defaults and options.
 
 ## Terrain
 

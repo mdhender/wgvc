@@ -1,54 +1,82 @@
 package wgvc
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"math"
 
-// Generate constructs a deterministic world with separated islands, one
-// world-level Voronoi mesh, and spatially correlated terrain. All IDs equal
-// their indexes in the corresponding world collections.
+	"github.com/mdhender/wgvc/internal/x23"
+)
+
+const (
+	productionOceanPercentage  = 0.68
+	preferredEdgeDistance      = 3
+	preferredIslandDistance    = 3
+	fallbackEdgeDistance       = 1
+	fallbackIslandDistance     = 2
+	productionMaximumRounds    = 20
+	productionLloydRelaxations = 2
+)
+
+// Generate constructs a deterministic world by growing separated islands on
+// one world-level Voronoi mesh. All IDs equal their indexes in the
+// corresponding world collections.
 func Generate(config Config) (World, error) {
 	if err := config.validate(); err != nil {
 		return World{}, err
 	}
 
-	allocations, err := allocateProvinces(config.ProvinceCount, config.IslandCount)
-	if err != nil {
-		return World{}, fmt.Errorf("allocate provinces: %w", err)
+	growthConfig := x23.Config{
+		WorldSeed:         config.WorldSeed,
+		ProvinceCount:     config.ProvinceCount,
+		IslandCount:       config.IslandCount,
+		OceanPercentage:   productionOceanPercentage,
+		MinEdgeDistance:   preferredEdgeDistance,
+		MinIslandDistance: preferredIslandDistance,
+		MaxRounds:         productionMaximumRounds,
+		Relaxations:       productionLloydRelaxations,
 	}
-	plans, err := planIslands(config, allocations)
-	if err != nil {
-		return World{}, fmt.Errorf("plan islands: %w", err)
+	result, err := x23.Generate(growthConfig)
+	if errors.Is(err, x23.ErrUnsatisfiable) {
+		growthConfig.MinEdgeDistance = fallbackEdgeDistance
+		growthConfig.MinIslandDistance = fallbackIslandDistance
+		result, err = x23.Generate(growthConfig)
 	}
-	meshes, err := tessellateIslands(plans)
 	if err != nil {
-		return World{}, fmt.Errorf("tessellate islands: %w", err)
+		return World{}, fmt.Errorf("grow islands: %w", err)
 	}
-	layout, err := placeIslands(config, plans, meshes)
-	if err != nil {
-		return World{}, fmt.Errorf("place islands: %w", err)
+
+	sites := make([]Point, len(result.Cells))
+	for cellID, cell := range result.Cells {
+		sites[cellID] = Point{X: cell.Site.X, Y: cell.Site.Y}
 	}
-	mesh, islandIDs, land, err := tessellateWorld(layout)
+	mesh, err := tessellateIsland(NoIslandID, sites)
 	if err != nil {
 		return World{}, fmt.Errorf("tessellate world: %w", err)
 	}
-
-	world := World{
-		Islands: make([]Island, config.IslandCount),
+	landArea, err := grownLandArea(mesh, result)
+	if err != nil {
+		return World{}, fmt.Errorf("measure land: %w", err)
 	}
-	for islandIndex, placed := range layout.islands {
-		world.Islands[islandIndex] = Island{
-			ID:          placed.id,
-			ProvinceIDs: make([]ProvinceID, 0, placed.landProvinceCount),
-		}
+	scale := math.Sqrt(float64(config.ProvinceCount) / landArea)
+	mesh = transformMesh(mesh, uniformTransform{scale: scale})
+
+	world := World{Islands: make([]Island, config.IslandCount)}
+	for islandID := range world.Islands {
+		world.Islands[islandID].ID = IslandID(islandID)
 	}
 	for cornerID, point := range mesh.corners {
 		world.Corners = append(world.Corners, Corner{ID: CornerID(cornerID), Point: point})
 	}
 	for cellID, cell := range mesh.cells {
 		provinceID := ProvinceID(cellID)
-		terrain := TerrainWater
-		if land[cellID] {
-			world.Islands[islandIDs[cellID]].ProvinceIDs = append(world.Islands[islandIDs[cellID]].ProvinceIDs, provinceID)
-			terrain = TerrainPlains
+		islandID := IslandID(result.Cells[cellID].IslandID)
+		terrain := TerrainPlains
+		if result.Cells[cellID].IslandID == x23.Water {
+			islandID = NoIslandID
+			terrain = TerrainWater
+		} else {
+			world.Islands[islandID].ProvinceIDs = append(world.Islands[islandID].ProvinceIDs, provinceID)
 		}
 		cornerIDs := make([]CornerID, len(cell.cornerIDs))
 		for ringIndex, cornerID := range cell.cornerIDs {
@@ -56,7 +84,7 @@ func Generate(config Config) (World, error) {
 		}
 		world.Provinces = append(world.Provinces, Province{
 			ID:        provinceID,
-			IslandID:  islandIDs[cellID],
+			IslandID:  islandID,
 			Center:    cell.center,
 			CornerIDs: cornerIDs,
 			Terrain:   terrain,
@@ -77,54 +105,23 @@ func Generate(config Config) (World, error) {
 	return world, nil
 }
 
-// tessellateWorld uses every placed candidate site as a generator in one
-// square enclosing the complete layout. Private frame sites still constrain
-// each coastline, while their world-level water cells bridge the former gaps
-// between independently clipped candidate envelopes.
-func tessellateWorld(layout islandLayout) (islandMesh, []IslandID, []bool, error) {
-	bounds := squareBounds(layout.bounds)
-	side := bounds.max.X - bounds.min.X
-	normalize := func(point Point) Point {
-		return Point{X: (point.X - bounds.min.X) / side, Y: (point.Y - bounds.min.Y) / side}
+func grownLandArea(mesh islandMesh, result x23.Result) (float64, error) {
+	if len(mesh.cells) != len(result.Cells) {
+		return 0, fmt.Errorf("mesh has %d cells for %d growth cells", len(mesh.cells), len(result.Cells))
 	}
-
-	count := 0
-	for _, island := range layout.islands {
-		count += len(island.candidateMesh.cells)
-	}
-	sites := make([]Point, 0, count)
-	islandIDs := make([]IslandID, 0, count)
-	land := make([]bool, 0, count)
-	for _, island := range layout.islands {
-		selected := make([]bool, len(island.candidateMesh.cells))
-		for _, candidateID := range island.landCandidateIDs {
-			selected[candidateID] = true
+	area := 0.0
+	for cellID, cell := range mesh.cells {
+		if result.Cells[cellID].IslandID == x23.Water {
+			continue
 		}
-		for candidateID, cell := range island.candidateMesh.cells {
-			sites = append(sites, normalize(cell.center))
-			islandIDs = append(islandIDs, island.id)
-			land = append(land, selected[candidateID])
+		ring := make([]Point, len(cell.cornerIDs))
+		for ringIndex, cornerID := range cell.cornerIDs {
+			ring[ringIndex] = mesh.corners[cornerID]
 		}
+		area += signedArea(ring)
 	}
-
-	mesh, err := tessellateIsland(0, sites)
-	if err != nil {
-		return islandMesh{}, nil, nil, err
+	if math.IsNaN(area) || math.IsInf(area, 0) || area <= 0 {
+		return 0, fmt.Errorf("land area must be finite and positive: %g", area)
 	}
-	return transformMesh(mesh, uniformTransform{scale: side, translation: bounds.min}), islandIDs, land, nil
-}
-
-func squareBounds(bounds rectangle) rectangle {
-	width := bounds.max.X - bounds.min.X
-	height := bounds.max.Y - bounds.min.Y
-	if width < height {
-		padding := (height - width) / 2
-		bounds.min.X -= padding
-		bounds.max.X += padding
-	} else if height < width {
-		padding := (width - height) / 2
-		bounds.min.Y -= padding
-		bounds.max.Y += padding
-	}
-	return bounds
+	return area, nil
 }

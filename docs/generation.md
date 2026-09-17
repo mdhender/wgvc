@@ -1,15 +1,9 @@
 # Generation contracts
 
 `Generate` accepts a world seed, province count, and island count. Counts must
-satisfy `ProvinceCount >= IslandCount >= 1`. It creates the exact requested
-number of canonical islands and land provinces, allocates at least one land
-province to every island, and also returns a continuous world-level ocean.
-Island planning creates candidate sites and shape parameters. Geometry first
-tessellates the private candidate maps and selects exact connected blobs.
-Placement scales land area and separates the islands. `Generate` then
-tessellates every placed candidate site together across the world bounds,
-classifies selected sites as land and all others as water, and assigns
-world-global IDs and terrain.
+satisfy `ProvinceCount >= IslandCount >= 1`. It returns exactly the requested
+number of canonical islands and land provinces, with at least one land province
+per island, plus a connected world-level ocean.
 
 ## Coordinates and topology
 
@@ -19,59 +13,42 @@ world-global IDs and terrain.
 - Every ID is the zero-based position of the object in its canonical world
   collection. Membership lists use that same canonical order.
 - A province center is its Voronoi generating point, not its polygon centroid.
+- Land provinces identify their island. Water provinces use `NoIslandID`.
 - An interior edge's incident provinces are the authoritative undirected
   geometric adjacency. An edge is never a game route.
 
-## Allocation
+## Single-mesh generation
 
-The allocator reserves one province for every island. It apportions the
-remainder in proportion to descending Fibonacci weights, using exact
-`math/big.Int` arithmetic. Truncated units are assigned by descending
-fractional remainder, with lower island IDs winning ties. This guarantees an
-exact total without imposing an arbitrary island-count cap.
+Generation begins with one deterministic point set over the unit square. The
+point count is derived from the requested land count and an initial 68% ocean
+fraction. Two Lloyd relaxation passes even the spacing without introducing a
+grid, and one Voronoi diagram supplies every eventual land and water cell.
 
-## Random streams
+Each island receives one seed cell at least three graph hops from the map
+boundary and other islands. Islands then grow concurrently: an island is drawn
+from a deterministic random deck and claims a random legal frontier cell. A
+claim cannot violate that spacing or disconnect the remaining water graph.
+Growth stops after exactly the requested number of land cells has been claimed.
+Tiny valid configurations that cannot satisfy three-hop spacing retry with one
+edge hop and two island hops.
 
-Randomness uses local `math/rand/v2` PCG generators. The world seed is combined
-with fixed placement, per-island candidate-site, per-island blob-shape, and
-terrain domains and expanded into PCG's two seeds with SplitMix64. Recreating
-a stream recreates its sequence, and consuming one stage's stream cannot alter
-another stage's sequence. No package-global random source is used.
+If a round cannot place or grow every island, the complete attempt is discarded.
+The next deterministic round adds three percentage points of ocean, up to 95%,
+and creates a fresh point set. Production allows twenty rounds. A round is a
+separate derived random stream, so retries remain reproducible rather than
+depending on mutable global state.
 
-## Island planning
+After growth, the mesh is uniformly scaled so total land area equals the land
+province count. A typical land province therefore has area one in world
+coordinates. Canonicalization assigns shared world-global corner and edge IDs,
+and terrain is assigned only after geometry and topology are final.
 
-Island planning remains private input to later geometry stages. An island
-allocated `n` land provinces receives the smallest square interior candidate
-grid with capacity at least `2n`, surrounded by a one-cell frame. One site is
-sampled from the inset center half of each grid slot. The complete map is
-tessellated in the unit square before land selection, so water cells
-constrain the final coastline.
+## Determinism
 
-A deterministic radial score with independent three-fold and five-fold shape
-phases grows exactly `n` edge-connected interior cells from the center. Frame
-cells are never eligible. Row-convex growth ensures every omitted cell remains
-connected to clipping-frame water, so the generator introduces no lakes. The
-selected candidate identities are retained through world tessellation.
-Land/water boundaries become coastline edges with both incident provinces
-retained.
+Randomness uses local `math/rand/v2` PCG generators. The world seed and round
+number derive each growth stream through SplitMix64; terrain uses an independent
+domain-separated stream. No package-global random source is used. Identical
+configurations produce deeply identical worlds for a fixed generator version.
 
-Placement measures each retained mesh and applies a uniform scale so its
-world-space land area equals `n`. It scatters private candidate envelopes, not
-merely the tighter land bounds, with deterministic seeded rejection packing in
-an expanding square. Every pair retains at least a one-unit water gap. Island
-IDs retain allocation order and are not spatially resorted.
-
-## World assembly
-
-Placed sites are assembled in island and candidate order and tessellated once
-inside square world bounds. Private frame sites preserve each selected blob's
-coastline while their water cells expand into the gaps and share edges with
-water cells originating around other islands. `Island.ProvinceIDs` contains
-only land; `World.Provinces` contains every resulting land and water cell.
-Canonicalization assigns world-global corner and edge IDs, so every public ID
-equals its collection index. The cells cover the complete world bounds without
-gaps, and water forms one connected component around the separated land
-obstacles. Terrain is assigned only after geometry and topology are final.
-
-See [Blob-island generation](blob-islands.md) for the complete stage order,
-visual fixtures, and resolution limits.
+See [Single-mesh island generation](blob-islands.md) for visual fixtures and
+regression coverage.

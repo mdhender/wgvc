@@ -9,6 +9,7 @@ import (
 const (
 	oceanEscalation = 0.03
 	maximumOcean    = 0.95
+	boundaryEpsilon = 1e-9
 )
 
 func Generate(config Config) (Result, error) {
@@ -30,7 +31,7 @@ func Generate(config Config) (Result, error) {
 			return result, nil
 		}
 	}
-	return Result{}, fmt.Errorf("could not grow %d islands to %d provinces after %d rounds", config.IslandCount, config.ProvinceCount, config.MaxRounds)
+	return Result{}, fmt.Errorf("%w: could not grow %d islands to %d provinces after %d rounds", ErrUnsatisfiable, config.IslandCount, config.ProvinceCount, config.MaxRounds)
 }
 
 func grow(config Config, cells []Cell, random *rand.Rand) (Result, bool) {
@@ -106,6 +107,9 @@ func legalForIsland(cellID, islandID, minimumEdgeDistance, minimumIslandDistance
 	if owners[cellID] != Water || boundaryDistance[cellID] < minimumEdgeDistance {
 		return false
 	}
+	if !preservesWaterConnectivity(cellID, cells, owners) {
+		return false
+	}
 	if minimumIslandDistance <= 1 {
 		return true
 	}
@@ -128,6 +132,38 @@ func legalForIsland(cellID, islandID, minimumEdgeDistance, minimumIslandDistance
 		level = next
 	}
 	return true
+}
+
+// preservesWaterConnectivity checks the only place where claiming cellID can
+// split the remaining water graph: among cellID's currently unclaimed
+// neighbors. If those neighbors remain connected without cellID, every path
+// that previously crossed cellID has an equivalent path after the claim.
+func preservesWaterConnectivity(cellID int, cells []Cell, owners []int) bool {
+	waterNeighbors := make(map[int]bool)
+	for _, neighbor := range cells[cellID].Neighbors {
+		if owners[neighbor] == Water {
+			waterNeighbors[neighbor] = true
+		}
+	}
+	if len(waterNeighbors) <= 1 {
+		return true
+	}
+	seen := make(map[int]bool, len(waterNeighbors))
+	queue := make([]int, 0, len(waterNeighbors))
+	for neighbor := range waterNeighbors {
+		seen[neighbor] = true
+		queue = append(queue, neighbor)
+		break
+	}
+	for head := 0; head < len(queue); head++ {
+		for _, neighbor := range cells[queue[head]].Neighbors {
+			if waterNeighbors[neighbor] && !seen[neighbor] {
+				seen[neighbor] = true
+				queue = append(queue, neighbor)
+			}
+		}
+	}
+	return len(seen) == len(waterNeighbors)
 }
 
 func pruneDistanceBlocked(cellID, islandID, minimumDistance int, cells []Cell, frontiers []randomSet) {
@@ -162,7 +198,8 @@ func distancesFromBoundary(cells []Cell) []int {
 	for cellID, cell := range cells {
 		distances[cellID] = -1
 		for _, point := range cell.Corners {
-			if point.X == 0 || point.X == 1 || point.Y == 0 || point.Y == 1 {
+			if point.X <= boundaryEpsilon || point.X >= 1-boundaryEpsilon ||
+				point.Y <= boundaryEpsilon || point.Y >= 1-boundaryEpsilon {
 				distances[cellID] = 0
 				queue = append(queue, cellID)
 				break

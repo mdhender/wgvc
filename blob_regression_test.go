@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-type blobRegressionFixture struct {
+type singleMeshRegressionFixture struct {
 	name               string
 	config             Config
 	wantCorners        int
@@ -24,50 +24,48 @@ type blobRegressionFixture struct {
 	wantSilhouettes    []string
 }
 
-func TestBlobShapeRegressionFixtures(t *testing.T) {
-	fixtures := []blobRegressionFixture{
+func TestSingleMeshGrowthRegressionFixtures(t *testing.T) {
+	fixtures := []singleMeshRegressionFixture{
 		{
 			name:               "medium",
 			config:             Config{WorldSeed: 42, ProvinceCount: 53, IslandCount: 1},
-			wantCorners:        340,
-			wantEdges:          508,
+			wantCorners:        368,
+			wantEdges:          550,
 			wantProvinceCounts: []int{53},
-			wantCoastlineEdges: []int{65},
-			wantConcaveTurns:   []int{29},
-			wantSilhouettes:    []string{"5b4dbb9b1d3e6575"},
+			wantCoastlineEdges: []int{75},
+			wantConcaveTurns:   []int{38},
+			wantSilhouettes:    []string{"17a0a803fbb6e2c7"},
 		},
 		{
 			name:               "asymmetric_multi_island",
 			config:             Config{WorldSeed: 8675309, ProvinceCount: 128, IslandCount: 4},
-			wantCorners:        906,
-			wantEdges:          1357,
-			wantProvinceCounts: []int{54, 36, 19, 19},
-			wantCoastlineEdges: []int{65, 43, 31, 35},
-			wantConcaveTurns:   []int{31, 20, 13, 14},
+			wantCorners:        804,
+			wantEdges:          1204,
+			wantProvinceCounts: []int{25, 30, 30, 43},
+			wantCoastlineEdges: []int{40, 58, 46, 58},
+			wantConcaveTurns:   []int{20, 26, 23, 26},
 			wantSilhouettes: []string{
-				"46741b49952c97ac",
-				"1a9511595963dbea",
-				"b72385e4d3c4a0fa",
-				"32a3bd423a656088",
+				"1998251163ecf24a",
+				"313c8c3fbeab6c51",
+				"71e0840e84113102",
+				"4633546beed1df79",
 			},
 		},
 		{
 			name:               "large",
 			config:             Config{WorldSeed: 0xdeadbeef, ProvinceCount: 256, IslandCount: 1},
-			wantCorners:        1252,
-			wantEdges:          1876,
+			wantCorners:        1604,
+			wantEdges:          2404,
 			wantProvinceCounts: []int{256},
-			wantCoastlineEdges: []int{137},
-			wantConcaveTurns:   []int{67},
-			wantSilhouettes:    []string{"b755c2075650a7c4"},
+			wantCoastlineEdges: []int{378},
+			wantConcaveTurns:   []int{184},
+			wantSilhouettes:    []string{"7ba41e5542525b90"},
 		},
 	}
 
 	seenSilhouettes := make(map[string]string)
 	for _, fixture := range fixtures {
 		t.Run(fixture.name, func(t *testing.T) {
-			assertCandidateOceanInvariants(t, fixture.config)
-
 			world, err := Generate(fixture.config)
 			if err != nil {
 				t.Fatalf("Generate() error = %v", err)
@@ -109,41 +107,6 @@ func TestBlobShapeRegressionFixtures(t *testing.T) {
 					provinceCounts, len(world.Corners), len(world.Edges), coastlineEdges, concaveTurns, silhouettes)
 			}
 		})
-	}
-}
-
-func assertCandidateOceanInvariants(t *testing.T, config Config) {
-	t.Helper()
-	allocations, err := allocateProvinces(config.ProvinceCount, config.IslandCount)
-	if err != nil {
-		t.Fatalf("allocateProvinces() error = %v", err)
-	}
-	plans, err := planIslands(config, allocations)
-	if err != nil {
-		t.Fatalf("planIslands() error = %v", err)
-	}
-	for _, plan := range plans {
-		candidate, err := tessellateIsland(plan.id, plan.candidates.sites)
-		if err != nil {
-			t.Fatalf("island %d tessellate candidates: %v", plan.id, err)
-		}
-		selectedIDs, err := selectCandidateCells(plan.landProvinceCount, plan.candidates, candidate, plan.shape)
-		if err != nil {
-			t.Fatalf("island %d select candidates: %v", plan.id, err)
-		}
-		neighbors, frame, err := candidateMeshTopology(candidate)
-		if err != nil {
-			t.Fatalf("island %d candidate topology: %v", plan.id, err)
-		}
-		land := make([]bool, len(candidate.cells))
-		for _, candidateID := range selectedIDs {
-			land[candidateID] = true
-			if frame[candidateID] {
-				t.Errorf("island %d selected clipping-frame candidate %d", plan.id, candidateID)
-			}
-		}
-		assertSelectionConnected(t, land, neighbors, plan.landProvinceCount)
-		assertWaterReachesFrame(t, land, frame, neighbors)
 	}
 }
 
@@ -256,10 +219,10 @@ func minimumCornerID(values []CornerID) CornerID {
 	return minimum
 }
 
-func TestBlobIslandGallery(t *testing.T) {
+func TestSingleMeshIslandGallery(t *testing.T) {
 	got := renderBlobIslandGallery(t)
 	path := filepath.Join("docs", "blob-islands.svg")
-	if os.Getenv("WGVC_UPDATE_BLOB_GALLERY") == "1" {
+	if os.Getenv("WGVC_UPDATE_SINGLE_MESH_GALLERY") == "1" {
 		if err := os.WriteFile(path, got, 0o644); err != nil {
 			t.Fatalf("write %s: %v", path, err)
 		}
@@ -269,7 +232,7 @@ func TestBlobIslandGallery(t *testing.T) {
 		t.Fatalf("read retained gallery %s: %v", path, err)
 	}
 	if !bytes.Equal(got, want) {
-		t.Fatalf("retained gallery is stale; reproduce with WGVC_UPDATE_BLOB_GALLERY=1 go test -run TestBlobIslandGallery")
+		t.Fatalf("retained gallery is stale; reproduce with WGVC_UPDATE_SINGLE_MESH_GALLERY=1 go test -run TestSingleMeshIslandGallery")
 	}
 }
 
@@ -286,7 +249,7 @@ func renderBlobIslandGallery(t *testing.T) []byte {
 	svg.WriteString("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"940\" viewBox=\"0 0 1200 940\">\n")
 	svg.WriteString("<rect width=\"1200\" height=\"940\" fill=\"#f7f5ef\"/>\n")
 	svg.WriteString("<style>text{font-family:ui-monospace,monospace;fill:#17212b}.title{font-size:22px;font-weight:700}.label{font-size:14px}.panel{fill:#dcebf0;stroke:#9babb2;stroke-width:1}.province{stroke:#7b7567;stroke-width:.7;stroke-linejoin:round}.land{fill:#eadfbe}.water{fill:#c6e3ec;stroke:#83aab8}.coast{stroke:#24343d;stroke-width:2.4;stroke-linecap:round}</style>\n")
-	svg.WriteString("<text class=\"title\" x=\"24\" y=\"32\">Deterministically scattered islands in a continuous ocean — issue #17</text>\n")
+	svg.WriteString("<text class=\"title\" x=\"24\" y=\"32\">Islands grown on one continuous mesh — issue #23</text>\n")
 	for fixtureIndex, config := range fixtures {
 		world, err := Generate(config)
 		if err != nil {
@@ -322,7 +285,7 @@ func renderBlobIslandGallery(t *testing.T) []byte {
 		svg.WriteString("</g>\n")
 	}
 	svg.WriteString("<text class=\"label\" x=\"24\" y=\"900\">tan = land · blue = one world-level ocean mesh · heavy coastline · no land terrain coloring</text>\n")
-	svg.WriteString("<text class=\"label\" x=\"24\" y=\"924\">reproduce: WGVC_UPDATE_BLOB_GALLERY=1 go test -run TestBlobIslandGallery</text>\n")
+	svg.WriteString("<text class=\"label\" x=\"24\" y=\"924\">reproduce: WGVC_UPDATE_SINGLE_MESH_GALLERY=1 go test -run TestSingleMeshIslandGallery</text>\n")
 	svg.WriteString("</svg>\n")
 	return []byte(svg.String())
 }

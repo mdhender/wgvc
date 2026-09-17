@@ -3,6 +3,9 @@ package wgvc
 // IslandID identifies an island by its index in World.Islands.
 type IslandID int
 
+// NoIslandID is the IslandID of every water province.
+const NoIslandID IslandID = -1
+
 // ProvinceID identifies a province by its index in World.Provinces.
 type ProvinceID int
 
@@ -45,10 +48,9 @@ type Island struct {
 	ProvinceIDs []ProvinceID
 }
 
-// Province is one land or water cell. IslandID identifies the island whose
-// private candidate set supplied its generating site; water cells from
-// different candidate sets share one world mesh. Only land provinces appear
-// in Island.ProvinceIDs. Center is the generating point used for its Voronoi
+// Province is one land or water cell. IslandID identifies the containing
+// island for land and is NoIslandID for water. Only land provinces appear in
+// Island.ProvinceIDs. Center is the generating point used for its Voronoi
 // cell, not the polygon centroid. CornerIDs is a counterclockwise polygon ring
 // without a repeated closing corner.
 type Province struct {

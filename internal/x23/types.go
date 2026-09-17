@@ -1,11 +1,18 @@
-// Package x23 implements the single-mesh island-growth experiment from issue
-// #23. It is internal so the experiment can evolve without committing the
-// public wgvc API to its configuration or diagnostics.
+// Package x23 implements the single-mesh island-growth algorithm introduced by
+// issue #23. It is internal so calibration controls and diagnostics do not
+// expand the public wgvc API.
 package x23
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 const Water = -1
+
+// ErrUnsatisfiable reports that every configured generation round exhausted
+// its legal growth frontier.
+var ErrUnsatisfiable = errors.New("growth constraints are unsatisfiable")
 
 type Point struct {
 	X float64

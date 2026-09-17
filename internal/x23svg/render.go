@@ -1,5 +1,5 @@
-// Package x23svg renders the issue #23 experiment without coupling the
-// experimental generator to a particular command.
+// Package x23svg renders single-mesh growth calibration results without
+// coupling the generator to a particular command.
 package x23svg
 
 import (

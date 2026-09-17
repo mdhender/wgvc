@@ -129,6 +129,7 @@ func assertValidResult(t *testing.T, result Result, config Config) {
 	if landCount != config.ProvinceCount {
 		t.Errorf("land count = %d, want %d", landCount, config.ProvinceCount)
 	}
+	assertConnectedWater(t, result)
 
 	for cellID, cell := range result.Cells {
 		if cell.ID != cellID {
@@ -149,6 +150,34 @@ func assertValidResult(t *testing.T, result Result, config Config) {
 				t.Errorf("cell %d has invalid or asymmetric neighbor %d", cellID, neighbor)
 			}
 		}
+	}
+}
+
+func assertConnectedWater(t *testing.T, result Result) {
+	t.Helper()
+	first := -1
+	want := 0
+	for cellID, cell := range result.Cells {
+		if cell.IslandID != Water {
+			continue
+		}
+		want++
+		if first == -1 {
+			first = cellID
+		}
+	}
+	seen := map[int]bool{first: true}
+	queue := []int{first}
+	for head := 0; head < len(queue); head++ {
+		for _, neighbor := range result.Cells[queue[head]].Neighbors {
+			if result.Cells[neighbor].IslandID == Water && !seen[neighbor] {
+				seen[neighbor] = true
+				queue = append(queue, neighbor)
+			}
+		}
+	}
+	if len(seen) != want {
+		t.Errorf("water component has %d cells, want %d", len(seen), want)
 	}
 }
 
