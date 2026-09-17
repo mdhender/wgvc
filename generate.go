@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/mdhender/wgvc/internal/aspectratio"
 	"github.com/mdhender/wgvc/internal/x24"
 )
 
@@ -20,25 +21,33 @@ func Generate(config Config) (World, error) {
 	growthConfig.ProvinceCount = config.ProvinceCount
 	growthConfig.IslandCount = config.IslandCount
 	growthConfig.AspectRatio = string(config.AspectRatio)
+	world, _, err := GenerateForRender(growthConfig)
+	return world, err
+}
+
+// GenerateForRender constructs a terrain-assigned world with the complete
+// internal growth configuration. Its internal parameter and result types keep
+// the calibration controls out of the public generator contract.
+func GenerateForRender(growthConfig x24.Config) (World, x24.Result, error) {
 	result, err := x24.Generate(growthConfig)
 	if err != nil {
-		return World{}, fmt.Errorf("grow islands: %w", err)
+		return World{}, x24.Result{}, fmt.Errorf("grow islands: %w", err)
 	}
 
 	sites := make([]Point, len(result.Cells))
 	for cellID, cell := range result.Cells {
 		sites[cellID] = Point{X: cell.Site.X, Y: cell.Site.Y}
 	}
-	width, height, _ := config.aspectDimensions()
+	width, height, _ := aspectratio.Dimensions(growthConfig.AspectRatio)
 	mesh, err := tessellateRectangle(NoIslandID, sites, width, height)
 	if err != nil {
-		return World{}, fmt.Errorf("tessellate world: %w", err)
+		return World{}, x24.Result{}, fmt.Errorf("tessellate world: %w", err)
 	}
 	landArea, err := grownLandArea(mesh, result)
 	if err != nil {
-		return World{}, fmt.Errorf("measure land: %w", err)
+		return World{}, x24.Result{}, fmt.Errorf("measure land: %w", err)
 	}
-	scale := math.Sqrt(float64(config.ProvinceCount) / landArea)
+	scale := math.Sqrt(float64(growthConfig.ProvinceCount) / landArea)
 	mesh = transformMesh(mesh, uniformTransform{scale: scale})
 
 	world := World{Islands: make([]Island, len(result.Islands))}
@@ -81,8 +90,8 @@ func Generate(config Config) (World, error) {
 			ProvinceIDs: provinceIDs,
 		})
 	}
-	assignTerrain(&world, config.WorldSeed)
-	return world, nil
+	assignTerrain(&world, growthConfig.WorldSeed)
+	return world, result, nil
 }
 
 func grownLandArea(mesh islandMesh, result x24.Result) (float64, error) {

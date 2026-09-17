@@ -93,24 +93,25 @@ resolution limits, regression fixtures, and reproduction command.
 
 ## Render a map
 
-The `wgvc-render` command runs the desirability-field generator and writes an
-SVG map:
+The `wgvc-render` command runs the desirability-field generator and writes a
+terrain map as SVG by default:
 
 ```sh
-go run ./cmd/wgvc-render -seed 42 -provinces 137 -islands 11 -aspect 16:9 -output world.svg
+go run ./cmd/wgvc-render -seed 42 -provinces 137 -islands 11 -aspect 16:9 -output world
 ```
 
-The SVG dimensions are derived from the requested land-province count, the
-effective ocean percentage, and the aspect ratio. Water cells are shaded by
-static desirability; purple rings mark attractants, dark dots mark surviving
-island seeds, and the darker outer band is the permanent ocean barrier.
+Use `-format png` for `world.png`, or `-format both` to write both
+`world.svg` and `world.png`. The `-output` value is a path without an
+extension. SVG and PNG dimensions are derived from the requested land-province
+count, the effective ocean percentage, and the aspect ratio. Both formats use
+the same terrain fills, thin cell borders, and heavier coastline.
 
 Attractants are disabled by default. Use `-attractors` with 1 through 6 to
 select regions in the familiar die-face pattern, or 9 to select every region
 of the 3×3 grid. Zero disables them. For example:
 
 ```sh
-go run ./cmd/wgvc-render -attractors 5 -output five-attractors.svg
+go run ./cmd/wgvc-render -attractors 5 -output five-attractors
 ```
 
 The command exposes all growth controls, including `-ocean`, `-edge-barrier`,

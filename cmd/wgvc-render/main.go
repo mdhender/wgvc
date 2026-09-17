@@ -11,21 +11,23 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mdhender/wgvc"
 	"github.com/mdhender/wgvc/internal/aspectratio"
 	"github.com/mdhender/wgvc/internal/x24"
-	"github.com/mdhender/wgvc/internal/x24svg"
 )
 
 const (
+	formatSVG  = "svg"
+	formatPNG  = "png"
+	formatBoth = "both"
+
 	pixelsPerCell = 16
-	minimumSize   = 64
-	mapPadding    = 40
-	titleSpace    = 84
 )
 
 type options struct {
-	config x24.Config
-	output string
+	config     x24.Config
+	format     string
+	outputBase string
 }
 
 type rampFlag struct {
@@ -68,7 +70,7 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
-	options := options{config: x24.DefaultConfig(), output: "world.svg"}
+	options := options{config: x24.DefaultConfig(), format: formatSVG, outputBase: "world"}
 	flags := flag.NewFlagSet("wgvc-render", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Uint64Var(&options.config.WorldSeed, "seed", options.config.WorldSeed, "world seed (decimal or 0x-prefixed hexadecimal)")
@@ -85,20 +87,24 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Float64Var(&options.config.ControlPenalty, "control-penalty", options.config.ControlPenalty, "value rivals see for a controlled cell")
 	flags.IntVar(&options.config.MaxRounds, "rounds", options.config.MaxRounds, "maximum generation rounds")
 	flags.IntVar(&options.config.Relaxations, "relaxations", options.config.Relaxations, "Lloyd relaxation passes per round")
-	flags.StringVar(&options.output, "output", options.output, "output SVG path")
+	flags.StringVar(&options.format, "format", options.format, "output format: svg, png, or both")
+	flags.StringVar(&options.outputBase, "output", options.outputBase, "output path without an extension")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments: %v", flags.Args())
 	}
-	if options.output == "" {
+	if options.outputBase == "" {
 		return fmt.Errorf("output path must not be empty")
 	}
+	if options.format != formatSVG && options.format != formatPNG && options.format != formatBoth {
+		return fmt.Errorf("unsupported format %q: use svg, png, or both", options.format)
+	}
 
-	result, err := x24.Generate(options.config)
+	world, result, err := wgvc.GenerateForRender(options.config)
 	if err != nil {
-		return fmt.Errorf("generate: %w", err)
+		return fmt.Errorf("generate world: %w", err)
 	}
 	for _, skip := range result.AttractantSkips {
 		fmt.Fprintf(stderr, "wgvc-render: skipped attractant region (%d,%d): %s\n", skip.RegionX, skip.RegionY, skip.Reason)
@@ -107,18 +113,31 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("derive render dimensions: %w", err)
 	}
-	svg, err := x24svg.Render(result, width, height)
+	scene, err := buildScene(world, width, height)
 	if err != nil {
-		return fmt.Errorf("render: %w", err)
+		return fmt.Errorf("build render scene: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(options.output), 0o755); err != nil {
-		return fmt.Errorf("create output directory: %w", err)
+
+	if options.format == formatSVG || options.format == formatBoth {
+		data, err := renderSVG(scene)
+		if err != nil {
+			return fmt.Errorf("render SVG: %w", err)
+		}
+		if err := writeOutput(options.outputBase+".svg", data); err != nil {
+			return err
+		}
 	}
-	if err := os.WriteFile(options.output, svg, 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", options.output, err)
+	if options.format == formatPNG || options.format == formatBoth {
+		data, err := renderPNG(scene)
+		if err != nil {
+			return fmt.Errorf("render PNG: %w", err)
+		}
+		if err := writeOutput(options.outputBase+".png", data); err != nil {
+			return err
+		}
 	}
 	fmt.Fprintf(stdout, "wrote %s (%d×%d): %d cells, %d land, %d→%d islands, merges=%d, %.0f%% ocean, %d round(s)\n",
-		options.output, width, height, len(result.Cells), options.config.ProvinceCount, result.InitialIslandCount,
+		options.outputBase, width, height, len(result.Cells), options.config.ProvinceCount, result.InitialIslandCount,
 		len(result.Islands), result.MergeCount, result.FinalOcean*100, result.RoundsAttempted)
 	return nil
 }
@@ -130,7 +149,17 @@ func renderDimensions(provinceCount int, oceanPercentage float64, aspect string)
 	}
 	cellCount := math.Ceil(float64(provinceCount) / (1 - oceanPercentage))
 	linearScale := pixelsPerCell * math.Sqrt(cellCount)
-	width := max(minimumSize, int(math.Ceil(unitWidth*linearScale))+mapPadding)
-	height := max(minimumSize, int(math.Ceil(unitHeight*linearScale))+titleSpace)
+	width := max(minimumImageSize, int(math.Ceil(unitWidth*linearScale+2*imageMargin)))
+	height := max(minimumImageSize, int(math.Ceil(unitHeight*linearScale+2*imageMargin)))
 	return width, height, nil
+}
+
+func writeOutput(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create output directory for %s: %w", path, err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
 }
