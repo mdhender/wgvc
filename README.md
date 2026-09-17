@@ -147,8 +147,25 @@ its corner samples and is classified using fixed thresholds:
 | `>= 0.4` and `< 0.6` | `hills` |
 | `>= 0.6` | `mountains` |
 
-Noise values remain internal. Terrain assignment preserves water and never
-removes provinces or changes geometry, island membership, or adjacency.
+The same corner samples shape shared-edge elevation. Land-land edges occupy
+`[0.1, 1)`, water-water edges occupy `[-1, -0.1)`, and coastlines and world
+boundaries remain exactly at sea level (`0`). A province keeps the mean of its
+boundary-edge elevations and an ordered elevation band: deep water, shallow
+water, lowland, upland, highland, or mountain. Island membership remains the
+authority for land and water, including provinces whose mean elevation is zero.
+
+| Growth assignment | Mean edge elevation | Elevation band |
+|---|---:|---|
+| water | `< -0.5` | deep water |
+| water | `>= -0.5` | shallow water |
+| land | `< 0.2` | lowland |
+| land | `>= 0.2` and `< 0.4` | upland |
+| land | `>= 0.4` and `< 0.6` | highland |
+| land | `>= 0.6` | mountain |
+
+The existing four terrain values continue to use their original corner-average
+thresholds. Elevation assignment never removes provinces or changes geometry,
+island membership, adjacency, or the growth-assigned land/water decision.
 
 ## Tests
 

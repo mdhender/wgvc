@@ -31,6 +31,19 @@ const (
 	TerrainMountains Terrain = "mountains"
 )
 
+// ElevationBand is an ordered classification of province elevation. Water
+// bands sort below land bands so callers can compare bands directly.
+type ElevationBand int
+
+const (
+	ElevationBandDeepWater ElevationBand = iota
+	ElevationBandShallowWater
+	ElevationBandLowland
+	ElevationBandUpland
+	ElevationBandHighland
+	ElevationBandMountain
+)
+
 // World contains canonically ordered world data. Every object's ID equals its
 // index in the corresponding collection.
 type World struct {
@@ -52,13 +65,17 @@ type Island struct {
 // island for land and is NoIslandID for water. Only land provinces appear in
 // Island.ProvinceIDs. Center is the generating point used for its Voronoi
 // cell, not the polygon centroid. CornerIDs is a counterclockwise polygon ring
-// without a repeated closing corner.
+// without a repeated closing corner. Elevation is the mean elevation of the
+// province's boundary edges, normalized to [-1, 1]. ElevationBand preserves
+// the growth-assigned land/water classification even at sea level.
 type Province struct {
-	ID        ProvinceID
-	IslandID  IslandID
-	Center    Point
-	CornerIDs []CornerID
-	Terrain   Terrain
+	ID            ProvinceID
+	IslandID      IslandID
+	Center        Point
+	CornerIDs     []CornerID
+	Terrain       Terrain
+	Elevation     float64
+	ElevationBand ElevationBand
 }
 
 // Corner is a vertex shared by province polygons.

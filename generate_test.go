@@ -261,6 +261,13 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 	neighbors := make([][]ProvinceID, len(world.Provinces))
 	edgeTraversals := make([][][2]CornerID, len(world.Edges))
 	cornerInProvince := make([]bool, len(world.Corners))
+	elevationTotals := make([]float64, len(world.Provinces))
+	elevationEdgeCounts := make([]int, len(world.Provinces))
+	noise := newTerrainNoise(config.WorldSeed)
+	cornerValues := make([]float64, len(world.Corners))
+	for cornerID, corner := range world.Corners {
+		cornerValues[cornerID] = noise.sample(corner.Point)
+	}
 	for edgeIndex, edge := range world.Edges {
 		if edge.ID != EdgeID(edgeIndex) {
 			t.Errorf("edge at index %d has ID %d", edgeIndex, edge.ID)
@@ -299,13 +306,27 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 			}
 		}
 		wantElevation := 0.0
-		if len(edge.ProvinceIDs) == 2 &&
-			world.Provinces[edge.ProvinceIDs[0]].Terrain != TerrainWater &&
-			world.Provinces[edge.ProvinceIDs[1]].Terrain != TerrainWater {
-			wantElevation = 0.1
+		if len(edge.ProvinceIDs) == 2 {
+			firstLand := world.Provinces[edge.ProvinceIDs[0]].IslandID != NoIslandID
+			secondLand := world.Provinces[edge.ProvinceIDs[1]].IslandID != NoIslandID
+			if firstLand == secondLand {
+				edgeNoise := (cornerValues[edge.CornerIDs[0]] + cornerValues[edge.CornerIDs[1]]) / 2
+				if firstLand {
+					wantElevation = elevationLandMargin + (1-elevationLandMargin)*edgeNoise
+				} else {
+					wantElevation = -1 + (1-elevationWaterMargin)*edgeNoise
+				}
+			}
 		}
 		if edge.Elevation != wantElevation {
 			t.Errorf("edge %d elevation = %g, want %g", edge.ID, edge.Elevation, wantElevation)
+		}
+		if math.IsNaN(edge.Elevation) || math.IsInf(edge.Elevation, 0) || edge.Elevation < -1 || edge.Elevation > 1 {
+			t.Errorf("edge %d elevation = %g, want finite value in [-1, 1]", edge.ID, edge.Elevation)
+		}
+		for _, provinceID := range edge.ProvinceIDs {
+			elevationTotals[provinceID] += edge.Elevation
+			elevationEdgeCounts[provinceID]++
 		}
 	}
 
@@ -333,6 +354,17 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		case TerrainWater, TerrainPlains, TerrainHills, TerrainMountains:
 		default:
 			t.Errorf("province %d has unsupported terrain %q", province.ID, province.Terrain)
+		}
+		wantElevation := elevationTotals[provinceIndex] / float64(elevationEdgeCounts[provinceIndex])
+		if province.Elevation != wantElevation {
+			t.Errorf("province %d elevation = %g, want boundary-edge mean %g", province.ID, province.Elevation, wantElevation)
+		}
+		if math.IsNaN(province.Elevation) || math.IsInf(province.Elevation, 0) || province.Elevation < -1 || province.Elevation > 1 {
+			t.Errorf("province %d elevation = %g, want finite value in [-1, 1]", province.ID, province.Elevation)
+		}
+		wantBand := classifyElevation(province.IslandID != NoIslandID, province.Elevation)
+		if province.ElevationBand != wantBand {
+			t.Errorf("province %d elevation band = %d, want %d", province.ID, province.ElevationBand, wantBand)
 		}
 		if !finitePoint(province.Center) {
 			t.Errorf("province %d center is not finite: %+v", province.ID, province.Center)

@@ -9,6 +9,12 @@ const (
 
 	terrainPlainsThreshold = 0.4
 	terrainHillsThreshold  = 0.6
+
+	elevationWaterMargin = 0.1
+	elevationLandMargin  = 0.1
+	elevationLowlandMax  = 0.2
+	elevationUplandMax   = 0.4
+	elevationHighlandMax = 0.6
 )
 
 type valueNoise struct {
@@ -48,12 +54,18 @@ func interpolate(first, second, fraction float64) float64 {
 	return first + fraction*(second-first)
 }
 
-func assignTerrain(world *World, worldSeed uint64) {
+func assignTerrainAndElevations(world *World, worldSeed uint64) {
 	noise := newTerrainNoise(worldSeed)
 	cornerValues := make([]float64, len(world.Corners))
 	for cornerID, corner := range world.Corners {
 		cornerValues[cornerID] = noise.sample(corner.Point)
 	}
+	assignTerrain(world, cornerValues)
+	assignEdgeElevations(world, cornerValues)
+	assignProvinceElevations(world)
+}
+
+func assignTerrain(world *World, cornerValues []float64) {
 	for provinceID := range world.Provinces {
 		if world.Provinces[provinceID].Terrain == TerrainWater {
 			continue
@@ -62,18 +74,59 @@ func assignTerrain(world *World, worldSeed uint64) {
 	}
 }
 
-func assignEdgeElevations(world *World) {
+func assignEdgeElevations(world *World, cornerValues []float64) {
 	for edgeID := range world.Edges {
 		edge := &world.Edges[edgeID]
 		edge.Elevation = 0
 		if len(edge.ProvinceIDs) != 2 {
 			continue
 		}
-		first := world.Provinces[edge.ProvinceIDs[0]]
-		second := world.Provinces[edge.ProvinceIDs[1]]
-		if first.Terrain != TerrainWater && second.Terrain != TerrainWater {
-			edge.Elevation = 0.1
+		firstLand := world.Provinces[edge.ProvinceIDs[0]].IslandID != NoIslandID
+		secondLand := world.Provinces[edge.ProvinceIDs[1]].IslandID != NoIslandID
+		if firstLand != secondLand {
+			continue
 		}
+		edgeNoise := (cornerValues[edge.CornerIDs[0]] + cornerValues[edge.CornerIDs[1]]) / 2
+		if firstLand {
+			edge.Elevation = elevationLandMargin + (1-elevationLandMargin)*edgeNoise
+		} else {
+			edge.Elevation = -1 + (1-elevationWaterMargin)*edgeNoise
+		}
+	}
+}
+
+func assignProvinceElevations(world *World) {
+	totals := make([]float64, len(world.Provinces))
+	counts := make([]int, len(world.Provinces))
+	for _, edge := range world.Edges {
+		for _, provinceID := range edge.ProvinceIDs {
+			totals[provinceID] += edge.Elevation
+			counts[provinceID]++
+		}
+	}
+	for provinceID := range world.Provinces {
+		province := &world.Provinces[provinceID]
+		province.Elevation = totals[provinceID] / float64(counts[provinceID])
+		province.ElevationBand = classifyElevation(province.IslandID != NoIslandID, province.Elevation)
+	}
+}
+
+func classifyElevation(land bool, elevation float64) ElevationBand {
+	if !land {
+		if elevation < -0.5 {
+			return ElevationBandDeepWater
+		}
+		return ElevationBandShallowWater
+	}
+	switch {
+	case elevation < elevationLowlandMax:
+		return ElevationBandLowland
+	case elevation < elevationUplandMax:
+		return ElevationBandUpland
+	case elevation < elevationHighlandMax:
+		return ElevationBandHighland
+	default:
+		return ElevationBandMountain
 	}
 }
 

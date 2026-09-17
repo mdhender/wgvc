@@ -91,8 +91,7 @@ func GenerateForRender(growthConfig x24.Config) (World, x24.Result, error) {
 			Elevation:   0,
 		})
 	}
-	assignTerrain(&world, growthConfig.WorldSeed)
-	assignEdgeElevations(&world)
+	assignTerrainAndElevations(&world, growthConfig.WorldSeed)
 	return world, result, nil
 }
 
