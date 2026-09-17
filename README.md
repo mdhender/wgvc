@@ -4,6 +4,9 @@
 Voronoi mesh, with concurrently grown and merging islands, shared polygon
 topology, and spatially correlated terrain.
 
+The included `wgvc-render` command exposes the complete growth configuration
+and writes terrain-colored SVG and PNG maps at automatically derived dimensions.
+
 ## Usage
 
 ```go
@@ -98,7 +101,8 @@ The `wgvc-render` command runs the desirability-field generator and writes a
 terrain map as SVG by default:
 
 ```sh
-go run ./cmd/wgvc-render -seed 42 -provinces 137 -islands 11 -aspect 16:9 -output world
+go run ./cmd/wgvc-render -seed 42 -provinces 137 -islands 11 \
+  -aspect widescreen -format both -output world
 ```
 
 Use `-format png` for `world.png`, or `-format both` to write both
