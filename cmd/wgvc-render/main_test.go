@@ -44,6 +44,8 @@ func TestRunOutputFormatsWithGrowthOptions(t *testing.T) {
 				"-control-penalty", "-0.7",
 				"-rounds", "5",
 				"-relaxations", "1",
+				"-polar-ice", "5",
+				"-peak-chill", "20",
 				"-output", base,
 			}, test.formatArg...)
 			var stdout, stderr bytes.Buffer
@@ -181,6 +183,15 @@ func TestRunRejectsUnknownFormat(t *testing.T) {
 	err := run([]string{"-format", "jpeg"}, io.Discard, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "unsupported format") {
 		t.Fatalf("run() error = %v, want unsupported format", err)
+	}
+}
+
+func TestRunRejectsInvalidClimatePercentages(t *testing.T) {
+	for _, args := range [][]string{{"-polar-ice", "101"}, {"-peak-chill", "-1"}} {
+		err := run(args, io.Discard, io.Discard)
+		if err == nil || !strings.Contains(err.Error(), "must be finite and in [0, 1]") {
+			t.Errorf("run(%v) error = %v, want climate range error", args, err)
+		}
 	}
 }
 

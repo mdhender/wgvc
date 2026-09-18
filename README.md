@@ -123,7 +123,8 @@ go run ./cmd/wgvc-render -attractors 5 -output five-attractors
 
 The command exposes all growth controls, including `-ocean`, `-edge-barrier`,
 `-edge-ramp`, `-attractant-ramp`, `-attractant-jitter`, `-temperature`,
-`-control-penalty`, `-rounds`, and `-relaxations`. Run
+`-control-penalty`, `-rounds`, and `-relaxations`. Climate calibration is
+controlled by `-polar-ice` and `-peak-chill`, both expressed as percentages. Run
 `go run ./cmd/wgvc-render -h` for their defaults and descriptions.
 
 See [Desirability-field growth](docs/x24.md) for the rules and defaults. The
@@ -166,6 +167,22 @@ authority for land and water, including provinces whose mean elevation is zero.
 The existing four terrain values continue to use their original corner-average
 thresholds. Elevation assignment never removes provinces or changes geometry,
 island membership, adjacency, or the growth-assigned land/water decision.
+
+## Climate
+
+Each province stores independent `Heat` and `Moisture` values in `[0,1]` plus
+ordered bands. Heat bands are polar, cold, temperate, warm, and hot; moisture
+bands are arid, dry, moderate, humid, and saturated. Both fields use their own
+domain-separated noise stream sampled at shared corners, so climate generation
+cannot perturb terrain, elevation, island growth, or geometry.
+
+Heat combines its corner mean with a north-cold/south-warm latitude gradient.
+Positive land elevation then cools the result; water receives no elevation
+adjustment. `Config.PolarIce` and `Config.PeakChill` tune those effects as
+fractions, with zero values selecting the defaults. Bands initially use
+population shares of 5%, 15%, 45%, 25%, and 10%. If a small population or an
+unattainable calibration cannot support those targets, continuous values remain
+available while the affected axis uses its middle band.
 
 ## Tests
 

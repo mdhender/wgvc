@@ -25,9 +25,11 @@ const (
 )
 
 type options struct {
-	config     x24.Config
-	format     string
-	outputBase string
+	config           x24.Config
+	polarIcePercent  float64
+	peakChillPercent float64
+	format           string
+	outputBase       string
 }
 
 type rampFlag struct {
@@ -70,7 +72,14 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
-	options := options{config: x24.DefaultConfig(), format: formatSVG, outputBase: "world"}
+	climateDefaults := wgvc.DefaultClimateConfig()
+	options := options{
+		config:           x24.DefaultConfig(),
+		polarIcePercent:  climateDefaults.PolarIce * 100,
+		peakChillPercent: climateDefaults.PeakChill * 100,
+		format:           formatSVG,
+		outputBase:       "world",
+	}
 	flags := flag.NewFlagSet("wgvc-render", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Uint64Var(&options.config.WorldSeed, "seed", options.config.WorldSeed, "world seed (decimal or 0x-prefixed hexadecimal)")
@@ -87,6 +96,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Float64Var(&options.config.ControlPenalty, "control-penalty", options.config.ControlPenalty, "value rivals see for a controlled cell")
 	flags.IntVar(&options.config.MaxRounds, "rounds", options.config.MaxRounds, "maximum generation rounds")
 	flags.IntVar(&options.config.Relaxations, "relaxations", options.config.Relaxations, "Lloyd relaxation passes per round")
+	flags.Float64Var(&options.polarIcePercent, "polar-ice", options.polarIcePercent, "target percentage of ocean provinces in the polar heat band")
+	flags.Float64Var(&options.peakChillPercent, "peak-chill", options.peakChillPercent, "target percentage of warm-region high peaks classified cold or colder")
 	flags.StringVar(&options.format, "format", options.format, "output format: svg, png, or both")
 	flags.StringVar(&options.outputBase, "output", options.outputBase, "output path without an extension")
 	if err := flags.Parse(args); err != nil {
@@ -102,7 +113,11 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("unsupported format %q: use svg, png, or both", options.format)
 	}
 
-	world, result, err := wgvc.GenerateForRender(options.config)
+	climateConfig := wgvc.ClimateConfig{
+		PolarIce:  options.polarIcePercent / 100,
+		PeakChill: options.peakChillPercent / 100,
+	}
+	world, result, err := wgvc.GenerateForRenderWithClimate(options.config, climateConfig)
 	if err != nil {
 		return fmt.Errorf("generate world: %w", err)
 	}

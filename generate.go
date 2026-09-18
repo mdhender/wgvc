@@ -21,14 +21,28 @@ func Generate(config Config) (World, error) {
 	growthConfig.ProvinceCount = config.ProvinceCount
 	growthConfig.IslandCount = config.IslandCount
 	growthConfig.AspectRatio = string(config.AspectRatio)
-	world, _, err := GenerateForRender(growthConfig)
+	climateConfig, _ := normalizeClimateConfig(ClimateConfig{PolarIce: config.PolarIce, PeakChill: config.PeakChill})
+	world, _, err := generateForRender(growthConfig, climateConfig)
 	return world, err
 }
 
 // GenerateForRender constructs a terrain-assigned world with the complete
-// internal growth configuration. Its internal parameter and result types keep
-// the calibration controls out of the public generator contract.
+// internal growth configuration and default climate calibration.
 func GenerateForRender(growthConfig x24.Config) (World, x24.Result, error) {
+	return GenerateForRenderWithClimate(growthConfig, DefaultClimateConfig())
+}
+
+// GenerateForRenderWithClimate constructs a world using the renderer's full
+// growth configuration and explicit climate calibration targets.
+func GenerateForRenderWithClimate(growthConfig x24.Config, climateConfig ClimateConfig) (World, x24.Result, error) {
+	climateConfig, err := normalizeClimateConfig(climateConfig)
+	if err != nil {
+		return World{}, x24.Result{}, err
+	}
+	return generateForRender(growthConfig, climateConfig)
+}
+
+func generateForRender(growthConfig x24.Config, climateConfig ClimateConfig) (World, x24.Result, error) {
 	result, err := x24.Generate(growthConfig)
 	if err != nil {
 		return World{}, x24.Result{}, fmt.Errorf("grow islands: %w", err)
@@ -92,6 +106,7 @@ func GenerateForRender(growthConfig x24.Config) (World, x24.Result, error) {
 		})
 	}
 	assignTerrainAndElevations(&world, growthConfig.WorldSeed)
+	assignClimate(&world, growthConfig.WorldSeed, climateConfig)
 	return world, result, nil
 }
 

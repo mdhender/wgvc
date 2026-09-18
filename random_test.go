@@ -41,6 +41,29 @@ func TestTerrainConsumptionDoesNotChangePlacement(t *testing.T) {
 	}
 }
 
+func TestClimateStreamsAreIndependent(t *testing.T) {
+	const seed = 8675309
+	heat := heatRandom(seed)
+	moisture := moistureRandom(seed)
+	terrain := terrainRandom(seed)
+	heatFirst, moistureFirst, terrainFirst := heat.Uint64(), moisture.Uint64(), terrain.Uint64()
+	if heatFirst == moistureFirst || heatFirst == terrainFirst || moistureFirst == terrainFirst {
+		t.Fatal("climate and terrain streams unexpectedly started with the same value")
+	}
+
+	wantMoisture := moistureRandom(seed).Uint64()
+	wantTerrain := terrainRandom(seed).Uint64()
+	for range 1000 {
+		heat.Uint64()
+	}
+	if got := moistureRandom(seed).Uint64(); got != wantMoisture {
+		t.Errorf("moisture value = %d after heat consumption, want %d", got, wantMoisture)
+	}
+	if got := terrainRandom(seed).Uint64(); got != wantTerrain {
+		t.Errorf("terrain value = %d after climate consumption, want %d", got, wantTerrain)
+	}
+}
+
 func TestIslandCandidateStreamsAreIndependent(t *testing.T) {
 	firstIsland := candidateRandom(42, 0)
 	secondIsland := candidateRandom(42, 1)

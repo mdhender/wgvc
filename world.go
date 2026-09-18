@@ -44,6 +44,28 @@ const (
 	ElevationBandMountain
 )
 
+// HeatBand is an ordered classification from coldest to warmest.
+type HeatBand int
+
+const (
+	HeatBandPolar HeatBand = iota
+	HeatBandCold
+	HeatBandTemperate
+	HeatBandWarm
+	HeatBandHot
+)
+
+// MoistureBand is an ordered classification from driest to wettest.
+type MoistureBand int
+
+const (
+	MoistureBandArid MoistureBand = iota
+	MoistureBandDry
+	MoistureBandModerate
+	MoistureBandHumid
+	MoistureBandSaturated
+)
+
 // World contains canonically ordered world data. Every object's ID equals its
 // index in the corresponding collection.
 type World struct {
@@ -67,7 +89,8 @@ type Island struct {
 // cell, not the polygon centroid. CornerIDs is a counterclockwise polygon ring
 // without a repeated closing corner. Elevation is the mean elevation of the
 // province's boundary edges, normalized to [-1, 1]. ElevationBand preserves
-// the growth-assigned land/water classification even at sea level.
+// the growth-assigned land/water classification even at sea level. Heat and
+// Moisture are normalized to [0, 1] and retain their ordered classifications.
 type Province struct {
 	ID            ProvinceID
 	IslandID      IslandID
@@ -76,6 +99,10 @@ type Province struct {
 	Terrain       Terrain
 	Elevation     float64
 	ElevationBand ElevationBand
+	Heat          float64
+	HeatBand      HeatBand
+	Moisture      float64
+	MoistureBand  MoistureBand
 }
 
 // Corner is a vertex shared by province polygons.

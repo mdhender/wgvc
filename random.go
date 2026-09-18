@@ -10,6 +10,8 @@ const (
 	candidateDomain uint64 = 0x63616e6469646174 // "candidat"
 	blobShapeDomain uint64 = 0x626c6f6273686170 // "blobshap"
 	terrainDomain   uint64 = 0x7465727261696e00 // "terrain\x00"
+	heatDomain      uint64 = 0x6865617400000000 // "heat\x00\x00\x00\x00"
+	moistureDomain  uint64 = 0x6d6f697374757265 // "moisture"
 	splitMixGamma   uint64 = 0x9e3779b97f4a7c15
 	sequenceStride  uint64 = 0xd1b54a32d192ed03
 )
@@ -28,6 +30,14 @@ func blobShapeRandom(worldSeed uint64, islandID IslandID) *rand.Rand {
 
 func terrainRandom(worldSeed uint64) *rand.Rand {
 	return derivedRandom(worldSeed, terrainDomain, 0)
+}
+
+func heatRandom(worldSeed uint64) *rand.Rand {
+	return derivedRandom(worldSeed, heatDomain, 0)
+}
+
+func moistureRandom(worldSeed uint64) *rand.Rand {
+	return derivedRandom(worldSeed, moistureDomain, 0)
 }
 
 func derivedRandom(worldSeed, domain, sequence uint64) *rand.Rand {
