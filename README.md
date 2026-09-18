@@ -101,11 +101,13 @@ resolution limits, regression fixtures, and reproduction command.
 ## Render a map
 
 The `wgvc-render` command runs the desirability-field generator and writes a
-terrain map as SVG by default:
+terrain map as SVG by default. The demo parameters generate a cinematic PNG
+with 25 initial islands, 3,500 land provinces, 75% water, and five attractors:
 
 ```sh
-go run ./cmd/wgvc-render -seed 42 -provinces 137 -islands 11 \
-  -aspect widescreen -format both -output world
+go run ./cmd/wgvc-render -seed 0x0123456789abcdef \
+  -islands 25 -provinces 3500 -ocean 0.75 \
+  -aspect cinematic -attractors 5 -format png -output world
 ```
 
 Use `-format png` for `world.png`, or `-format both` to write both
