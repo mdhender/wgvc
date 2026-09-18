@@ -366,6 +366,9 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		if province.ElevationBand != wantBand {
 			t.Errorf("province %d elevation band = %d, want %d", province.ID, province.ElevationBand, wantBand)
 		}
+		if province.Relief != 0 {
+			t.Errorf("province %d relief = %g, want default 0", province.ID, province.Relief)
+		}
 		if !finitePoint(province.Center) {
 			t.Errorf("province %d center is not finite: %+v", province.ID, province.Center)
 		}
