@@ -4,7 +4,7 @@
 Voronoi mesh, with concurrently grown and merging islands, shared polygon
 topology, and spatially correlated terrain.
 
-The included `wgvc-render` command exposes the complete growth configuration
+The included `generate` command exposes the complete growth configuration
 and writes terrain-colored SVG and PNG maps at automatically derived dimensions.
 
 ## Usage
@@ -100,12 +100,12 @@ resolution limits, regression fixtures, and reproduction command.
 
 ## Render a map
 
-The `wgvc-render` command runs the desirability-field generator and writes a
+The `generate` command runs the desirability-field generator and writes a
 terrain map as SVG by default. The demo parameters generate a cinematic PNG
 with 25 initial islands, 3,500 land provinces, 75% water, and five attractors:
 
 ```sh
-go run ./cmd/wgvc-render -seed 0x0123456789abcdef \
+go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 25 -provinces 3500 -ocean 0.75 \
   -aspect cinematic -attractors 5 -format png -output world
 ```
@@ -123,14 +123,14 @@ select regions in the familiar die-face pattern, or 9 to select every region
 of the 3×3 grid. Zero disables them. For example:
 
 ```sh
-go run ./cmd/wgvc-render -attractors 5 -output five-attractors
+go run ./cmd/generate -attractors 5 -output five-attractors
 ```
 
 The command exposes all growth controls, including `-ocean`, `-edge-barrier`,
 `-edge-ramp`, `-attractant-ramp`, `-attractant-jitter`, `-temperature`,
 `-control-penalty`, `-rounds`, and `-relaxations`. Climate calibration is
 controlled by `-polar-ice` and `-peak-chill`, both expressed as percentages. Run
-`go run ./cmd/wgvc-render -h` for their defaults and descriptions.
+`go run ./cmd/generate -h` for their defaults and descriptions.
 
 See [Desirability-field growth](docs/x24.md) for the rules and defaults. The
 public `Generate` API uses those defaults, including zero attractants; these

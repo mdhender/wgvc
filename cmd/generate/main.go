@@ -66,7 +66,7 @@ func main() {
 		if errors.Is(err, flag.ErrHelp) {
 			return
 		}
-		fmt.Fprintf(os.Stderr, "wgvc-render: %v\n", err)
+		fmt.Fprintf(os.Stderr, "generate: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -80,7 +80,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		format:           formatSVG,
 		outputBase:       "world",
 	}
-	flags := flag.NewFlagSet("wgvc-render", flag.ContinueOnError)
+	flags := flag.NewFlagSet("generate", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Uint64Var(&options.config.WorldSeed, "seed", options.config.WorldSeed, "world seed (decimal or 0x-prefixed hexadecimal)")
 	flags.IntVar(&options.config.ProvinceCount, "provinces", options.config.ProvinceCount, "number of land provinces")
@@ -122,7 +122,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("generate world: %w", err)
 	}
 	for _, skip := range result.AttractantSkips {
-		fmt.Fprintf(stderr, "wgvc-render: skipped attractant region (%d,%d): %s\n", skip.RegionX, skip.RegionY, skip.Reason)
+		fmt.Fprintf(stderr, "generate: skipped attractant region (%d,%d): %s\n", skip.RegionX, skip.RegionY, skip.Reason)
 	}
 	width, height, err := renderDimensions(options.config.ProvinceCount, result.FinalOcean, options.config.AspectRatio)
 	if err != nil {
