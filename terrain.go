@@ -5,31 +5,43 @@ import "math"
 const (
 	// Provinces have a typical area of one square world unit, so this spans
 	// roughly four typical province widths.
-	terrainWavelength = 4.0
-
-	terrainPlainsThreshold = 0.4
-	terrainHillsThreshold  = 0.6
+	elevationWavelength = 4.0
 
 	elevationWaterMargin = 0.1
 	elevationLandMargin  = 0.1
 	elevationLowlandMax  = 0.2
 	elevationUplandMax   = 0.4
 	elevationHighlandMax = 0.6
+
+	terrainOceanMax          = -0.1
+	terrainCoastMax          = 0.04
+	terrainWetlandReliefMax  = 0.34
+	terrainMountainReliefMin = 0.42
+	terrainHillReliefMin     = 0.38
+	terrainBadlandsReliefMin = 0.55
 )
+
+var terrainCover = [5][5]Terrain{
+	{TerrainTundra, TerrainTundra, TerrainTundra, TerrainTundra, TerrainTundra},
+	{TerrainTundra, TerrainSteppe, TerrainBorealForest, TerrainBorealForest, TerrainBorealForest},
+	{TerrainScrubland, TerrainGrassland, TerrainPlains, TerrainTemperateForest, TerrainTemperateForest},
+	{TerrainDesert, TerrainScrubland, TerrainSavanna, TerrainTemperateForest, TerrainTemperateForest},
+	{TerrainDesert, TerrainScrubland, TerrainSavanna, TerrainRainforest, TerrainRainforest},
+}
 
 type valueNoise struct {
 	seed uint64
 }
 
-func newTerrainNoise(worldSeed uint64) valueNoise {
-	return valueNoise{seed: terrainRandom(worldSeed).Uint64()}
+func newElevationNoise(worldSeed uint64) valueNoise {
+	return valueNoise{seed: elevationRandom(worldSeed).Uint64()}
 }
 
 // sample evaluates seeded two-dimensional value noise. Quintic interpolation
 // makes values and their first derivatives continuous at lattice boundaries.
 func (noise valueNoise) sample(point Point) float64 {
-	x := point.X / terrainWavelength
-	y := point.Y / terrainWavelength
+	x := point.X / elevationWavelength
+	y := point.Y / elevationWavelength
 	x0 := int64(math.Floor(x))
 	y0 := int64(math.Floor(y))
 	tx := smoothQuintic(x - float64(x0))
@@ -54,24 +66,14 @@ func interpolate(first, second, fraction float64) float64 {
 	return first + fraction*(second-first)
 }
 
-func assignTerrainAndElevations(world *World, worldSeed uint64) {
-	noise := newTerrainNoise(worldSeed)
+func assignElevations(world *World, worldSeed uint64) {
+	noise := newElevationNoise(worldSeed)
 	cornerValues := make([]float64, len(world.Corners))
 	for cornerID, corner := range world.Corners {
 		cornerValues[cornerID] = noise.sample(corner.Point)
 	}
-	assignTerrain(world, cornerValues)
 	assignEdgeElevations(world, cornerValues)
 	assignProvinceElevations(world)
-}
-
-func assignTerrain(world *World, cornerValues []float64) {
-	for provinceID := range world.Provinces {
-		if world.Provinces[provinceID].Terrain == TerrainWater {
-			continue
-		}
-		world.Provinces[provinceID].Terrain = terrainFromCorners(world.Provinces[provinceID], cornerValues)
-	}
 }
 
 func assignEdgeElevations(world *World, cornerValues []float64) {
@@ -130,21 +132,85 @@ func classifyElevation(land bool, elevation float64) ElevationBand {
 	}
 }
 
-func terrainFromCorners(province Province, cornerValues []float64) Terrain {
-	total := 0.0
-	for _, cornerID := range province.CornerIDs {
-		total += cornerValues[cornerID]
+func assignTerrain(world *World) {
+	adjacentLand := make([]bool, len(world.Provinces))
+	adjacentWater := make([]bool, len(world.Provinces))
+	for _, edge := range world.Edges {
+		if len(edge.ProvinceIDs) != 2 {
+			continue
+		}
+		first, second := edge.ProvinceIDs[0], edge.ProvinceIDs[1]
+		firstLand := world.Provinces[first].IslandID != NoIslandID
+		secondLand := world.Provinces[second].IslandID != NoIslandID
+		if firstLand == secondLand {
+			continue
+		}
+		if firstLand {
+			adjacentWater[first] = true
+			adjacentLand[second] = true
+		} else {
+			adjacentLand[first] = true
+			adjacentWater[second] = true
+		}
 	}
-	return classifyTerrain(total / float64(len(province.CornerIDs)))
+	for provinceID := range world.Provinces {
+		world.Provinces[provinceID].Terrain = classifyTerrain(world.Provinces[provinceID], adjacentLand[provinceID], adjacentWater[provinceID])
+	}
 }
 
-func classifyTerrain(elevation float64) Terrain {
-	switch {
-	case elevation < terrainPlainsThreshold:
-		return TerrainPlains
-	case elevation < terrainHillsThreshold:
-		return TerrainHills
-	default:
-		return TerrainMountains
+func classifyTerrain(province Province, adjacentLand, adjacentWater bool) Terrain {
+	if province.IslandID == NoIslandID {
+		switch {
+		case adjacentLand:
+			return TerrainCoastalWater
+		case province.ElevationBand == ElevationBandDeepWater:
+			return TerrainDeepOcean
+		case province.Elevation <= terrainOceanMax:
+			return TerrainOcean
+		default:
+			return TerrainShallowSea
+		}
 	}
+
+	if province.HeatBand == HeatBandPolar && province.MoistureBand > MoistureBandArid {
+		return TerrainGlacialIce
+	}
+	if province.ElevationBand == ElevationBandMountain {
+		if province.HeatBand <= HeatBandCold {
+			return TerrainAlpine
+		}
+		return TerrainMountain
+	}
+	if province.ElevationBand == ElevationBandHighland {
+		if province.Relief >= terrainMountainReliefMin {
+			return TerrainMountain
+		}
+		return TerrainHills
+	}
+	if province.ElevationBand == ElevationBandLowland &&
+		province.Relief <= terrainWetlandReliefMax &&
+		province.MoistureBand >= MoistureBandHumid {
+		switch province.HeatBand {
+		case HeatBandPolar, HeatBandCold:
+			return TerrainBog
+		case HeatBandTemperate:
+			return TerrainMarsh
+		default:
+			return TerrainSwamp
+		}
+	}
+	if province.ElevationBand == ElevationBandLowland && province.Elevation <= terrainCoastMax && adjacentWater {
+		return TerrainCoast
+	}
+	if province.MoistureBand <= MoistureBandDry && province.Relief >= terrainBadlandsReliefMin {
+		return TerrainBadlands
+	}
+	if province.ElevationBand == ElevationBandUpland && province.Relief >= terrainHillReliefMin {
+		return TerrainHills
+	}
+	if province.HeatBand < HeatBandPolar || province.HeatBand > HeatBandHot ||
+		province.MoistureBand < MoistureBandArid || province.MoistureBand > MoistureBandSaturated {
+		return TerrainPlains
+	}
+	return terrainCover[province.HeatBand][province.MoistureBand]
 }

@@ -189,10 +189,10 @@ func isCoastlineEdge(world World, edge Edge, islandID IslandID) bool {
 	}
 	first := world.Provinces[edge.ProvinceIDs[0]]
 	second := world.Provinces[edge.ProvinceIDs[1]]
-	if first.Terrain == TerrainWater {
+	if first.IslandID == NoIslandID {
 		first, second = second, first
 	}
-	return first.IslandID == islandID && first.Terrain != TerrainWater && second.Terrain == TerrainWater
+	return first.IslandID == islandID && second.IslandID == NoIslandID
 }
 
 func coastlineConcaveTurns(world World, loop []CornerID) int {
@@ -285,7 +285,7 @@ func renderBlobIslandGallery(t *testing.T) []byte {
 		transform := galleryTransform(world, panelWidth, panelHeight-28, 18)
 		for _, province := range world.Provinces {
 			class := "land"
-			if province.Terrain == TerrainWater {
+			if province.IslandID == NoIslandID {
 				class = "water"
 			}
 			fmt.Fprintf(&svg, "<polygon class=\"province %s\" points=\"", class)
@@ -296,7 +296,7 @@ func renderBlobIslandGallery(t *testing.T) []byte {
 			svg.WriteString("\"/>\n")
 		}
 		for _, edge := range world.Edges {
-			if len(edge.ProvinceIDs) != 2 || (world.Provinces[edge.ProvinceIDs[0]].Terrain == TerrainWater) == (world.Provinces[edge.ProvinceIDs[1]].Terrain == TerrainWater) {
+			if len(edge.ProvinceIDs) != 2 || (world.Provinces[edge.ProvinceIDs[0]].IslandID == NoIslandID) == (world.Provinces[edge.ProvinceIDs[1]].IslandID == NoIslandID) {
 				continue
 			}
 			first := transform(world.Corners[edge.CornerIDs[0]].Point)

@@ -270,7 +270,7 @@ func renderCurrentWorldPanel(svg *strings.Builder, world World, x, y, width, hei
 	transform := galleryTransform(world, width, height-28, 18)
 	for _, province := range world.Provinces {
 		class := "province"
-		if province.Terrain == TerrainWater {
+		if province.IslandID == NoIslandID {
 			class = "water"
 		}
 		fmt.Fprintf(svg, "<polygon class=\"%s\" points=\"", class)

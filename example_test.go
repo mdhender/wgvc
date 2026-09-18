@@ -18,7 +18,7 @@ func ExampleGenerate() {
 
 	land, water := 0, 0
 	for _, province := range world.Provinces {
-		if province.Terrain == wgvc.TerrainWater {
+		if province.IslandID == wgvc.NoIslandID {
 			water++
 		} else {
 			land++

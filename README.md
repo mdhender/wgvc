@@ -53,13 +53,16 @@ Every successful call returns exactly the requested number of land provinces.
 Changing the ratio changes the map bounds but not their area or point budget.
 `IslandCount` is the number of initial seeds; directly connected islands merge,
 so the returned world may contain fewer islands. A world-level ocean mesh covers
-the space between and around land and can include interior lakes. Water provinces
-have `TerrainWater`, use `NoIslandID`, and do not appear in `Island.ProvinceIDs`.
+the space between and around land and can include enclosed growth-water
+provinces. Water provinces use `NoIslandID` and do not appear in
+`Island.ProvinceIDs`; `IslandID` remains the authoritative land/water assignment
+independently of terrain vocabulary.
 For a fixed version of this generator, identical `Config` values produce deeply identical `World` values.
 Generation stages use independent deterministic random streams, so consuming
-randomness in terrain generation cannot perturb island placement or province
-tessellation. A newer generator version may intentionally change generated
-output for the same configuration.
+randomness in elevation or climate generation cannot perturb island placement
+or province tessellation. Terrain classification itself consumes no randomness.
+A newer generator version may intentionally change generated output for the
+same configuration.
 
 ## World topology
 
@@ -133,22 +136,21 @@ tuning flags do not expand its `Config`.
 
 ## Terrain
 
-Terrain is generated from a seeded two-dimensional value-noise field in world
-coordinates. Lattice values are in `[0, 1)` and use quintic interpolation. The
-fixed wavelength is four world units, spanning roughly four typical province
-widths because a province's typical area is one square world unit.
+Terrain is a deterministic final classification derived from island membership,
+elevation, relief, heat, moisture, and coastal adjacency. It has no independent
+noise field. `Terrains` returns the complete vocabulary in stable family order:
+ocean, inland water, frozen, wetland, dry, open land, forest, elevated,
+volcanic, and coast. `Terrain.IsWater` recognizes both ocean and inland-water
+values.
 
-The field is sampled once per shared corner. Each province receives the mean of
-its corner samples and is classified using fixed thresholds:
+Classification considers ocean depth first, then glacial ice, elevated terrain,
+wetlands, coastal land, rough dry or upland terrain, and finally a heat ×
+moisture cover table. Water next to growth-assigned land is coastal water; low,
+growth-assigned land next to water can be coast. `inland-sea`, `lake`, `volcano`,
+and `volcanic-highland` are reserved for topology-aware generation and are not
+currently emitted.
 
-| Mean value | Terrain |
-|---:|---|
-| not sampled | `water` |
-| `< 0.4` | `plains` |
-| `>= 0.4` and `< 0.6` | `hills` |
-| `>= 0.6` | `mountains` |
-
-The same corner samples shape shared-edge elevation. Land-land edges occupy
+The seeded elevation field is sampled once per shared corner. Land-land edges occupy
 `[0.1, 1)`, water-water edges occupy `[-1, -0.1)`, and coastlines and world
 boundaries remain exactly at sea level (`0`). A province keeps the mean of its
 boundary-edge elevations and an ordered elevation band: deep water, shallow
@@ -164,9 +166,10 @@ authority for land and water, including provinces whose mean elevation is zero.
 | land | `>= 0.4` and `< 0.6` | highland |
 | land | `>= 0.6` | mountain |
 
-The existing four terrain values continue to use their original corner-average
-thresholds. Elevation assignment never removes provinces or changes geometry,
-island membership, adjacency, or the growth-assigned land/water decision.
+Terrain assignment never removes provinces or changes geometry, island
+membership, adjacency, or the growth-assigned land/water decision. Relief is
+currently zero until issue #30 implements its graph-derived pass, so
+relief-gated terrain distinctions remain dormant.
 
 ## Climate
 

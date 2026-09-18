@@ -74,10 +74,8 @@ func generateForRender(growthConfig x24.Config, climateConfig ClimateConfig) (Wo
 	for cellID, cell := range mesh.cells {
 		provinceID := ProvinceID(cellID)
 		islandID := IslandID(result.Cells[cellID].IslandID)
-		terrain := TerrainPlains
 		if result.Cells[cellID].IslandID == x24.Water {
 			islandID = NoIslandID
-			terrain = TerrainWater
 		} else {
 			world.Islands[islandID].ProvinceIDs = append(world.Islands[islandID].ProvinceIDs, provinceID)
 		}
@@ -90,7 +88,6 @@ func generateForRender(growthConfig x24.Config, climateConfig ClimateConfig) (Wo
 			IslandID:  islandID,
 			Center:    cell.center,
 			CornerIDs: cornerIDs,
-			Terrain:   terrain,
 		})
 	}
 	for edgeIndex, edge := range mesh.edges {
@@ -105,9 +102,10 @@ func generateForRender(growthConfig x24.Config, climateConfig ClimateConfig) (Wo
 			Elevation:   0,
 		})
 	}
-	assignTerrainAndElevations(&world, growthConfig.WorldSeed)
+	assignElevations(&world, growthConfig.WorldSeed)
 	assignRelief(&world)
 	assignClimate(&world, growthConfig.WorldSeed, climateConfig)
+	assignTerrain(&world)
 	return world, result, nil
 }
 

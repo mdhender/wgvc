@@ -20,11 +20,37 @@ const (
 	backgroundColor = "#f7f5ef"
 	cellBorderColor = "#69787b"
 	coastlineColor  = "#24343d"
-	waterColor      = "#c6e3ec"
-	plainsColor     = "#eadfbe"
-	hillsColor      = "#a9bd79"
-	mountainsColor  = "#9d9388"
 )
+
+var terrainColors = map[wgvc.Terrain]string{
+	wgvc.TerrainDeepOcean:        "#04142b",
+	wgvc.TerrainOcean:            "#0d3a6b",
+	wgvc.TerrainShallowSea:       "#2f7fb5",
+	wgvc.TerrainCoastalWater:     "#74b3d4",
+	wgvc.TerrainInlandSea:        "#1f5e8c",
+	wgvc.TerrainLake:             "#3d86b8",
+	wgvc.TerrainGlacialIce:       "#eef4f8",
+	wgvc.TerrainTundra:           "#9aa79a",
+	wgvc.TerrainMarsh:            "#5d7a52",
+	wgvc.TerrainSwamp:            "#3f5c3a",
+	wgvc.TerrainBog:              "#6b6f4e",
+	wgvc.TerrainDesert:           "#d9c07a",
+	wgvc.TerrainBadlands:         "#b07a4e",
+	wgvc.TerrainScrubland:        "#a89a5e",
+	wgvc.TerrainPlains:           "#a7bd72",
+	wgvc.TerrainGrassland:        "#8fb45c",
+	wgvc.TerrainSteppe:           "#b9b071",
+	wgvc.TerrainSavanna:          "#c9b45a",
+	wgvc.TerrainBorealForest:     "#2f5741",
+	wgvc.TerrainTemperateForest:  "#3f7a3a",
+	wgvc.TerrainRainforest:       "#1f5a2c",
+	wgvc.TerrainHills:            "#8a8257",
+	wgvc.TerrainMountain:         "#8a8a8a",
+	wgvc.TerrainAlpine:           "#c7ccd1",
+	wgvc.TerrainVolcano:          "#7a2a24",
+	wgvc.TerrainVolcanicHighland: "#5c4038",
+	wgvc.TerrainCoast:            "#d8cfa5",
+}
 
 type renderPoint struct {
 	x float64
@@ -109,8 +135,8 @@ func buildScene(world wgvc.World, width, height int) (renderScene, error) {
 		if firstProvince < 0 || int(firstProvince) >= len(world.Provinces) || secondProvince < 0 || int(secondProvince) >= len(world.Provinces) {
 			return renderScene{}, fmt.Errorf("edge %d references an unknown province", edge.ID)
 		}
-		firstWater := world.Provinces[firstProvince].Terrain == wgvc.TerrainWater
-		secondWater := world.Provinces[secondProvince].Terrain == wgvc.TerrainWater
+		firstWater := world.Provinces[firstProvince].IslandID == wgvc.NoIslandID
+		secondWater := world.Provinces[secondProvince].IslandID == wgvc.NoIslandID
 		if firstWater == secondWater {
 			continue
 		}
@@ -127,18 +153,11 @@ func buildScene(world wgvc.World, width, height int) (renderScene, error) {
 }
 
 func terrainColor(terrain wgvc.Terrain) (string, error) {
-	switch terrain {
-	case wgvc.TerrainWater:
-		return waterColor, nil
-	case wgvc.TerrainPlains:
-		return plainsColor, nil
-	case wgvc.TerrainHills:
-		return hillsColor, nil
-	case wgvc.TerrainMountains:
-		return mountainsColor, nil
-	default:
+	color, ok := terrainColors[terrain]
+	if !ok {
 		return "", fmt.Errorf("unsupported terrain %q", terrain)
 	}
+	return color, nil
 }
 
 func renderSVG(scene renderScene) ([]byte, error) {

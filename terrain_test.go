@@ -2,14 +2,13 @@ package wgvc
 
 import (
 	"math"
-	"reflect"
 	"testing"
 )
 
 func TestValueNoiseSamplesAreDeterministicFiniteBoundedAndSmooth(t *testing.T) {
-	first := newTerrainNoise(42)
-	second := newTerrainNoise(42)
-	otherSeed := newTerrainNoise(43)
+	first := newElevationNoise(42)
+	second := newElevationNoise(42)
+	otherSeed := newElevationNoise(43)
 	seedProbe := Point{X: 8, Y: 12}
 	if first.sample(seedProbe) == otherSeed.sample(seedProbe) {
 		t.Fatalf("different seeds produced the same sample at %+v", seedProbe)
@@ -32,68 +31,126 @@ func TestValueNoiseSamplesAreDeterministicFiniteBoundedAndSmooth(t *testing.T) {
 	}
 
 	const epsilon = 1e-7
-	left := first.sample(Point{X: terrainWavelength - epsilon, Y: 1.25})
-	right := first.sample(Point{X: terrainWavelength + epsilon, Y: 1.25})
+	left := first.sample(Point{X: elevationWavelength - epsilon, Y: 1.25})
+	right := first.sample(Point{X: elevationWavelength + epsilon, Y: 1.25})
 	if math.Abs(left-right) > epsilon {
 		t.Fatalf("samples across a lattice boundary differ by %g", math.Abs(left-right))
 	}
 }
 
-func TestTerrainFromKnownCornerValues(t *testing.T) {
-	cornerValues := []float64{0.1, 0.3, 0.5, 0.7, 0.9}
+func TestTerrainVocabularyIsStableAndComplete(t *testing.T) {
+	want := []Terrain{
+		"deep-ocean", "ocean", "shallow-sea", "coastal-water", "inland-sea", "lake",
+		"glacial-ice", "tundra", "marsh", "swamp", "bog",
+		"desert", "badlands", "scrubland", "plains", "grassland", "steppe", "savanna",
+		"boreal-forest", "temperate-forest", "rainforest", "hills", "mountain", "alpine",
+		"volcano", "volcanic-highland", "coast",
+	}
+	got := Terrains()
+	if len(got) != len(want) {
+		t.Fatalf("Terrains() returned %d values, want %d", len(got), len(want))
+	}
+	for index := range want {
+		if got[index] != want[index] || !got[index].Valid() {
+			t.Errorf("terrain %d = %q (valid=%t), want %q", index, got[index], got[index].Valid(), want[index])
+		}
+	}
+	got[0] = "changed"
+	if Terrains()[0] != TerrainDeepOcean {
+		t.Fatal("Terrains returned mutable package storage")
+	}
+	if (Terrain("unknown")).Valid() {
+		t.Fatal("unknown terrain is valid")
+	}
+	for _, terrain := range want {
+		wantWater := terrain == TerrainDeepOcean || terrain == TerrainOcean || terrain == TerrainShallowSea ||
+			terrain == TerrainCoastalWater || terrain == TerrainInlandSea || terrain == TerrainLake
+		if terrain.IsWater() != wantWater {
+			t.Errorf("terrain %q IsWater() = %t, want %t", terrain, terrain.IsWater(), wantWater)
+		}
+	}
+}
+
+func TestClassifyTerrainPrecedence(t *testing.T) {
+	land := Province{IslandID: 0, Elevation: 0.1, ElevationBand: ElevationBandLowland, HeatBand: HeatBandTemperate, MoistureBand: MoistureBandModerate}
 	for _, test := range []struct {
-		name      string
-		cornerIDs []CornerID
-		want      Terrain
+		name          string
+		province      Province
+		adjacentLand  bool
+		adjacentWater bool
+		want          Terrain
 	}{
-		{name: "plains", cornerIDs: []CornerID{0, 1}, want: TerrainPlains},
-		{name: "plains threshold belongs to hills", cornerIDs: []CornerID{1, 2}, want: TerrainHills},
-		{name: "hills", cornerIDs: []CornerID{1, 3}, want: TerrainHills},
-		{name: "hills threshold belongs to mountains", cornerIDs: []CornerID{2, 3}, want: TerrainMountains},
-		{name: "mountains", cornerIDs: []CornerID{3, 4}, want: TerrainMountains},
+		{name: "coastal water precedes depth", province: Province{IslandID: NoIslandID, Elevation: -0.8, ElevationBand: ElevationBandDeepWater}, adjacentLand: true, want: TerrainCoastalWater},
+		{name: "deep ocean", province: Province{IslandID: NoIslandID, Elevation: -0.8, ElevationBand: ElevationBandDeepWater}, want: TerrainDeepOcean},
+		{name: "ocean", province: Province{IslandID: NoIslandID, Elevation: -0.3, ElevationBand: ElevationBandShallowWater}, want: TerrainOcean},
+		{name: "shallow sea", province: Province{IslandID: NoIslandID, Elevation: -0.05, ElevationBand: ElevationBandShallowWater}, want: TerrainShallowSea},
+		{name: "glacial ice", province: Province{IslandID: 0, ElevationBand: ElevationBandLowland, HeatBand: HeatBandPolar, MoistureBand: MoistureBandDry}, want: TerrainGlacialIce},
+		{name: "arid polar land is tundra", province: Province{IslandID: 0, ElevationBand: ElevationBandLowland, HeatBand: HeatBandPolar, MoistureBand: MoistureBandArid}, want: TerrainTundra},
+		{name: "cold mountain is alpine", province: Province{IslandID: 0, ElevationBand: ElevationBandMountain, HeatBand: HeatBandCold}, want: TerrainAlpine},
+		{name: "warm mountain", province: Province{IslandID: 0, ElevationBand: ElevationBandMountain, HeatBand: HeatBandWarm}, want: TerrainMountain},
+		{name: "rough highland is mountain", province: Province{IslandID: 0, ElevationBand: ElevationBandHighland, Relief: terrainMountainReliefMin}, want: TerrainMountain},
+		{name: "smooth highland is hills", province: Province{IslandID: 0, ElevationBand: ElevationBandHighland, Relief: terrainMountainReliefMin - 0.01}, want: TerrainHills},
+		{name: "cold wetland is bog", province: Province{IslandID: 0, ElevationBand: ElevationBandLowland, HeatBand: HeatBandCold, MoistureBand: MoistureBandHumid}, want: TerrainBog},
+		{name: "temperate wetland is marsh", province: Province{IslandID: 0, ElevationBand: ElevationBandLowland, HeatBand: HeatBandTemperate, MoistureBand: MoistureBandHumid}, want: TerrainMarsh},
+		{name: "warm wetland is swamp", province: Province{IslandID: 0, ElevationBand: ElevationBandLowland, HeatBand: HeatBandWarm, MoistureBand: MoistureBandSaturated}, want: TerrainSwamp},
+		{name: "coast", province: Province{IslandID: 0, Elevation: terrainCoastMax, ElevationBand: ElevationBandLowland, HeatBand: HeatBandTemperate, MoistureBand: MoistureBandModerate}, adjacentWater: true, want: TerrainCoast},
+		{name: "rough dry land is badlands", province: Province{IslandID: 0, Elevation: 0.1, ElevationBand: ElevationBandLowland, Relief: terrainBadlandsReliefMin, HeatBand: HeatBandWarm, MoistureBand: MoistureBandDry}, want: TerrainBadlands},
+		{name: "rough upland is hills", province: Province{IslandID: 0, ElevationBand: ElevationBandUpland, Relief: terrainHillReliefMin, HeatBand: HeatBandTemperate, MoistureBand: MoistureBandModerate}, want: TerrainHills},
+		{name: "ordinary land uses climate cover", province: land, want: TerrainPlains},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			province := Province{CornerIDs: test.cornerIDs}
-			if got := terrainFromCorners(province, cornerValues); got != test.want {
-				t.Fatalf("terrainFromCorners() = %q, want %q", got, test.want)
+			if got := classifyTerrain(test.province, test.adjacentLand, test.adjacentWater); got != test.want {
+				t.Fatalf("classifyTerrain() = %q, want %q", got, test.want)
 			}
 		})
 	}
 }
 
-func TestAssignTerrainChangesOnlyTerrain(t *testing.T) {
-	config := Config{WorldSeed: 42, ProvinceCount: 97, IslandCount: 7}
-	got, err := Generate(config)
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
+func TestTerrainCoverTable(t *testing.T) {
+	want := [5][5]Terrain{
+		{TerrainTundra, TerrainTundra, TerrainTundra, TerrainTundra, TerrainTundra},
+		{TerrainTundra, TerrainSteppe, TerrainBorealForest, TerrainBorealForest, TerrainBorealForest},
+		{TerrainScrubland, TerrainGrassland, TerrainPlains, TerrainTemperateForest, TerrainTemperateForest},
+		{TerrainDesert, TerrainScrubland, TerrainSavanna, TerrainTemperateForest, TerrainTemperateForest},
+		{TerrainDesert, TerrainScrubland, TerrainSavanna, TerrainRainforest, TerrainRainforest},
 	}
-	want, err := Generate(config)
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
+	for heat := range want {
+		for moisture := range want[heat] {
+			if terrainCover[heat][moisture] != want[heat][moisture] {
+				t.Errorf("cover[%d][%d] = %q, want %q", heat, moisture, terrainCover[heat][moisture], want[heat][moisture])
+			}
+		}
+	}
+}
+
+func TestAssignTerrainUsesEdgeAdjacency(t *testing.T) {
+	world := World{
+		Provinces: []Province{
+			{IslandID: 0, Elevation: 0.02, ElevationBand: ElevationBandLowland, HeatBand: HeatBandTemperate, MoistureBand: MoistureBandModerate},
+			{IslandID: NoIslandID, Elevation: -0.8, ElevationBand: ElevationBandDeepWater},
+			{IslandID: NoIslandID, Elevation: -0.8, ElevationBand: ElevationBandDeepWater},
+			{IslandID: 0, Elevation: 0.1, ElevationBand: ElevationBandLowland, HeatBand: HeatBandWarm, MoistureBand: MoistureBandSaturated},
+		},
+		Edges: []Edge{{ProvinceIDs: []ProvinceID{0, 1}}},
 	}
 
-	noise := newTerrainNoise(8675309)
-	cornerValues := make([]float64, len(got.Corners))
-	for cornerID, corner := range got.Corners {
-		cornerValues[cornerID] = noise.sample(corner.Point)
-	}
-	assignTerrain(&got, cornerValues)
-	for provinceID := range got.Provinces {
-		got.Provinces[provinceID].Terrain = ""
-		want.Provinces[provinceID].Terrain = ""
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatal("assignTerrain changed world geometry or topology")
+	assignTerrain(&world)
+
+	want := []Terrain{TerrainCoast, TerrainCoastalWater, TerrainDeepOcean, TerrainSwamp}
+	for provinceID, terrain := range want {
+		if world.Provinces[provinceID].Terrain != terrain {
+			t.Errorf("province %d terrain = %q, want %q", provinceID, world.Provinces[provinceID].Terrain, terrain)
+		}
 	}
 }
 
 func TestAssignElevationsFromEdges(t *testing.T) {
 	world := World{
 		Provinces: []Province{
-			{IslandID: 0, Terrain: TerrainWater},
-			{IslandID: 0, Terrain: TerrainWater},
-			{IslandID: NoIslandID, Terrain: TerrainPlains},
-			{IslandID: NoIslandID, Terrain: TerrainPlains},
+			{IslandID: 0, Terrain: TerrainGrassland},
+			{IslandID: 0, Terrain: TerrainGrassland},
+			{IslandID: NoIslandID, Terrain: TerrainOcean},
+			{IslandID: NoIslandID, Terrain: TerrainOcean},
 		},
 		Edges: []Edge{
 			{CornerIDs: [2]CornerID{0, 1}, ProvinceIDs: []ProvinceID{0, 1}, Elevation: -1},
@@ -123,8 +180,8 @@ func TestAssignElevationsFromEdges(t *testing.T) {
 			t.Errorf("province %d elevation band = %d, want %d", provinceID, province.ElevationBand, wantBands[provinceID])
 		}
 	}
-	if world.Provinces[0].Terrain != TerrainWater || world.Provinces[2].Terrain != TerrainPlains {
-		t.Fatal("elevation assignment changed legacy terrain")
+	if world.Provinces[0].Terrain != TerrainGrassland || world.Provinces[2].Terrain != TerrainOcean {
+		t.Fatal("elevation assignment changed terrain")
 	}
 }
 
@@ -165,7 +222,7 @@ func TestGenerateLargerWorldHasMultipleTerrainClasses(t *testing.T) {
 	}
 	terrains := make(map[Terrain]bool)
 	for _, province := range world.Provinces {
-		if province.Terrain != TerrainWater {
+		if province.IslandID != NoIslandID {
 			terrains[province.Terrain] = true
 		}
 	}

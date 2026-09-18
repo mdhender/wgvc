@@ -67,17 +67,11 @@ func TestGenerateUsesOneMeshForLandAndWater(t *testing.T) {
 
 	land, water := 0, 0
 	for _, province := range world.Provinces {
-		if province.Terrain == TerrainWater {
+		if province.IslandID == NoIslandID {
 			water++
-			if province.IslandID != NoIslandID {
-				t.Errorf("water province %d island ID = %d, want NoIslandID", province.ID, province.IslandID)
-			}
 			continue
 		}
 		land++
-		if province.IslandID == NoIslandID {
-			t.Errorf("land province %d has NoIslandID", province.ID)
-		}
 	}
 	if land != config.ProvinceCount || water == 0 {
 		t.Fatalf("world has %d land and %d water provinces, want %d land and nonzero water", land, water, config.ProvinceCount)
@@ -194,7 +188,7 @@ func TestGenerateKeepsWaterProvinces(t *testing.T) {
 
 	land, water := 0, 0
 	for _, province := range world.Provinces {
-		if province.Terrain == TerrainWater {
+		if province.IslandID == NoIslandID {
 			water++
 		} else {
 			land++
@@ -240,7 +234,7 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 	}
 	for provinceID, count := range memberships {
 		want := 1
-		if world.Provinces[provinceID].Terrain == TerrainWater {
+		if world.Provinces[provinceID].IslandID == NoIslandID {
 			want = 0
 		}
 		if count != want {
@@ -263,7 +257,7 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 	cornerInProvince := make([]bool, len(world.Corners))
 	elevationTotals := make([]float64, len(world.Provinces))
 	elevationEdgeCounts := make([]int, len(world.Provinces))
-	noise := newTerrainNoise(config.WorldSeed)
+	noise := newElevationNoise(config.WorldSeed)
 	cornerValues := make([]float64, len(world.Corners))
 	for cornerID, corner := range world.Corners {
 		cornerValues[cornerID] = noise.sample(corner.Point)
@@ -290,13 +284,13 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 				t.Errorf("edge %d incidence is not canonical: %v", edge.ID, edge.ProvinceIDs)
 			}
 		}
-		if len(edge.ProvinceIDs) == 1 && world.Provinces[edge.ProvinceIDs[0]].Terrain != TerrainWater {
+		if len(edge.ProvinceIDs) == 1 && world.Provinces[edge.ProvinceIDs[0]].IslandID != NoIslandID {
 			t.Errorf("world-boundary edge %d is incident to land province %d", edge.ID, edge.ProvinceIDs[0])
 		}
 		if len(edge.ProvinceIDs) == 2 {
 			first, second := edge.ProvinceIDs[0], edge.ProvinceIDs[1]
-			firstWater := world.Provinces[first].Terrain == TerrainWater
-			secondWater := world.Provinces[second].Terrain == TerrainWater
+			firstWater := world.Provinces[first].IslandID == NoIslandID
+			secondWater := world.Provinces[second].IslandID == NoIslandID
 			if !firstWater && !secondWater && world.Provinces[first].IslandID != world.Provinces[second].IslandID {
 				t.Errorf("interior edge %d joins islands %d and %d", edge.ID, world.Provinces[first].IslandID, world.Provinces[second].IslandID)
 			}
@@ -343,17 +337,17 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		if province.ID != ProvinceID(provinceIndex) {
 			t.Errorf("province at index %d has ID %d", provinceIndex, province.ID)
 		}
-		if province.Terrain == TerrainWater {
-			if province.IslandID != NoIslandID {
-				t.Errorf("water province %d has island ID %d, want NoIslandID", province.ID, province.IslandID)
-			}
-		} else if int(province.IslandID) < 0 || int(province.IslandID) >= len(world.Islands) {
+		if province.IslandID != NoIslandID && (int(province.IslandID) < 0 || int(province.IslandID) >= len(world.Islands)) {
 			t.Fatalf("land province %d has invalid island ID %d", province.ID, province.IslandID)
 		}
-		switch province.Terrain {
-		case TerrainWater, TerrainPlains, TerrainHills, TerrainMountains:
-		default:
+		if !province.Terrain.Valid() {
 			t.Errorf("province %d has unsupported terrain %q", province.ID, province.Terrain)
+		}
+		if province.Terrain.IsWater() != (province.IslandID == NoIslandID) {
+			t.Errorf("province %d terrain %q disagrees with island ID %d", province.ID, province.Terrain, province.IslandID)
+		}
+		if province.Terrain == TerrainInlandSea || province.Terrain == TerrainLake || province.Terrain == TerrainVolcano || province.Terrain == TerrainVolcanicHighland {
+			t.Errorf("province %d received reserved terrain %q", province.ID, province.Terrain)
 		}
 		wantElevation := elevationTotals[provinceIndex] / float64(elevationEdgeCounts[provinceIndex])
 		if province.Elevation != wantElevation {
@@ -400,7 +394,7 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 			t.Errorf("province %d signed area = %g, want positive", province.ID, area)
 		}
 		totalArea += area
-		if province.Terrain != TerrainWater {
+		if province.IslandID != NoIslandID {
 			landArea += area
 		}
 		for ringIndex, start := range ring {

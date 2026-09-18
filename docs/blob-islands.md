@@ -3,8 +3,8 @@
 `Generate` builds irregular Voronoi islands from one point set shared by the
 whole world. Callers provide only `WorldSeed`, `ProvinceCount`, and
 `IslandCount`. The land count is exact; the island count is an initial seed
-count and can decrease through mergers. Water provinces use `TerrainWater` and
-`NoIslandID`, and interior lakes are valid.
+count and can decrease through mergers. Growth-assigned water provinces use
+`NoIslandID`; terrain is a later classification, and interior water is valid.
 
 ## Stage order
 
@@ -24,7 +24,8 @@ For every successful generation:
 8. Retry from a fresh deterministic mesh with more ocean if a round cannot
    finish.
 9. Scale the complete mesh so total land area equals the requested province
-   count, canonicalize shared corners and edges, and assign land terrain.
+   count, canonicalize shared corners and edges, and assign physical axes and
+   final terrain.
 
 Every public province remains finite, convex, counterclockwise, positive-area,
 and center-containing. Every island is one authoritative shared-edge land

@@ -106,11 +106,29 @@ func TestRunSVGUsesDerivedDimensionsAndTerrainColors(t *testing.T) {
 	if width != wantWidth || height != wantHeight {
 		t.Errorf("SVG dimensions = %d×%d, want %d×%d", width, height, wantWidth, wantHeight)
 	}
-	terrainFills := strings.Count(string(data), `fill="`+plainsColor+`"`) +
-		strings.Count(string(data), `fill="`+hillsColor+`"`) +
-		strings.Count(string(data), `fill="`+mountainsColor+`"`)
+	terrainFills := 0
+	for terrain, color := range terrainColors {
+		if !terrain.IsWater() {
+			terrainFills += strings.Count(string(data), `fill="`+color+`"`)
+		}
+	}
 	if terrainFills != 30 {
 		t.Errorf("SVG terrain-filled land cells = %d, want 30", terrainFills)
+	}
+}
+
+func TestEveryTerrainHasColor(t *testing.T) {
+	for _, terrain := range wgvc.Terrains() {
+		color, err := terrainColor(terrain)
+		if err != nil {
+			t.Errorf("terrainColor(%q) error = %v", terrain, err)
+		}
+		if color == "" {
+			t.Errorf("terrainColor(%q) returned an empty color", terrain)
+		}
+	}
+	if _, err := terrainColor("unknown"); err == nil {
+		t.Fatal("terrainColor accepted unknown terrain")
 	}
 }
 

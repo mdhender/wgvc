@@ -25,18 +25,18 @@ func TestRandomStreamCanBeReconstructed(t *testing.T) {
 	}
 }
 
-func TestTerrainConsumptionDoesNotChangePlacement(t *testing.T) {
+func TestElevationConsumptionDoesNotChangePlacement(t *testing.T) {
 	const seed = 8675309
 	want := placementRandom(seed)
 	got := placementRandom(seed)
-	terrain := terrainRandom(seed)
+	elevation := elevationRandom(seed)
 
 	for range 1000 {
-		terrain.Uint64()
+		elevation.Uint64()
 	}
 	for i := 0; i < 20; i++ {
 		if gotValue, wantValue := got.Uint64(), want.Uint64(); gotValue != wantValue {
-			t.Fatalf("placement value %d = %d after terrain consumption, want %d", i, gotValue, wantValue)
+			t.Fatalf("placement value %d = %d after elevation consumption, want %d", i, gotValue, wantValue)
 		}
 	}
 }
@@ -45,22 +45,22 @@ func TestClimateStreamsAreIndependent(t *testing.T) {
 	const seed = 8675309
 	heat := heatRandom(seed)
 	moisture := moistureRandom(seed)
-	terrain := terrainRandom(seed)
-	heatFirst, moistureFirst, terrainFirst := heat.Uint64(), moisture.Uint64(), terrain.Uint64()
-	if heatFirst == moistureFirst || heatFirst == terrainFirst || moistureFirst == terrainFirst {
-		t.Fatal("climate and terrain streams unexpectedly started with the same value")
+	elevation := elevationRandom(seed)
+	heatFirst, moistureFirst, elevationFirst := heat.Uint64(), moisture.Uint64(), elevation.Uint64()
+	if heatFirst == moistureFirst || heatFirst == elevationFirst || moistureFirst == elevationFirst {
+		t.Fatal("climate and elevation streams unexpectedly started with the same value")
 	}
 
 	wantMoisture := moistureRandom(seed).Uint64()
-	wantTerrain := terrainRandom(seed).Uint64()
+	wantElevation := elevationRandom(seed).Uint64()
 	for range 1000 {
 		heat.Uint64()
 	}
 	if got := moistureRandom(seed).Uint64(); got != wantMoisture {
 		t.Errorf("moisture value = %d after heat consumption, want %d", got, wantMoisture)
 	}
-	if got := terrainRandom(seed).Uint64(); got != wantTerrain {
-		t.Errorf("terrain value = %d after climate consumption, want %d", got, wantTerrain)
+	if got := elevationRandom(seed).Uint64(); got != wantElevation {
+		t.Errorf("elevation value = %d after climate consumption, want %d", got, wantElevation)
 	}
 }
 
@@ -79,7 +79,7 @@ func TestShapeConsumptionCannotPerturbOtherStreams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("planCandidateSites() error = %v", err)
 	}
-	wantTerrain := terrainRandom(seed).Uint64()
+	wantElevation := elevationRandom(seed).Uint64()
 	wantOtherIsland := blobShapeRandom(seed, 3).Uint64()
 
 	shape := blobShapeRandom(seed, 2)
@@ -97,8 +97,8 @@ func TestShapeConsumptionCannotPerturbOtherStreams(t *testing.T) {
 	if !reflect.DeepEqual(gotCandidates, wantCandidates) {
 		t.Error("candidate sites changed after shape consumption")
 	}
-	if got := terrainRandom(seed).Uint64(); got != wantTerrain {
-		t.Errorf("terrain value = %d after shape consumption, want %d", got, wantTerrain)
+	if got := elevationRandom(seed).Uint64(); got != wantElevation {
+		t.Errorf("elevation value = %d after shape consumption, want %d", got, wantElevation)
 	}
 	if got := blobShapeRandom(seed, 3).Uint64(); got != wantOtherIsland {
 		t.Errorf("island 3 shape value = %d after island 2 shape consumption, want %d", got, wantOtherIsland)

@@ -25,11 +25,72 @@ type Point struct {
 type Terrain string
 
 const (
-	TerrainWater     Terrain = "water"
-	TerrainPlains    Terrain = "plains"
-	TerrainHills     Terrain = "hills"
-	TerrainMountains Terrain = "mountains"
+	TerrainDeepOcean        Terrain = "deep-ocean"
+	TerrainOcean            Terrain = "ocean"
+	TerrainShallowSea       Terrain = "shallow-sea"
+	TerrainCoastalWater     Terrain = "coastal-water"
+	TerrainInlandSea        Terrain = "inland-sea"
+	TerrainLake             Terrain = "lake"
+	TerrainGlacialIce       Terrain = "glacial-ice"
+	TerrainTundra           Terrain = "tundra"
+	TerrainMarsh            Terrain = "marsh"
+	TerrainSwamp            Terrain = "swamp"
+	TerrainBog              Terrain = "bog"
+	TerrainDesert           Terrain = "desert"
+	TerrainBadlands         Terrain = "badlands"
+	TerrainScrubland        Terrain = "scrubland"
+	TerrainPlains           Terrain = "plains"
+	TerrainGrassland        Terrain = "grassland"
+	TerrainSteppe           Terrain = "steppe"
+	TerrainSavanna          Terrain = "savanna"
+	TerrainBorealForest     Terrain = "boreal-forest"
+	TerrainTemperateForest  Terrain = "temperate-forest"
+	TerrainRainforest       Terrain = "rainforest"
+	TerrainHills            Terrain = "hills"
+	TerrainMountain         Terrain = "mountain"
+	TerrainAlpine           Terrain = "alpine"
+	TerrainVolcano          Terrain = "volcano"
+	TerrainVolcanicHighland Terrain = "volcanic-highland"
+	TerrainCoast            Terrain = "coast"
 )
+
+var terrains = [...]Terrain{
+	TerrainDeepOcean, TerrainOcean, TerrainShallowSea, TerrainCoastalWater,
+	TerrainInlandSea, TerrainLake,
+	TerrainGlacialIce, TerrainTundra,
+	TerrainMarsh, TerrainSwamp, TerrainBog,
+	TerrainDesert, TerrainBadlands, TerrainScrubland,
+	TerrainPlains, TerrainGrassland, TerrainSteppe, TerrainSavanna,
+	TerrainBorealForest, TerrainTemperateForest, TerrainRainforest,
+	TerrainHills, TerrainMountain, TerrainAlpine,
+	TerrainVolcano, TerrainVolcanicHighland,
+	TerrainCoast,
+}
+
+// Terrains returns every terrain in stable family order.
+func Terrains() []Terrain {
+	return append([]Terrain(nil), terrains[:]...)
+}
+
+// Valid reports whether terrain is a declared terrain value.
+func (terrain Terrain) Valid() bool {
+	for _, candidate := range terrains {
+		if terrain == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+// IsWater reports whether terrain represents ocean or inland water.
+func (terrain Terrain) IsWater() bool {
+	switch terrain {
+	case TerrainDeepOcean, TerrainOcean, TerrainShallowSea, TerrainCoastalWater, TerrainInlandSea, TerrainLake:
+		return true
+	default:
+		return false
+	}
+}
 
 // ElevationBand is an ordered classification of province elevation. Water
 // bands sort below land bands so callers can compare bands directly.
