@@ -19,6 +19,21 @@ requested count. Water can contain interior components such as lakes.
 - An interior edge's incident provinces are the authoritative undirected
   geometric adjacency. An edge is never a game route.
 
+## JSON export
+
+`go run ./cmd/generate -format json -output world` writes `world.json`. The
+document has `schema_version: 1`, generation configuration and effective result
+metadata, world-coordinate bounds, and the canonical `islands`, `provinces`,
+`corners`, and `edges` collections. It uses the same IDs and references described
+above. Water provinces retain `island_id: -1`; terrain and elevation, heat, and
+moisture bands use descriptive strings. The seed is a hexadecimal string to
+preserve the complete unsigned 64-bit value.
+
+JSON uses Cartesian generation coordinates rather than the transformed pixel
+coordinates used by image renderers. Use a comma-separated format such as
+`-format svg,json` to export world data with an image, or `-format all` for SVG,
+PNG, and JSON. The existing `-format both` remains an SVG-and-PNG alias.
+
 ## Single-mesh generation
 
 Generation begins with one deterministic point set over a fixed-area rectangle.

@@ -5,7 +5,8 @@ Voronoi mesh, with concurrently grown and merging islands, shared polygon
 topology, and spatially correlated terrain.
 
 The included `generate` command exposes the complete growth configuration
-and writes terrain-colored SVG and PNG maps at automatically derived dimensions.
+and writes canonical JSON world data as well as terrain-colored SVG and PNG
+maps at automatically derived dimensions.
 
 ## Usage
 
@@ -110,13 +111,40 @@ go run ./cmd/generate -seed 0x0123456789abcdef \
   -aspect cinematic -attractors 5 -format png -output world
 ```
 
-Use `-format png` for `world.png`, or `-format both` to write both
-`world.svg` and `world.png`. The `-output` value is a path without an
-extension. SVG and PNG dimensions are derived from the requested land-province
-count, the effective ocean percentage, and the aspect ratio. Both formats use
-the same terrain fills, thin cell borders, and heavier coastline.
+Use `-format png` for `world.png`, `-format json` for `world.json`, or
+`-format both` to write `world.svg` and `world.png`. Comma-separated values such
+as `-format svg,json` select any combination, and `-format all` writes all three
+files. The `-output` value is a path without an extension. SVG and PNG dimensions
+are derived from the requested land-province count, the effective ocean
+percentage, and the aspect ratio. Both image formats use the same terrain fills,
+thin cell borders, and heavier coastline.
 The `-aspect` flag accepts `landscape`, `portrait`, `widescreen`, and
 `cinematic` as aliases for their corresponding numeric ratios.
+
+JSON output contains the canonical indexed world topology in Cartesian world
+coordinates; it does not contain pixel coordinates or rendering styles. Its
+top-level shape is:
+
+```json
+{
+  "schema_version": 1,
+  "generation": {
+    "config": { "seed": "0x0123456789abcdef" },
+    "result": { "province_count": 4688, "land_province_count": 1500 }
+  },
+  "bounds": { "minimum": { "x": 0, "y": 0 }, "maximum": { "x": 68, "y": 68 } },
+  "islands": [],
+  "provinces": [],
+  "corners": [],
+  "edges": []
+}
+```
+
+The abbreviated objects above omit fields and collection entries. IDs equal
+their array indexes, polygon rings refer to shared corners, edges refer to their
+incident provinces, and water provinces use `island_id: -1`. Terrain and climate
+bands are descriptive strings. The seed is a hexadecimal string so all 64 bits
+survive parsers whose numeric values use IEEE-754 doubles.
 
 Attractants are disabled by default. Use `-attractors` with 1 through 6 to
 select regions in the familiar die-face pattern, or 9 to select every region

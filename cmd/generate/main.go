@@ -19,7 +19,9 @@ import (
 const (
 	formatSVG  = "svg"
 	formatPNG  = "png"
+	formatJSON = "json"
 	formatBoth = "both"
+	formatAll  = "all"
 
 	pixelsPerCell = 16
 )
@@ -30,6 +32,12 @@ type options struct {
 	peakChillPercent float64
 	format           string
 	outputBase       string
+}
+
+type outputFormats struct {
+	svg  bool
+	png  bool
+	json bool
 }
 
 type rampFlag struct {
@@ -98,7 +106,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.IntVar(&options.config.Relaxations, "relaxations", options.config.Relaxations, "Lloyd relaxation passes per round")
 	flags.Float64Var(&options.polarIcePercent, "polar-ice", options.polarIcePercent, "target percentage of ocean provinces in the polar heat band")
 	flags.Float64Var(&options.peakChillPercent, "peak-chill", options.peakChillPercent, "target percentage of warm-region high peaks classified cold or colder")
-	flags.StringVar(&options.format, "format", options.format, "output format: svg, png, or both")
+	flags.StringVar(&options.format, "format", options.format, "output format: svg, png, json, both, all, or a comma-separated combination")
 	flags.StringVar(&options.outputBase, "output", options.outputBase, "output path without an extension")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -109,13 +117,20 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if options.outputBase == "" {
 		return fmt.Errorf("output path must not be empty")
 	}
-	if options.format != formatSVG && options.format != formatPNG && options.format != formatBoth {
-		return fmt.Errorf("unsupported format %q: use svg, png, or both", options.format)
+	formats, err := parseOutputFormats(options.format)
+	if err != nil {
+		return err
 	}
 
 	climateConfig := wgvc.ClimateConfig{
 		PolarIce:  options.polarIcePercent / 100,
 		PeakChill: options.peakChillPercent / 100,
+	}
+	if climateConfig.PolarIce == 0 {
+		climateConfig.PolarIce = climateDefaults.PolarIce
+	}
+	if climateConfig.PeakChill == 0 {
+		climateConfig.PeakChill = climateDefaults.PeakChill
 	}
 	world, result, err := wgvc.GenerateForRenderWithClimate(options.config, climateConfig)
 	if err != nil {
@@ -124,16 +139,20 @@ func run(args []string, stdout, stderr io.Writer) error {
 	for _, skip := range result.AttractantSkips {
 		fmt.Fprintf(stderr, "generate: skipped attractant region (%d,%d): %s\n", skip.RegionX, skip.RegionY, skip.Reason)
 	}
-	width, height, err := renderDimensions(options.config.ProvinceCount, result.FinalOcean, options.config.AspectRatio)
-	if err != nil {
-		return fmt.Errorf("derive render dimensions: %w", err)
-	}
-	scene, err := buildScene(world, width, height)
-	if err != nil {
-		return fmt.Errorf("build render scene: %w", err)
+	var width, height int
+	var scene renderScene
+	if formats.svg || formats.png {
+		width, height, err = renderDimensions(options.config.ProvinceCount, result.FinalOcean, options.config.AspectRatio)
+		if err != nil {
+			return fmt.Errorf("derive render dimensions: %w", err)
+		}
+		scene, err = buildScene(world, width, height)
+		if err != nil {
+			return fmt.Errorf("build render scene: %w", err)
+		}
 	}
 
-	if options.format == formatSVG || options.format == formatBoth {
+	if formats.svg {
 		data, err := renderSVG(scene)
 		if err != nil {
 			return fmt.Errorf("render SVG: %w", err)
@@ -142,7 +161,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 	}
-	if options.format == formatPNG || options.format == formatBoth {
+	if formats.png {
 		data, err := renderPNG(scene)
 		if err != nil {
 			return fmt.Errorf("render PNG: %w", err)
@@ -151,10 +170,47 @@ func run(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 	}
-	fmt.Fprintf(stdout, "wrote %s (%d×%d): %d cells, %d land, %d→%d islands, merges=%d, %.0f%% ocean, %d round(s)\n",
-		options.outputBase, width, height, len(result.Cells), options.config.ProvinceCount, result.InitialIslandCount,
+	if formats.json {
+		data, err := renderJSON(world, options.config, climateConfig, result)
+		if err != nil {
+			return fmt.Errorf("render JSON: %w", err)
+		}
+		if err := writeOutput(options.outputBase+".json", data); err != nil {
+			return err
+		}
+	}
+	dimensions := ""
+	if formats.svg || formats.png {
+		dimensions = fmt.Sprintf(" (%d×%d)", width, height)
+	}
+	fmt.Fprintf(stdout, "wrote %s%s: %d cells, %d land, %d→%d islands, merges=%d, %.0f%% ocean, %d round(s)\n",
+		options.outputBase, dimensions, len(result.Cells), options.config.ProvinceCount, result.InitialIslandCount,
 		len(result.Islands), result.MergeCount, result.FinalOcean*100, result.RoundsAttempted)
 	return nil
+}
+
+func parseOutputFormats(value string) (outputFormats, error) {
+	var formats outputFormats
+	for _, part := range strings.Split(value, ",") {
+		switch strings.TrimSpace(part) {
+		case formatSVG:
+			formats.svg = true
+		case formatPNG:
+			formats.png = true
+		case formatJSON:
+			formats.json = true
+		case formatBoth:
+			formats.svg = true
+			formats.png = true
+		case formatAll:
+			formats.svg = true
+			formats.png = true
+			formats.json = true
+		default:
+			return outputFormats{}, fmt.Errorf("unsupported format %q: use svg, png, json, both, all, or a comma-separated combination", value)
+		}
+	}
+	return formats, nil
 }
 
 func renderDimensions(provinceCount int, oceanPercentage float64, aspect string) (int, int, error) {

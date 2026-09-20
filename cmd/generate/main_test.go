@@ -20,11 +20,15 @@ func TestRunOutputFormatsWithGrowthOptions(t *testing.T) {
 		formatArg []string
 		wantSVG   bool
 		wantPNG   bool
+		wantJSON  bool
 	}{
 		{name: "default is SVG", wantSVG: true},
 		{name: "explicit SVG", formatArg: []string{"-format", "svg"}, wantSVG: true},
 		{name: "PNG", formatArg: []string{"-format", "png"}, wantPNG: true},
 		{name: "both", formatArg: []string{"-format", "both"}, wantSVG: true, wantPNG: true},
+		{name: "JSON", formatArg: []string{"-format", "json"}, wantJSON: true},
+		{name: "SVG and JSON", formatArg: []string{"-format", "svg,json"}, wantSVG: true, wantJSON: true},
+		{name: "all", formatArg: []string{"-format", "all"}, wantSVG: true, wantPNG: true, wantJSON: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -54,6 +58,7 @@ func TestRunOutputFormatsWithGrowthOptions(t *testing.T) {
 			}
 			assertOutputExists(t, base+".svg", test.wantSVG)
 			assertOutputExists(t, base+".png", test.wantPNG)
+			assertOutputExists(t, base+".json", test.wantJSON)
 			if !strings.Contains(stdout.String(), "200 cells, 100 land") {
 				t.Errorf("stdout = %q, want configured 50%% ocean cell budget", stdout.String())
 			}
