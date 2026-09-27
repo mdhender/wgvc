@@ -206,6 +206,27 @@ values no province has print `0`:
 go run ./cmd/generate -summary -format json
 ```
 
+`-layer` chooses the province field that colors SVG and PNG maps. JSON output
+is unaffected, and cell borders, coastlines, and the background are the same
+for every layer:
+
+| Layer | Colors each province by |
+|---|---|
+| `terrain` | its terrain (the default) |
+| `elevation` | elevation, deep ocean through shelf, then a hard step at sea level to coastal green, upland brown, and snow; the side of the step follows land/water membership |
+| `relief` | relief, dark (flat) to pale (rugged) |
+| `heat` | heat, blue (cold) through neutral to red (hot) |
+| `moisture` | moisture, ochre (dry) through neutral to deep green (wet) |
+| `climate` | its heat band × moisture band, one color per cell of the 5×5 table |
+
+Ramps cover each field's full range (`[-1, 1]` for elevation, `[0, 1]` for the
+others) rather than stretching to the values a world happens to contain. Unknown
+layer names are rejected:
+
+```sh
+go run ./cmd/generate -layer heat -format png -output heat
+```
+
 See [Desirability-field growth](docs/x24.md) for the rules and defaults. The
 public `Generate` API uses those defaults, including zero attractants; these
 tuning flags do not expand its `Config`.

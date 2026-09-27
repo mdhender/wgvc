@@ -142,7 +142,7 @@ func TestRenderedPNGIsDeterministicAndKeepsCellBorders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
-	scene, err := buildScene(world, 480, 360)
+	scene, err := buildScene(world, 480, 360, layerTerrain)
 	if err != nil {
 		t.Fatalf("buildScene() error = %v", err)
 	}

@@ -74,7 +74,7 @@ type renderScene struct {
 	coastlines []renderLine
 }
 
-func buildScene(world wgvc.World, width, height int) (renderScene, error) {
+func buildScene(world wgvc.World, width, height int, layer mapLayer) (renderScene, error) {
 	if width < minimumImageSize || height < minimumImageSize {
 		return renderScene{}, fmt.Errorf("width and height must each be at least %d pixels", minimumImageSize)
 	}
@@ -110,7 +110,7 @@ func buildScene(world wgvc.World, width, height int) (renderScene, error) {
 
 	scene := renderScene{width: width, height: height, polygons: make([]renderPolygon, 0, len(world.Provinces))}
 	for _, province := range world.Provinces {
-		fill, err := terrainColor(province.Terrain)
+		fill, err := provinceFill(layer, province)
 		if err != nil {
 			return renderScene{}, fmt.Errorf("province %d: %w", province.ID, err)
 		}

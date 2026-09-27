@@ -31,6 +31,7 @@ type options struct {
 	polarIcePercent  float64
 	peakChillPercent float64
 	format           string
+	layer            string
 	outputBase       string
 	showVersion      bool
 	summary          bool
@@ -88,6 +89,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		polarIcePercent:  climateDefaults.PolarIce * 100,
 		peakChillPercent: climateDefaults.PeakChill * 100,
 		format:           formatSVG,
+		layer:            string(layerTerrain),
 		outputBase:       "world",
 	}
 	flags := flag.NewFlagSet("generate", flag.ContinueOnError)
@@ -109,6 +111,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Float64Var(&options.polarIcePercent, "polar-ice", options.polarIcePercent, "target percentage of ocean provinces in the polar heat band")
 	flags.Float64Var(&options.peakChillPercent, "peak-chill", options.peakChillPercent, "target percentage of warm-region high peaks classified cold or colder")
 	flags.StringVar(&options.format, "format", options.format, "output format: svg, png, json, both, all, or a comma-separated combination")
+	flags.StringVar(&options.layer, "layer", options.layer, "field that colors SVG and PNG provinces: terrain, elevation, relief, heat, moisture, or climate")
 	flags.StringVar(&options.outputBase, "output", options.outputBase, "output path without an extension")
 	flags.BoolVar(&options.showVersion, "version", false, "print the generator version and exit")
 	flags.BoolVar(&options.summary, "summary", false, "print province counts per elevation band, heat band, moisture band, and terrain")
@@ -126,6 +129,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("output path must not be empty")
 	}
 	formats, err := parseOutputFormats(options.format)
+	if err != nil {
+		return err
+	}
+	layer, err := parseLayer(options.layer)
 	if err != nil {
 		return err
 	}
@@ -154,7 +161,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("derive render dimensions: %w", err)
 		}
-		scene, err = buildScene(world, width, height)
+		scene, err = buildScene(world, width, height, layer)
 		if err != nil {
 			return fmt.Errorf("build render scene: %w", err)
 		}
