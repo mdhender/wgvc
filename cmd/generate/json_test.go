@@ -100,6 +100,23 @@ func TestRunJSONContainsCanonicalWorldData(t *testing.T) {
 		if !(province.Area > 0) {
 			t.Errorf("province %d area = %g, want positive", province.ID, province.Area)
 		}
+		if len(province.Exits) != len(province.EdgeIDs) {
+			t.Errorf("province %d has %d exits for %d edges", province.ID, len(province.Exits), len(province.EdgeIDs))
+		}
+		for exitIndex, exit := range province.Exits {
+			if exit.Number != exitIndex+1 {
+				t.Errorf("province %d exit at index %d has number %d", province.ID, exitIndex, exit.Number)
+			}
+			if exit.EdgeID < 0 || int(exit.EdgeID) >= len(document.Edges) {
+				t.Errorf("province %d exit %d references unknown edge %d", province.ID, exit.Number, exit.EdgeID)
+			}
+			if exit.NeighborID != wgvc.NoProvinceID && (exit.NeighborID < 0 || int(exit.NeighborID) >= len(document.Provinces)) {
+				t.Errorf("province %d exit %d references unknown neighbor %d", province.ID, exit.Number, exit.NeighborID)
+			}
+			if exit.Bearing < 0 || exit.Bearing >= 360 || exit.Compass == "" {
+				t.Errorf("province %d exit %d = %+v, want bearing in [0, 360) and a compass label", province.ID, exit.Number, exit)
+			}
+		}
 	}
 	if !foundWater {
 		t.Fatal("JSON contains no water province with island_id -1")

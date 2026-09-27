@@ -18,6 +18,17 @@ requested count. Water can contain interior components such as lakes.
 - `Province.EdgeIDs` lists the boundary edges in ring order: `EdgeIDs[i]` is
   the edge from `CornerIDs[i]` to `CornerIDs[(i+1) % n]`. The ring starts at
   the province's lowest corner ID, so the numbering is deterministic.
+- `Province.Exits` numbers those same edges from 1, clockwise from north
+  (reverse ring order). Exit 1 is the edge whose outward bearing is smallest,
+  the first exit clockwise from due north. Each exit records its `EdgeID`, the
+  `NeighborID` across the edge (`NoProvinceID` on the world boundary), the
+  `Bearing` of the edge's outward normal in degrees clockwise from north in
+  `[0, 360)`, and an 8-point `Compass` label rounded from the bearing. The
+  bearing is the direction contract; compass labels are informative and two
+  exits can share one. Bearings increase strictly with exit number. The
+  numbering is geometric and never expresses passability. The world does not
+  wrap; boundary exits lead nowhere. See
+  [About exits, bearings, and compass points](explanations/bearing-not-compass.md).
 - `Province.Area` is the polygon area and `Edge.Length` is the distance between
   the edge's corners, both in world units. The mesh is scaled so the land
   provinces have a mean area of exactly 1; coarse ocean cells near the world
@@ -33,7 +44,7 @@ requested count. Water can contain interior components such as lakes.
 ## JSON export
 
 `go run ./cmd/generate -format json -output world` writes `world.json`. The
-document has `schema_version: 4`, generator identity, generation configuration
+document has `schema_version: 5`, generator identity, generation configuration
 and effective result metadata, world-coordinate bounds, and the canonical `islands`,
 `basins`, `provinces`, `corners`, and `edges` collections. It uses the same IDs
 and references described above. Water provinces retain `island_id: -1`, and
@@ -50,7 +61,9 @@ version 2 added the `generator` object; schema version 1 documents lack it.
 Schema version 3 added the `basins` collection (`id`, `province_ids`,
 `surface_elevation`, `depth`) and each province's `basin_id`. Schema version 4
 added each province's `edge_ids` (ring order, parallel to `corner_ids`) and
-`area`, and each edge's `length`, all in world units.
+`area`, and each edge's `length`, all in world units. Schema version 5 added
+each province's `exits` (`number`, `edge_id`, `neighbor_id`, `bearing`,
+`compass`), ordered by `number`.
 
 JSON uses Cartesian generation coordinates rather than the transformed pixel
 coordinates used by image renderers. Use a comma-separated format such as

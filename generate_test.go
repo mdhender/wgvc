@@ -422,6 +422,7 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		if province.Area != area {
 			t.Errorf("province %d area = %g, want polygon area %g", province.ID, province.Area, area)
 		}
+		assertValidExits(t, world, province)
 		totalArea += area
 		if province.IslandID != NoIslandID {
 			landArea += area
@@ -465,6 +466,64 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 	}
 	for _, island := range world.Islands {
 		assertIslandConnected(t, island, neighbors)
+	}
+}
+
+// assertValidExits checks that exits are the province's edges numbered
+// densely from 1, clockwise from north (reverse ring order), with strictly
+// increasing outward bearings that start at the smallest one, correct
+// neighbors, and compass labels that match their bearings.
+func assertValidExits(t *testing.T, world World, province Province) {
+	t.Helper()
+	n := len(province.EdgeIDs)
+	if len(province.Exits) != n {
+		t.Errorf("province %d has %d exits for %d edges", province.ID, len(province.Exits), n)
+		return
+	}
+	start := -1
+	for ringIndex, edgeID := range province.EdgeIDs {
+		if edgeID == province.Exits[0].EdgeID {
+			start = ringIndex
+		}
+	}
+	if start < 0 {
+		t.Errorf("province %d exit 1 edge %d is not a boundary edge", province.ID, province.Exits[0].EdgeID)
+		return
+	}
+	for exitIndex, exit := range province.Exits {
+		if exit.Number != exitIndex+1 {
+			t.Errorf("province %d exit at index %d has number %d", province.ID, exitIndex, exit.Number)
+		}
+		ringIndex := ((start-exitIndex)%n + n) % n
+		if exit.EdgeID != province.EdgeIDs[ringIndex] {
+			t.Errorf("province %d exit %d edge = %d, want reverse-ring edge %d", province.ID, exit.Number, exit.EdgeID, province.EdgeIDs[ringIndex])
+		}
+		first := world.Corners[province.CornerIDs[ringIndex]].Point
+		second := world.Corners[province.CornerIDs[(ringIndex+1)%n]].Point
+		if want := outwardBearing(first, second); exit.Bearing != want || exit.Bearing < 0 || exit.Bearing >= 360 {
+			t.Errorf("province %d exit %d bearing = %g, want outward normal %g in [0, 360)", province.ID, exit.Number, exit.Bearing, want)
+		}
+		if exitIndex > 0 && exit.Bearing <= province.Exits[exitIndex-1].Bearing {
+			t.Errorf("province %d exit %d bearing %g does not increase from %g", province.ID, exit.Number, exit.Bearing, province.Exits[exitIndex-1].Bearing)
+		}
+		if exit.Compass != compassFor(exit.Bearing) || !slices.Contains(compassPoints[:], exit.Compass) {
+			t.Errorf("province %d exit %d compass = %q for bearing %g", province.ID, exit.Number, exit.Compass, exit.Bearing)
+		}
+		edge := world.Edges[exit.EdgeID]
+		wantNeighbor := NoProvinceID
+		for _, incident := range edge.ProvinceIDs {
+			if incident != province.ID {
+				wantNeighbor = incident
+			}
+		}
+		if exit.NeighborID != wantNeighbor {
+			t.Errorf("province %d exit %d neighbor = %d, want %d", province.ID, exit.Number, exit.NeighborID, wantNeighbor)
+		}
+	}
+	for _, exit := range province.Exits[1:] {
+		if exit.Bearing < province.Exits[0].Bearing {
+			t.Errorf("province %d exit 1 bearing %g is not the smallest; exit %d has %g", province.ID, province.Exits[0].Bearing, exit.Number, exit.Bearing)
+		}
 	}
 }
 

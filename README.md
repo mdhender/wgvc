@@ -79,6 +79,10 @@ The returned geometry is indexed:
   not its polygon centroid.
 - `Province.EdgeIDs` lists the boundary edges in the same ring order:
   `EdgeIDs[i]` joins `CornerIDs[i]` to `CornerIDs[(i+1) % n]`.
+- `Province.Exits` numbers those edges from 1 clockwise from north, each with
+  its neighbor (or `NoProvinceID` on the world boundary), a bearing in degrees
+  clockwise from north, and an informative 8-point compass label. See
+  [About exits, bearings, and compass points](docs/explanations/bearing-not-compass.md).
 - `Province.Area` and `Edge.Length` are in world units, where the mesh is
   scaled so land provinces have a mean area of exactly 1.
 - Corners and edges are shared objects. An `Edge` references two corners and
@@ -160,7 +164,7 @@ top-level shape is:
 
 ```json
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "generation": {
     "generator": { "version": "0.7.3-alpha", "build": "9a64246" },
     "config": { "seed": "0x0123456789abcdef" },
@@ -177,7 +181,8 @@ top-level shape is:
 
 The abbreviated objects above omit fields and collection entries. IDs equal
 their array indexes, polygon rings refer to shared corners, each province also
-lists its boundary `edge_ids` in ring order and its `area`, edges refer to their
+lists its boundary `edge_ids` in ring order, its numbered `exits`, and its
+`area`, edges refer to their
 incident provinces and carry their `length`, water provinces use
 `island_id: -1`, and provinces outside any basin use `basin_id: -1`. Terrain and climate
 bands are descriptive strings. The seed is a hexadecimal string so all 64 bits

@@ -9,7 +9,7 @@ import (
 	"github.com/mdhender/wgvc/internal/x24"
 )
 
-const jsonSchemaVersion = 4
+const jsonSchemaVersion = 5
 
 type jsonWorld struct {
 	SchemaVersion int            `json:"schema_version"`
@@ -94,6 +94,7 @@ type jsonProvince struct {
 	Center        jsonPoint       `json:"center"`
 	CornerIDs     []wgvc.CornerID `json:"corner_ids"`
 	EdgeIDs       []wgvc.EdgeID   `json:"edge_ids"`
+	Exits         []jsonExit      `json:"exits"`
 	Area          float64         `json:"area"`
 	Terrain       wgvc.Terrain    `json:"terrain"`
 	Elevation     float64         `json:"elevation"`
@@ -103,6 +104,14 @@ type jsonProvince struct {
 	HeatBand      string          `json:"heat_band"`
 	Moisture      float64         `json:"moisture"`
 	MoistureBand  string          `json:"moisture_band"`
+}
+
+type jsonExit struct {
+	Number     int             `json:"number"`
+	EdgeID     wgvc.EdgeID     `json:"edge_id"`
+	NeighborID wgvc.ProvinceID `json:"neighbor_id"`
+	Bearing    float64         `json:"bearing"`
+	Compass    wgvc.Compass    `json:"compass"`
 }
 
 type jsonCorner struct {
@@ -195,6 +204,16 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 		if err != nil {
 			return nil, fmt.Errorf("province %d: %w", province.ID, err)
 		}
+		exits := make([]jsonExit, len(province.Exits))
+		for exitIndex, exit := range province.Exits {
+			exits[exitIndex] = jsonExit{
+				Number:     exit.Number,
+				EdgeID:     exit.EdgeID,
+				NeighborID: exit.NeighborID,
+				Bearing:    exit.Bearing,
+				Compass:    exit.Compass,
+			}
+		}
 		document.Provinces[index] = jsonProvince{
 			ID:            province.ID,
 			IslandID:      province.IslandID,
@@ -202,6 +221,7 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 			Center:        toJSONPoint(province.Center),
 			CornerIDs:     province.CornerIDs,
 			EdgeIDs:       province.EdgeIDs,
+			Exits:         exits,
 			Area:          province.Area,
 			Terrain:       province.Terrain,
 			Elevation:     province.Elevation,

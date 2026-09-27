@@ -15,6 +15,9 @@ const NoBasinID BasinID = -1
 // ProvinceID identifies a province by its index in World.Provinces.
 type ProvinceID int
 
+// NoProvinceID is the NeighborID of an exit on the world boundary.
+const NoProvinceID ProvinceID = -1
+
 // CornerID identifies a polygon corner by its index in World.Corners.
 type CornerID int
 
@@ -199,6 +202,7 @@ type Basin struct {
 // cell, not the polygon centroid. CornerIDs is a counterclockwise polygon ring
 // without a repeated closing corner. EdgeIDs lists the boundary edges in the
 // same ring order: EdgeIDs[i] joins CornerIDs[i] to CornerIDs[(i+1) % n].
+// Exits lists the same edges numbered clockwise from north, in Number order.
 // Area is the polygon area in world units. Elevation is the mean elevation of the
 // province's boundary edges, normalized to [-1, 1]. ElevationBand preserves
 // the growth-assigned land/water classification even at sea level. Relief is
@@ -213,6 +217,7 @@ type Province struct {
 	Center        Point
 	CornerIDs     []CornerID
 	EdgeIDs       []EdgeID
+	Exits         []Exit
 	Area          float64
 	Terrain       Terrain
 	Elevation     float64
@@ -223,6 +228,37 @@ type Province struct {
 	Moisture      float64
 	MoistureBand  MoistureBand
 }
+
+// Exit is one boundary edge of a province seen as a way out of it. Exits are
+// numbered from 1, clockwise from north, so 0 stays free for "stay here".
+// Bearing is the outward normal of the edge in degrees clockwise from north,
+// in [0, 360); because the edge lies on the perpendicular bisector between the
+// two Voronoi centers, it is also the bearing from this province's center to
+// the neighbor's. Compass is the nearest 8-point label, for reports only;
+// two exits can share one. NeighborID is the province across the edge, or
+// NoProvinceID on the world boundary. Exits describe geometry, never
+// passability or routes.
+type Exit struct {
+	Number     int
+	EdgeID     EdgeID
+	NeighborID ProvinceID
+	Bearing    float64
+	Compass    Compass
+}
+
+// Compass is an 8-point compass label.
+type Compass string
+
+const (
+	CompassNorth     Compass = "N"
+	CompassNortheast Compass = "NE"
+	CompassEast      Compass = "E"
+	CompassSoutheast Compass = "SE"
+	CompassSouth     Compass = "S"
+	CompassSouthwest Compass = "SW"
+	CompassWest      Compass = "W"
+	CompassNorthwest Compass = "NW"
+)
 
 // Corner is a vertex shared by province polygons.
 type Corner struct {
