@@ -155,7 +155,7 @@ func TestRivalFieldTracksNearestTwoIslands(t *testing.T) {
 	}
 	// Merging 0 into 1 must drop the penalty island 1 saw from island 0.
 	owners := []int{1, Water, Water, 1, Water, Water, 2}
-	field.rebuild(owners)
+	field.rebuild(owners, func(islandID int) int { return islandID })
 	if got, ok := field.penalty(2, 1); ok {
 		t.Errorf("after the merge island 1 still sees a penalty %g on cell 2", got)
 	}
@@ -565,6 +565,90 @@ func TestGenerateRejectsUnknownConstellation(t *testing.T) {
 	}
 	if names := ConstellationNames(); !slices.Contains(names, "ursa-minor") {
 		t.Errorf("ConstellationNames() = %v, want ursa-minor", names)
+	}
+}
+
+func TestKinIslandsIgnoreEachOtherAndKeepDeckShare(t *testing.T) {
+	// Islands 0 and 1 are kin; island 2 is not. Cells 0..5 lie on a line.
+	cells := lineCells(6)
+	state := newGrowthState(cells, []float64{0, 0, 0, 0, 0, 0}, allEligible(6), []float64{-1, -0.5, 0})
+	state.groups = []int{0, 0, 2}
+	state.islands = []islandState{{seedID: 0, active: true}, {seedID: 2, active: true}, {seedID: 5, active: true}}
+	state.frontiers = make([]randomSet, 3)
+	state.claim(0, 0)
+	state.claim(2, 1)
+	state.claim(5, 2)
+	if got := state.visibleValue(1, 0); got != 0 {
+		t.Errorf("kin island 0 sees cell 1 (adjacent to kin land) at %g, want the static 0", got)
+	}
+	if got := state.visibleValue(4, 1); got != -1 {
+		t.Errorf("island 1 sees cell 4 (adjacent to rival land) at %g, want -1", got)
+	}
+	if got := state.visibleValue(3, 2); got != -1 {
+		t.Errorf("island 2 sees cell 3 (adjacent to island 1) at %g, want -1", got)
+	}
+	d := deck{}
+	d.add(0)
+	d.add(1)
+	d.add(2)
+	losers := state.claim(1, 0)
+	if !reflect.DeepEqual(losers, []int{1}) {
+		t.Fatalf("kin claim absorbed %v, want [1]", losers)
+	}
+	d.transfer(1, 0)
+	if !reflect.DeepEqual(d.entries, []int{0, 0, 2}) {
+		t.Errorf("deck after kin merge = %v, want [0 0 2]", d.entries)
+	}
+	d.remove(0)
+	if !reflect.DeepEqual(d.entries, []int{2}) {
+		t.Errorf("deck after removing island 0 = %v, want [2]", d.entries)
+	}
+}
+
+func TestKinGroupsFollowConstellationLists(t *testing.T) {
+	constellation := Constellation{Kin: [][]int{{0, 1, 2}, {3, 4}}}
+	if got := kinGroups(constellation, 6); !reflect.DeepEqual(got, []int{0, 0, 0, 3, 3, 5}) {
+		t.Errorf("kinGroups(6) = %v, want [0 0 0 3 3 5]", got)
+	}
+	if got := kinGroups(constellation, 2); !reflect.DeepEqual(got, []int{0, 0}) {
+		t.Errorf("kinGroups(2) = %v, want [0 0]", got)
+	}
+	if got := kinGroups(Constellation{}, 3); got != nil {
+		t.Errorf("kinGroups without kin = %v, want nil", got)
+	}
+}
+
+func TestSubaruMainlandFormsOneLandmass(t *testing.T) {
+	config := DefaultConfig()
+	config.Constellation = "subaru"
+	config.AspectRatio = "5:2"
+	config.ProvinceCount = 6_000
+	config.OceanPercentage = 0.78
+	constellation, _ := ConstellationByName("subaru")
+	config.IslandCount = len(constellation.Sites)
+	result, err := Generate(config)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	groups := len(constellation.Sites)
+	for _, kin := range constellation.Kin {
+		groups -= len(kin) - 1
+	}
+	if len(result.Islands) != groups {
+		t.Errorf("subaru produced %d landmasses, want one per kin group: %d", len(result.Islands), groups)
+	}
+	mainland := result.Cells[result.Attractants[0].CellID].IslandID
+	for _, site := range constellation.Kin[0] {
+		if got := result.Cells[result.Attractants[site].CellID].IslandID; got != mainland {
+			t.Errorf("mainland star %d belongs to island %d, want %d", site, got, mainland)
+		}
+	}
+	largest := 0
+	for _, island := range result.Islands {
+		largest = max(largest, len(island.CellIDs))
+	}
+	if largest < config.ProvinceCount/2 {
+		t.Errorf("largest landmass has %d of %d provinces, want at least half", largest, config.ProvinceCount)
 	}
 }
 

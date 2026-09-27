@@ -40,13 +40,14 @@ func Generate(config Config) (Result, error) {
 		}
 		desirability := desirabilityField(mesh, edgeValues, landEligible, attractants, config.AttractantRamp)
 		state := newGrowthState(mesh, desirability, landEligible, config.RivalRamp)
-		var pinnedSeeds []int
-		if config.Constellation != "" {
+		var pinnedSeeds, groups []int
+		if constellation, ok := ConstellationByName(config.Constellation); ok {
 			for _, attractant := range attractants {
 				pinnedSeeds = append(pinnedSeeds, attractant.CellID)
 			}
+			groups = kinGroups(constellation, config.IslandCount)
 		}
-		if state.seedAndGrow(config.IslandCount, config.ProvinceCount, config.SoftmaxTemperature, pinnedSeeds, random) {
+		if state.seedAndGrow(config.IslandCount, config.ProvinceCount, config.SoftmaxTemperature, pinnedSeeds, groups, random) {
 			result := state.result(attractants, skips, config.IslandCount)
 			result.RoundsAttempted = round + 1
 			result.FinalOcean = ocean
@@ -99,6 +100,26 @@ func makeAttractants(cells []singlemesh.Cell, bounds singlemesh.Bounds, edgeDist
 		})
 	}
 	return attractants, skips
+}
+
+// kinGroups maps each island to its kin group: islands seeded on the sites of
+// one Kin list share a group, and every other island is its own group.
+func kinGroups(constellation Constellation, islandCount int) []int {
+	if len(constellation.Kin) == 0 {
+		return nil
+	}
+	groups := make([]int, islandCount)
+	for islandID := range groups {
+		groups[islandID] = islandID
+	}
+	for _, kin := range constellation.Kin {
+		for _, site := range kin {
+			if site < islandCount && kin[0] < islandCount {
+				groups[site] = kin[0]
+			}
+		}
+	}
+	return groups
 }
 
 // Constellation sites fill this much of the map's width and height, whichever
@@ -307,6 +328,7 @@ type growthState struct {
 	landEligible []bool
 	owners       []int
 	rivals       rivalField
+	groups       []int // kin group per island; nil means every island is its own group
 	islands      []islandState
 	frontiers    []randomSet
 	mergeCount   int
@@ -423,21 +445,71 @@ func (f *rivalField) record(cellID, islandID, hop int) {
 	}
 }
 
-// rebuild recomputes every distance from the current owners. Merges change
-// island identity, which the two-entry compression cannot relabel in place.
-func (f *rivalField) rebuild(owners []int) {
+// rebuild recomputes every distance from the current owners, mapped to their
+// kin groups. Merges change island identity, which the two-entry compression
+// cannot relabel in place.
+func (f *rivalField) rebuild(owners []int, group func(int) int) {
 	f.reset()
 	for cellID, owner := range owners {
 		if owner != Water {
-			f.claim(cellID, owner)
+			f.claim(cellID, group(owner))
 		}
 	}
+}
+
+// group returns the kin group an island belongs to. Kin islands see no rival
+// penalty from each other and merge freely when they touch.
+func (s *growthState) group(islandID int) int {
+	if s.groups == nil {
+		return islandID
+	}
+	return s.groups[islandID]
+}
+
+// deck holds one entry per active island, plus one more for every kin island
+// it has absorbed, so a merged kin landmass keeps its stars' share of growth.
+// Removal swaps with the last entry, matching the order randomSet produced.
+type deck struct {
+	entries []int
+}
+
+func (d *deck) add(islandID int) {
+	d.entries = append(d.entries, islandID)
+}
+
+func (d *deck) remove(islandID int) {
+	for i := len(d.entries) - 1; i >= 0; i-- {
+		if d.entries[i] != islandID {
+			continue
+		}
+		last := len(d.entries) - 1
+		d.entries[i] = d.entries[last]
+		d.entries = d.entries[:last]
+	}
+}
+
+func (d *deck) transfer(loser, winner int) {
+	for i, islandID := range d.entries {
+		if islandID == loser {
+			d.entries[i] = winner
+		}
+	}
+}
+
+func (d *deck) random(random *rand.Rand) int {
+	return d.entries[random.IntN(len(d.entries))]
+}
+
+func (d *deck) len() int {
+	return len(d.entries)
 }
 
 // seedAndGrow plants one seed per island and grows them to provinceCount.
 // The first len(pinnedSeeds) islands are seeded on those cells when they are
 // still unclaimed and eligible; every other island draws a uniform seed.
-func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature float64, pinnedSeeds []int, random *rand.Rand) bool {
+// groups assigns each island a kin group, or nil for no kinship.
+func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature float64, pinnedSeeds, groups []int, random *rand.Rand) bool {
+	s.groups = groups
 	seedOrder := random.Perm(islandCount)
 	s.islands = make([]islandState, islandCount)
 	s.frontiers = make([]randomSet, islandCount)
@@ -459,7 +531,7 @@ func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature fl
 		s.claim(seedID, islandID)
 	}
 
-	deck := randomSet{}
+	deck := deck{}
 	for islandID := range s.islands {
 		if s.islands[islandID].active {
 			deck.add(islandID)
@@ -474,7 +546,11 @@ func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature fl
 			continue
 		}
 		for _, loser := range s.claim(cellID, islandID) {
-			deck.remove(loser)
+			if s.group(loser) == s.group(islandID) {
+				deck.transfer(loser, islandID)
+			} else {
+				deck.remove(loser)
+			}
 		}
 		remaining--
 	}
@@ -514,7 +590,7 @@ func (s *growthState) weightedFrontier(islandID int, temperature float64, random
 // attractant cannot cancel the penalty on a cell whose claim would merge.
 func (s *growthState) visibleValue(cellID, islandID int) float64 {
 	value := s.desirability[cellID]
-	if penalty, ok := s.rivals.penalty(cellID, islandID); ok {
+	if penalty, ok := s.rivals.penalty(cellID, s.group(islandID)); ok {
 		value = min(value, penalty)
 	}
 	return value
@@ -535,7 +611,7 @@ func (s *growthState) claim(cellID, islandID int) []int {
 	}
 
 	s.owners[cellID] = islandID
-	s.rivals.claim(cellID, islandID)
+	s.rivals.claim(cellID, s.group(islandID))
 	s.islands[islandID].cellIDs = append(s.islands[islandID].cellIDs, cellID)
 	for i := range s.frontiers {
 		s.frontiers[i].remove(cellID)
@@ -550,7 +626,7 @@ func (s *growthState) claim(cellID, islandID int) []int {
 		s.absorb(islandID, loser)
 	}
 	if len(losers) > 0 {
-		s.rivals.rebuild(s.owners)
+		s.rivals.rebuild(s.owners, s.group)
 	}
 	return losers
 }

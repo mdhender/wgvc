@@ -14,6 +14,11 @@ type Constellation struct {
 	// command uses it when -aspect is not given.
 	AspectRatio string
 	Sites       []Point
+	// Kin lists site indexes whose islands form one landmass: they ignore
+	// each other's rival ramp, merge when they touch, and the merged
+	// landmass keeps every member's share of growth. Sites not listed grow
+	// their own island.
+	Kin [][]int
 }
 
 // constellations maps a -attractors name to its sites. Positions come from
@@ -74,6 +79,45 @@ var constellations = map[string]Constellation{
 			{X: -0.52, Y: 0.08},  // tau Virginis
 			{X: -0.69, Y: -0.27}, // Syrma
 			{X: -1.00, Y: -0.26}, // mu Virginis
+		},
+	},
+	// Subaru is not a constellation but an archipelago in the shape of
+	// Japan: a twelve-star mainland arcing from southwest to northeast, a
+	// four-star northern island beyond a strait at its northeast end, a
+	// two-star southwestern island, one island south of the mainland's
+	// western half, and two small islands off the western edge. Sites are
+	// ordered so the mainland is seeded first when fewer islands are asked
+	// for than stars.
+	"subaru": {
+		Name:        "subaru",
+		AspectRatio: "5:2",
+		Sites: []Point{
+			{X: -0.64, Y: -0.20}, // mainland, west end
+			{X: -0.54, Y: -0.18},
+			{X: -0.44, Y: -0.15},
+			{X: -0.34, Y: -0.11},
+			{X: -0.24, Y: -0.08},
+			{X: -0.14, Y: -0.05},
+			{X: -0.04, Y: -0.01},
+			{X: 0.06, Y: 0.02},
+			{X: 0.16, Y: 0.06},
+			{X: 0.26, Y: 0.11},
+			{X: 0.36, Y: 0.17},
+			{X: 0.46, Y: 0.24}, // mainland, northeast end
+			{X: 0.70, Y: 0.30}, // northern island
+			{X: 0.84, Y: 0.20},
+			{X: 0.86, Y: 0.34},
+			{X: 1.00, Y: 0.28},
+			{X: -0.80, Y: -0.20}, // southwestern island
+			{X: -0.76, Y: -0.34},
+			{X: -0.42, Y: -0.34}, // island south of the mainland
+			{X: -0.93, Y: 0.02},  // small western islands
+			{X: -1.00, Y: -0.30},
+		},
+		Kin: [][]int{
+			{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
+			{12, 13, 14, 15},
+			{16, 17},
 		},
 	},
 }
