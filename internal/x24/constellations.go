@@ -231,12 +231,14 @@ var constellations = map[string]Constellation{
 	// Aster is Draco with a chain of islands for a body: the same figure,
 	// but only the twelve half-weight head sites are kin, ringing a repulsor
 	// that leaves a bay or an inland sea, while every body site grows its
-	// own island held apart from its neighbors by the rival ramp. Body sites
-	// are spaced every 0.30 of the frame so the beads stay distinct.
+	// own island held apart from its neighbors by the rival ramp. The body's
+	// rising run from chi to Edasich is rotated 25 degrees toward the east
+	// and the tail shortened to fit, and body sites are spaced every 0.30 of
+	// the frame so the beads stay distinct at 84% ocean.
 	"aster": {
 		Name:        "aster",
 		AspectRatio: "16:9",
-		Ocean:       0.78,
+		Ocean:       0.84,
 		Sites: []Point{
 			{X: -1.00, Y: 0.09},  // Eltanin
 			{X: -0.92, Y: 0.19},  // between Eltanin and Rastaban
@@ -255,19 +257,17 @@ var constellations = map[string]Constellation{
 			{X: -0.38, Y: -0.58}, // Tyl
 			{X: -0.18, Y: -0.44}, // between Tyl and chi Draconis
 			{X: 0.02, Y: -0.31},  // chi Draconis
-			{X: -0.03, Y: -0.13}, // between chi Draconis and Aldhibah
-			{X: -0.08, Y: 0.05},  // Aldhibah
-			{X: -0.06, Y: 0.32},  // Athebyne
-			{X: -0.04, Y: 0.49},  // theta Draconis
-			{X: 0.10, Y: 0.58},   // Edasich
-			{X: 0.28, Y: 0.53},   // between Edasich and Thuban
-			{X: 0.45, Y: 0.48},   // Thuban
-			{X: 0.62, Y: 0.36},   // between Thuban and kappa Draconis
-			{X: 0.79, Y: 0.24},   // kappa Draconis
-			{X: 1.00, Y: 0.16},   // Giausar
+			{X: 0.05, Y: -0.13},  // between chi Draconis and Aldhibah
+			{X: 0.08, Y: 0.06},   // Aldhibah
+			{X: 0.21, Y: 0.29},   // Athebyne
+			{X: 0.30, Y: 0.44},   // theta Draconis
+			{X: 0.47, Y: 0.46},   // Edasich
+			{X: 0.68, Y: 0.40},   // Thuban
+			{X: 0.88, Y: 0.26},   // kappa Draconis
+			{X: 1.00, Y: 0.21},   // Giausar
 			{X: -0.73, Y: 0.14},  // repulsor: bay or inland sea in the head
 		},
-		Weights: []float64{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.7, 0.7, 0.7, 0.7, -1},
+		Weights: []float64{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.7, 0.7, 0.7, -1},
 		Kin:     [][]int{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}},
 	},
 }

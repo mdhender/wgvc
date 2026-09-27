@@ -177,9 +177,9 @@ go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 37 -provinces 10000 \
   -attractors draco -format png -output draco
 
-# Aster: the dragon as 27→16 islands behind a kin head, 45,455 provinces, 4597×2607
+# Aster: the dragon as 25→14 islands behind a kin head, 62,500 provinces, 5382×3048
 go run ./cmd/generate -seed 0x0123456789abcdef \
-  -islands 27 -provinces 10000 \
+  -islands 25 -provinces 10000 \
   -attractors aster -format png -output aster
 
 # Little Dipper: 7→7 islands, 45,455 provinces, 4873×2461
@@ -271,7 +271,8 @@ shape it was drawn for (`2:1` for `ursa-minor` and `virgo`, `3:2` for
 `cygnus`, `5:2` for `subaru`, `16:9` for `draco` and `aster`) unless `-aspect`
 is given,
 and may select an ocean fraction the same way (`draco` uses 86% so its single
-winding landmass stays thin) unless `-ocean` is given. A constellation can
+winding landmass stays thin, `aster` 84% so its beads show water between them)
+unless `-ocean` is given. A constellation can
 mark stars as kin: their islands ignore each other's rival ramp, merge when
 they touch, and the merged landmass keeps every star's share of growth, which
 is how `subaru` grows a twelve-star mainland and a four-star northern island
