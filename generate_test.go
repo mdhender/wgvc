@@ -493,6 +493,147 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		assertIslandConnected(t, island, neighbors)
 	}
 	assertValidRivers(t, world)
+	assertValidSeas(t, world)
+}
+
+// assertValidSeas checks coast distances against a fresh BFS, and the sea
+// zone, strait, and neck contracts: zones cover exactly the ocean, are
+// connected, capped, and canonically ordered; straits join two distinct
+// islands through water with the named shores adjacent; necks are land whose
+// removal separates their two ends into regions of the stated sizes.
+func assertValidSeas(t *testing.T, world World) {
+	t.Helper()
+	neighbors := provinceNeighbors(&world)
+	isLand := func(id ProvinceID) bool { return world.Provinces[id].IslandID != NoIslandID }
+	isOcean := func(id ProvinceID) bool { return !isLand(id) && world.Provinces[id].BasinID == NoBasinID }
+
+	want := make([]int, len(world.Provinces))
+	var queue []ProvinceID
+	for id := range world.Provinces {
+		want[id] = -1
+		for _, n := range neighbors[id] {
+			if isLand(n) != isLand(ProvinceID(id)) {
+				want[id] = 0
+				queue = append(queue, ProvinceID(id))
+				break
+			}
+		}
+	}
+	for next := 0; next < len(queue); next++ {
+		id := queue[next]
+		for _, n := range neighbors[id] {
+			if want[n] < 0 && isLand(n) == isLand(id) {
+				want[n] = want[id] + 1
+				queue = append(queue, n)
+			}
+		}
+	}
+	for id, province := range world.Provinces {
+		if province.CoastDistance != want[id] || province.CoastDistance < 0 {
+			t.Errorf("province %d coast distance = %d, want %d", id, province.CoastDistance, want[id])
+		}
+		if isOcean(ProvinceID(id)) != (province.SeaZoneID != NoSeaZoneID) {
+			t.Errorf("province %d ocean=%t has sea zone %d", id, isOcean(ProvinceID(id)), province.SeaZoneID)
+		}
+	}
+
+	for index, zone := range world.SeaZones {
+		if zone.ID != SeaZoneID(index) || len(zone.ProvinceIDs) == 0 || len(zone.ProvinceIDs) > 2*seaZoneTargetSize {
+			t.Errorf("sea zone at index %d has ID %d and %d provinces, want at most %d", index, zone.ID, len(zone.ProvinceIDs), 2*seaZoneTargetSize)
+			continue
+		}
+		if index > 0 && world.SeaZones[index-1].ProvinceIDs[0] >= zone.ProvinceIDs[0] {
+			t.Errorf("sea zone %d is not ordered by lowest member after zone %d", zone.ID, index-1)
+		}
+		if !slices.IsSorted(zone.ProvinceIDs) || !slices.Contains(zone.ProvinceIDs, zone.CenterProvinceID) {
+			t.Errorf("sea zone %d members %v are unsorted or omit center %d", zone.ID, zone.ProvinceIDs, zone.CenterProvinceID)
+		}
+		for _, id := range zone.ProvinceIDs {
+			if world.Provinces[id].SeaZoneID != zone.ID {
+				t.Errorf("sea zone %d member %d has zone %d", zone.ID, id, world.Provinces[id].SeaZoneID)
+			}
+		}
+		reached := boundedBFS(zone.ProvinceIDs[0], neighbors, len(world.Provinces), func(id ProvinceID) bool { return world.Provinces[id].SeaZoneID == zone.ID })
+		if !slices.Equal(reached, zone.ProvinceIDs) {
+			t.Errorf("sea zone %d is not connected: reached %d of %d members", zone.ID, len(reached), len(zone.ProvinceIDs))
+		}
+	}
+
+	for index, strait := range world.Straits {
+		if strait.ID != StraitID(index) || strait.IslandIDs[0] >= strait.IslandIDs[1] || strait.Width < 1 || strait.Width > maxStraitWidth || len(strait.ProvinceIDs) == 0 || !slices.IsSorted(strait.ProvinceIDs) {
+			t.Errorf("strait at index %d is malformed: %+v", index, strait)
+			continue
+		}
+		for _, id := range strait.ProvinceIDs {
+			if isLand(id) {
+				t.Errorf("strait %d contains land province %d", strait.ID, id)
+			}
+		}
+		reached := boundedBFS(strait.ProvinceIDs[0], neighbors, len(world.Provinces), func(id ProvinceID) bool { return slices.Contains(strait.ProvinceIDs, id) })
+		if !slices.Equal(reached, strait.ProvinceIDs) {
+			t.Errorf("strait %d is not connected by water", strait.ID)
+		}
+		for side, shore := range strait.Shores {
+			if len(shore) == 0 || !slices.IsSorted(shore) {
+				t.Errorf("strait %d shore %d = %v, want a sorted non-empty list", strait.ID, side, shore)
+			}
+			for _, id := range shore {
+				adjacent := false
+				for _, n := range neighbors[id] {
+					adjacent = adjacent || slices.Contains(strait.ProvinceIDs, n)
+				}
+				if world.Provinces[id].IslandID != strait.IslandIDs[side] || !adjacent {
+					t.Errorf("strait %d shore province %d is not island %d land adjacent to the strait", strait.ID, id, strait.IslandIDs[side])
+				}
+			}
+		}
+	}
+
+	for index, neck := range world.Necks {
+		if neck.ID != NeckID(index) || neck.Width < 1 || neck.Width > maxNeckWidth || len(neck.ProvinceIDs) == 0 || !slices.IsSorted(neck.ProvinceIDs) {
+			t.Errorf("neck at index %d is malformed: %+v", index, neck)
+			continue
+		}
+		if index > 0 && (world.Necks[index-1].IslandID > neck.IslandID || world.Necks[index-1].IslandID == neck.IslandID && world.Necks[index-1].ProvinceIDs[0] >= neck.ProvinceIDs[0]) {
+			t.Errorf("neck %d is out of order after neck %d", neck.ID, index-1)
+		}
+		for _, id := range neck.ProvinceIDs {
+			if world.Provinces[id].IslandID != neck.IslandID {
+				t.Errorf("neck %d province %d is not on island %d", neck.ID, id, neck.IslandID)
+			}
+		}
+		open := func(id ProvinceID) bool {
+			return world.Provinces[id].IslandID == neck.IslandID && !slices.Contains(neck.ProvinceIDs, id)
+		}
+		if neck.EndSizes[0] < neck.EndSizes[1] || neck.EndSizes[1] < 1 {
+			t.Errorf("neck %d end sizes %v are not descending and positive", neck.ID, neck.EndSizes)
+		}
+		var regions [2][]ProvinceID
+		for side, end := range neck.Ends {
+			if len(end) == 0 || !slices.IsSorted(end) {
+				t.Errorf("neck %d end %d = %v, want a sorted non-empty list", neck.ID, side, end)
+				continue
+			}
+			regions[side] = boundedBFS(end[0], neighbors, len(world.Provinces), open)
+			if len(regions[side]) != neck.EndSizes[side] {
+				t.Errorf("neck %d end %d region has %d provinces, want %d", neck.ID, side, len(regions[side]), neck.EndSizes[side])
+			}
+			for _, id := range end {
+				adjacent := false
+				for _, n := range neighbors[id] {
+					adjacent = adjacent || slices.Contains(neck.ProvinceIDs, n)
+				}
+				if _, inRegion := slices.BinarySearch(regions[side], id); !open(id) || !adjacent || !inRegion {
+					t.Errorf("neck %d end province %d is not open land adjacent to the neck in its region", neck.ID, id)
+				}
+			}
+		}
+		if len(regions[0]) > 0 && len(regions[1]) > 0 {
+			if _, joined := slices.BinarySearch(regions[0], regions[1][0]); joined {
+				t.Errorf("neck %d does not separate its ends", neck.ID)
+			}
+		}
+	}
 }
 
 // assertValidRivers checks the river contracts: chains are contiguous edges

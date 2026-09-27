@@ -9,7 +9,7 @@ import (
 	"github.com/mdhender/wgvc/internal/x24"
 )
 
-const jsonSchemaVersion = 6
+const jsonSchemaVersion = 7
 
 type jsonWorld struct {
 	SchemaVersion int            `json:"schema_version"`
@@ -21,6 +21,32 @@ type jsonWorld struct {
 	Corners       []jsonCorner   `json:"corners"`
 	Edges         []jsonEdge     `json:"edges"`
 	Rivers        []jsonRiver    `json:"rivers"`
+	SeaZones      []jsonSeaZone  `json:"sea_zones"`
+	Straits       []jsonStrait   `json:"straits"`
+	Necks         []jsonNeck     `json:"necks"`
+}
+
+type jsonSeaZone struct {
+	ID               wgvc.SeaZoneID    `json:"id"`
+	CenterProvinceID wgvc.ProvinceID   `json:"center_province_id"`
+	ProvinceIDs      []wgvc.ProvinceID `json:"province_ids"`
+}
+
+type jsonStrait struct {
+	ID          wgvc.StraitID        `json:"id"`
+	IslandIDs   [2]wgvc.IslandID     `json:"island_ids"`
+	Width       int                  `json:"width"`
+	ProvinceIDs []wgvc.ProvinceID    `json:"province_ids"`
+	Shores      [2][]wgvc.ProvinceID `json:"shores"`
+}
+
+type jsonNeck struct {
+	ID          wgvc.NeckID          `json:"id"`
+	IslandID    wgvc.IslandID        `json:"island_id"`
+	Width       int                  `json:"width"`
+	ProvinceIDs []wgvc.ProvinceID    `json:"province_ids"`
+	Ends        [2][]wgvc.ProvinceID `json:"ends"`
+	EndSizes    [2]int               `json:"end_sizes"`
 }
 
 type jsonGeneration struct {
@@ -97,6 +123,8 @@ type jsonProvince struct {
 	EdgeIDs       []wgvc.EdgeID   `json:"edge_ids"`
 	Exits         []jsonExit      `json:"exits"`
 	Area          float64         `json:"area"`
+	CoastDistance int             `json:"coast_distance"`
+	SeaZoneID     wgvc.SeaZoneID  `json:"sea_zone_id"`
 	Terrain       wgvc.Terrain    `json:"terrain"`
 	Elevation     float64         `json:"elevation"`
 	ElevationBand string          `json:"elevation_band"`
@@ -200,6 +228,9 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 		Corners:   make([]jsonCorner, len(world.Corners)),
 		Edges:     make([]jsonEdge, len(world.Edges)),
 		Rivers:    make([]jsonRiver, len(world.Rivers)),
+		SeaZones:  make([]jsonSeaZone, len(world.SeaZones)),
+		Straits:   make([]jsonStrait, len(world.Straits)),
+		Necks:     make([]jsonNeck, len(world.Necks)),
 	}
 	for index, island := range world.Islands {
 		document.Islands[index] = jsonIsland{ID: island.ID, ProvinceIDs: island.ProvinceIDs}
@@ -244,6 +275,8 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 			EdgeIDs:       province.EdgeIDs,
 			Exits:         exits,
 			Area:          province.Area,
+			CoastDistance: province.CoastDistance,
+			SeaZoneID:     province.SeaZoneID,
 			Terrain:       province.Terrain,
 			Elevation:     province.Elevation,
 			ElevationBand: elevationBand,
@@ -278,6 +311,15 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 			Source:    jsonRiverEnd{Kind: river.Source.Kind, BasinID: river.Source.BasinID, RiverID: river.Source.RiverID},
 			Mouth:     jsonRiverEnd{Kind: river.Mouth.Kind, BasinID: river.Mouth.BasinID, RiverID: river.Mouth.RiverID},
 		}
+	}
+	for index, zone := range world.SeaZones {
+		document.SeaZones[index] = jsonSeaZone{ID: zone.ID, CenterProvinceID: zone.CenterProvinceID, ProvinceIDs: zone.ProvinceIDs}
+	}
+	for index, strait := range world.Straits {
+		document.Straits[index] = jsonStrait{ID: strait.ID, IslandIDs: strait.IslandIDs, Width: strait.Width, ProvinceIDs: strait.ProvinceIDs, Shores: strait.Shores}
+	}
+	for index, neck := range world.Necks {
+		document.Necks[index] = jsonNeck{ID: neck.ID, IslandID: neck.IslandID, Width: neck.Width, ProvinceIDs: neck.ProvinceIDs, Ends: neck.Ends, EndSizes: neck.EndSizes}
 	}
 	data, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {

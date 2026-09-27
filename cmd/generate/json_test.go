@@ -100,6 +100,13 @@ func TestRunJSONContainsCanonicalWorldData(t *testing.T) {
 		if !(province.Area > 0) {
 			t.Errorf("province %d area = %g, want positive", province.ID, province.Area)
 		}
+		if province.CoastDistance < 0 {
+			t.Errorf("province %d coast distance = %d, want non-negative", province.ID, province.CoastDistance)
+		}
+		ocean := province.IslandID == wgvc.NoIslandID && province.BasinID == wgvc.NoBasinID
+		if ocean != (province.SeaZoneID != wgvc.NoSeaZoneID) || province.SeaZoneID != wgvc.NoSeaZoneID && int(province.SeaZoneID) >= len(document.SeaZones) {
+			t.Errorf("province %d (ocean %t) has sea zone %d", province.ID, ocean, province.SeaZoneID)
+		}
 		if len(province.Exits) != len(province.EdgeIDs) {
 			t.Errorf("province %d has %d exits for %d edges", province.ID, len(province.Exits), len(province.EdgeIDs))
 		}
@@ -148,6 +155,55 @@ func TestRunJSONContainsCanonicalWorldData(t *testing.T) {
 		}
 		if edge.RiverID != wgvc.NoRiverID && (edge.RiverID < 0 || int(edge.RiverID) >= len(document.Rivers)) {
 			t.Errorf("edge %d references unknown river %d", edge.ID, edge.RiverID)
+		}
+	}
+}
+
+func TestRunJSONExportsSeaZonesStraitsAndNecks(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "map")
+	err := run([]string{"-seed", "0x0123456789abcdef", "-provinces", "1500", "-islands", "15", "-format", "json", "-output", base}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	data, err := os.ReadFile(base + ".json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document jsonWorld
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatalf("decode JSON: %v", err)
+	}
+	if len(document.SeaZones) == 0 || len(document.Necks) == 0 {
+		t.Fatalf("JSON contains %d sea zones and %d necks, want both", len(document.SeaZones), len(document.Necks))
+	}
+	for index, zone := range document.SeaZones {
+		if zone.ID != wgvc.SeaZoneID(index) || len(zone.ProvinceIDs) == 0 {
+			t.Errorf("sea zone %d at index %d has %d provinces", zone.ID, index, len(zone.ProvinceIDs))
+			continue
+		}
+		if document.Provinces[zone.CenterProvinceID].SeaZoneID != zone.ID {
+			t.Errorf("sea zone %d center %d is not a member", zone.ID, zone.CenterProvinceID)
+		}
+		for _, provinceID := range zone.ProvinceIDs {
+			if document.Provinces[provinceID].SeaZoneID != zone.ID {
+				t.Errorf("sea zone %d member %d has sea_zone_id %d", zone.ID, provinceID, document.Provinces[provinceID].SeaZoneID)
+			}
+		}
+	}
+	for index, strait := range document.Straits {
+		if strait.ID != wgvc.StraitID(index) || strait.IslandIDs[0] >= strait.IslandIDs[1] || strait.Width < 1 || len(strait.ProvinceIDs) == 0 {
+			t.Errorf("strait %d at index %d is malformed: %+v", strait.ID, index, strait)
+		}
+	}
+	for index, neck := range document.Necks {
+		if neck.ID != wgvc.NeckID(index) || neck.Width < 1 || len(neck.ProvinceIDs) == 0 || len(neck.Ends[0]) == 0 || len(neck.Ends[1]) == 0 || neck.EndSizes[0] < neck.EndSizes[1] || neck.EndSizes[1] < 1 {
+			t.Errorf("neck %d at index %d is malformed: %+v", neck.ID, index, neck)
+			continue
+		}
+		for _, provinceID := range neck.ProvinceIDs {
+			if document.Provinces[provinceID].IslandID != neck.IslandID {
+				t.Errorf("neck %d province %d is not on island %d", neck.ID, provinceID, neck.IslandID)
+			}
 		}
 	}
 }

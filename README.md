@@ -92,6 +92,14 @@ The returned geometry is indexed:
   ends (spring, basin outflow, ocean, basin, or a confluence). `Edge.RiverID`
   and `Edge.Discharge` link edges back to them. See
   [Rivers](#rivers) below and the [contracts](docs/generation.md).
+- `Province.CoastDistance` is the hop count through the province's own medium
+  to the nearest coast, so coastal land and coastal water are 0.
+- `World.SeaZones` partition the ocean into contiguous regions of about 200
+  provinces for naming seas; `Province.SeaZoneID` names a province's zone.
+  `World.Straits` are water crossings of at most 3 provinces between two
+  islands, and `World.Necks` are land isthmuses of at most 3 provinces whose
+  removal splits an island into two regions of at least 10. See
+  [Seas, straits, and necks](#seas-straits-and-necks).
 - Corners and edges are shared objects. An `Edge` references two corners and
   either one province at the outside of the world or two provinces inside it.
   A coastline edge joins one land province to one water province.
@@ -172,7 +180,7 @@ top-level shape is:
 
 ```json
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "generation": {
     "generator": { "version": "0.7.3-alpha", "build": "9a64246" },
     "config": { "seed": "0x0123456789abcdef" },
@@ -184,7 +192,10 @@ top-level shape is:
   "provinces": [],
   "corners": [],
   "edges": [],
-  "rivers": []
+  "rivers": [],
+  "sea_zones": [],
+  "straits": [],
+  "necks": []
 }
 ```
 
@@ -346,6 +357,39 @@ are absolute because a province is a fixed real size, so a default
 10,000-province TNYC map has about a dozen major rivers reaching the ocean and
 a few hundred rivers in all. Rivers are ordered by descending discharge. The
 pass consumes no randomness, so adding rivers changed no existing field.
+
+## Seas, straits, and necks
+
+These features are derived from topology alone and consume no randomness.
+
+Every province records its distance to the coast: a BFS hop count through its
+own medium to the nearest edge it shares with the other medium, so coastal
+land and coastal water are 0, and a lake shore counts as coast for both sides.
+
+Sea zones partition the ocean, water outside any basin, into contiguous
+regions for naming and administering seas. Seeds come from farthest-point
+sampling over water adjacency, one per 200 ocean provinces and at least one per
+ocean component, and each ocean province joins its nearest seed with ties to
+the lower seed, which keeps every zone connected. A zone larger than 400 is
+partitioned again within itself, so zones range from a few provinces in an
+isolated pocket to 400. A default world has about 18 zones; the 10,000-province
+TNYC maps have 40 (one continent) or about 200 (nine landmasses).
+
+Straits are narrow water crossings between two islands: from each island's
+coastal water a bounded BFS counts the water provinces to that island, and a
+water province is narrow between islands A and B when a path of at most 3
+water provinces joins them through it. Narrow provinces of one island pair that
+touch by water form one strait, with its shortest width and the land provinces
+on each shore. Today's growth stage keeps islands 5 or more water provinces
+apart on the TNYC maps, so straits rarely appear until island spacing changes.
+
+Necks are narrow isthmuses, found as small vertex cuts of each island's land
+graph: articulation points, and paths of two or three adjacent land provinces
+whose ends touch water, tested by removal. A cut counts when the two largest
+regions it leaves each have at least 10 provinces and no smaller subset of it
+is already a neck; cuts that share or touch a province merge, so a corridor one
+province wide is reported once. Each neck lists its provinces, its width, the
+land provinces of each region adjacent to it, and the regions' sizes.
 
 ## Climate
 

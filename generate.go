@@ -109,6 +109,10 @@ func generateForRender(growthConfig x24.Config, climateConfig ClimateConfig) (Wo
 	assignClimate(&world, growthConfig.WorldSeed, climateConfig)
 	assignBasins(&world)
 	assignRivers(&world)
+	assignCoastDistances(&world)
+	assignSeaZones(&world)
+	assignStraits(&world)
+	assignNecks(&world)
 	assignTerrain(&world)
 	return world, result, nil
 }

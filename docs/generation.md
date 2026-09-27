@@ -56,6 +56,34 @@ requested count. Water can contain interior components such as lakes.
   and inland seas are ordinary nodes, so rivers flowing in end at the shore
   and the basin's water leaves at its spill corner. Runoff is each land
   province's `Area * Moisture` spread over its corners.
+- `Province.CoastDistance` is the number of hops through the province's own
+  medium (land through land, water through water) to the nearest edge shared
+  with the other medium, so coastal land and coastal water are `0`. A lake
+  shore counts as coast for the land beside it and for the lake; the world
+  boundary does not.
+- `World.SeaZones` partition the ocean provinces, water outside any basin,
+  into contiguous regions of about 200 provinces (never more than 400) for
+  naming seas. Seeds come from farthest-point sampling over water adjacency
+  and each province joins its nearest seed, ties to the lower seed, so zones
+  never cross land. `Province.SeaZoneID` is `NoSeaZoneID` for land and basin
+  water. Zones are ordered by lowest member and record their seed as
+  `CenterProvinceID`.
+- `World.Straits` are narrow water crossings between two islands: the water
+  provinces on a path of at most 3 water provinces joining them, grouped by
+  water adjacency, with the two `IslandIDs`, `Width` as the shortest such path,
+  and `Shores`, each island's land provinces adjacent to the strait. A water
+  province can lie in more than one strait. Straits are ordered by island pair
+  and then lowest province. Whether any appear depends on how closely the
+  growth stage lets islands approach one another.
+- `World.Necks` are narrow isthmuses: minimal cuts of at most 3 adjacent land
+  provinces whose removal splits their island into regions of which the two
+  largest each have at least 10 provinces. Cuts that share or touch a province
+  merge into one neck. `Ends` lists, largest region first, the land provinces
+  of each region adjacent to the neck, and `EndSizes` the regions' sizes with
+  the whole neck removed. Necks are ordered by island and then lowest
+  province.
+- Coast distance, sea zones, straits, and necks are derived from topology and
+  IDs alone and consume no randomness.
 - `Province.Area` is the polygon area and `Edge.Length` is the distance between
   the edge's corners, both in world units. The mesh is scaled so the land
   provinces have a mean area of exactly 1; coarse ocean cells near the world
@@ -71,9 +99,10 @@ requested count. Water can contain interior components such as lakes.
 ## JSON export
 
 `go run ./cmd/generate -format json -output world` writes `world.json`. The
-document has `schema_version: 6`, generator identity, generation configuration
+document has `schema_version: 7`, generator identity, generation configuration
 and effective result metadata, world-coordinate bounds, and the canonical `islands`,
-`basins`, `provinces`, `corners`, `edges`, and `rivers` collections. It uses the same IDs
+`basins`, `provinces`, `corners`, `edges`, `rivers`, `sea_zones`, `straits`,
+and `necks` collections. It uses the same IDs
 and references described above. Water provinces retain `island_id: -1`, and
 provinces outside any basin have `basin_id: -1`; terrain and elevation, heat, and
 moisture bands use descriptive strings. The seed is a hexadecimal string to
@@ -93,7 +122,11 @@ each province's `exits` (`number`, `edge_id`, `neighbor_id`, `bearing`,
 `compass`), ordered by `number`. Schema version 6 added each corner's
 `elevation`, each edge's `river_id` and `discharge`, and the `rivers`
 collection (`id`, `class`, `discharge`, `corner_ids`, `edge_ids`, and `source`
-and `mouth` objects with `kind`, `basin_id`, and `river_id`).
+and `mouth` objects with `kind`, `basin_id`, and `river_id`). Schema version 7
+added each province's `coast_distance` and `sea_zone_id`, and the `sea_zones`
+(`id`, `center_province_id`, `province_ids`), `straits` (`id`, `island_ids`,
+`width`, `province_ids`, `shores`), and `necks` (`id`, `island_id`, `width`,
+`province_ids`, `ends`, `end_sizes`) collections.
 
 JSON uses Cartesian generation coordinates rather than the transformed pixel
 coordinates used by image renderers. Use a comma-separated format such as

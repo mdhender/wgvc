@@ -27,6 +27,18 @@ type EdgeID int
 // RiverID identifies a river by its index in World.Rivers.
 type RiverID int
 
+// SeaZoneID identifies a sea zone by its index in World.SeaZones.
+type SeaZoneID int
+
+// NoSeaZoneID is the SeaZoneID of every land province and every basin province.
+const NoSeaZoneID SeaZoneID = -1
+
+// StraitID identifies a strait by its index in World.Straits.
+type StraitID int
+
+// NeckID identifies a land neck by its index in World.Necks.
+type NeckID int
+
 // NoRiverID is the RiverID of every edge that carries no river.
 const NoRiverID RiverID = -1
 
@@ -177,6 +189,49 @@ type World struct {
 	Corners   []Corner
 	Edges     []Edge
 	Rivers    []River
+	SeaZones  []SeaZone
+	Straits   []Strait
+	Necks     []Neck
+}
+
+// SeaZone is a contiguous region of ocean provinces, water outside any basin,
+// for naming and administering seas. Zones are graph-Voronoi cells around
+// seeds chosen by farthest-point sampling, one seed per seaZoneTargetSize
+// ocean provinces, so their sizes are bounded only on average. Every ocean
+// province belongs to exactly one zone. CenterProvinceID is the seed;
+// ProvinceIDs is in ascending order.
+type SeaZone struct {
+	ID               SeaZoneID
+	CenterProvinceID ProvinceID
+	ProvinceIDs      []ProvinceID
+}
+
+// Strait is a narrow water crossing between two islands: the water provinces
+// through which a path of at most maxStraitWidth water provinces joins them,
+// grouped by water adjacency. Width is the shortest such path. Shores lists,
+// per island in IslandIDs order, the island's land provinces adjacent to the
+// strait. A water province can lie in more than one strait when it is narrow
+// for two island pairs.
+type Strait struct {
+	ID          StraitID
+	IslandIDs   [2]IslandID
+	Width       int
+	ProvinceIDs []ProvinceID
+	Shores      [2][]ProvinceID
+}
+
+// Neck is a narrow isthmus: land provinces on a crossing of at most
+// maxNeckWidth land provinces between two coastal waters that are far apart
+// by water, whose removal splits the island into two larger regions. Ends
+// lists the land provinces of each region adjacent to the neck, largest
+// region first, and EndSizes each region's province count.
+type Neck struct {
+	ID          NeckID
+	IslandID    IslandID
+	Width       int
+	ProvinceIDs []ProvinceID
+	Ends        [2][]ProvinceID
+	EndSizes    [2]int
 }
 
 // Island groups the land provinces in one connected component. ProvinceIDs is
@@ -210,7 +265,10 @@ type Basin struct {
 // without a repeated closing corner. EdgeIDs lists the boundary edges in the
 // same ring order: EdgeIDs[i] joins CornerIDs[i] to CornerIDs[(i+1) % n].
 // Exits lists the same edges numbered clockwise from north, in Number order.
-// Area is the polygon area in world units. Elevation is the mean elevation of the
+// Area is the polygon area in world units. CoastDistance is the number of
+// hops through the province's own medium to the nearest edge shared with the
+// other medium, so coastal land and coastal water are 0. SeaZoneID is the
+// zone of an ocean province and NoSeaZoneID for land and basin water. Elevation is the mean elevation of the
 // province's boundary edges, normalized to [-1, 1]. ElevationBand preserves
 // the growth-assigned land/water classification even at sea level. Relief is
 // the mean absolute elevation difference to neighbors across shared edges,
@@ -226,6 +284,8 @@ type Province struct {
 	EdgeIDs       []EdgeID
 	Exits         []Exit
 	Area          float64
+	CoastDistance int
+	SeaZoneID     SeaZoneID
 	Terrain       Terrain
 	Elevation     float64
 	ElevationBand ElevationBand
