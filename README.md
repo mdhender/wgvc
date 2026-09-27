@@ -172,9 +172,9 @@ go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 21 -provinces 10000 -ocean 0.78 \
   -attractors subaru -format png -output subaru
 
-# Draco: 37→1 islands with an inland sea in the head, 71,429 provinces, 5750×3256
+# Draco: 35→1 islands with an inland sea in the head, 71,429 provinces, 5750×3256
 go run ./cmd/generate -seed 0x0123456789abcdef \
-  -islands 37 -provinces 10000 \
+  -islands 35 -provinces 10000 \
   -attractors draco -format png -output draco
 
 # Aster: the dragon as 25→14 islands behind a kin head, 62,500 provinces, 5382×3048
@@ -262,7 +262,7 @@ select regions in the familiar die-face pattern, or 9 to select every region
 of the 3×3 grid. Zero disables them. A constellation name (`ursa-minor`, the
 seven stars of the Little Dipper; `cygnus`, eight stars of the Northern Cross;
 `virgo`, eleven stars spread along the ecliptic; `draco`, a winding dragon of
-thirty-seven kin sites with an inland sea in its head; `aster`, the same
+thirty-five kin sites with an inland sea in its head; `aster`, the same
 dragon as a chain of separate islands behind a kin head; or `subaru`, twenty-one sites
 laid out like the Japanese archipelago) instead places one attractor per star, scaled to fill the map while keeping the
 figure's proportions, without jitter, and seeds the first islands on the star

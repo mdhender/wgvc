@@ -173,13 +173,14 @@ var constellations = map[string]Constellation{
 		},
 	},
 	// Draco winds from a five-star head in the west, down through the neck to
-	// Altais and Tyl, north through chi, Aldhibah, Athebyne, and theta to
-	// Edasich, then east through Thuban and kappa to Giausar at the tail.
+	// Altais and Tyl, north-east through chi, Aldhibah, Athebyne, and theta
+	// to Edasich, then east through Thuban and kappa to Giausar at the tail.
 	// The head is drawn 2.2 times its sky size and closed with a fifth site
-	// so its ring can hold an inland sea around a repulsor; the neck and the
-	// rising body are spread apart so they stay two arms; sites are filled in
-	// every 0.16 of the frame so the kin chain stays joined at 86% ocean; and
-	// the tail tapers by weight. The whole dragon is one kin group.
+	// so its ring can hold an inland sea around a repulsor; the rising run
+	// is rotated 25 degrees toward the east and the tail shortened to fit;
+	// sites are filled in every 0.16 of the frame so the kin chain stays
+	// joined at 86% ocean; and the tail tapers by weight. The whole dragon
+	// is one kin group.
 	"draco": {
 		Name:        "draco",
 		AspectRatio: "16:9",
@@ -206,28 +207,26 @@ var constellations = map[string]Constellation{
 			{X: -0.18, Y: -0.44}, // between Tyl and chi Draconis
 			{X: -0.08, Y: -0.38}, // between Tyl and chi Draconis
 			{X: 0.02, Y: -0.31},  // chi Draconis
-			{X: -0.01, Y: -0.19}, // between chi Draconis and Aldhibah
-			{X: -0.05, Y: -0.07}, // between chi Draconis and Aldhibah
-			{X: -0.08, Y: 0.05},  // Aldhibah
-			{X: -0.07, Y: 0.18},  // between Aldhibah and Athebyne
-			{X: -0.06, Y: 0.32},  // Athebyne
-			{X: -0.05, Y: 0.41},  // between Athebyne and theta Draconis
-			{X: -0.04, Y: 0.49},  // theta Draconis
-			{X: 0.03, Y: 0.53},   // between theta Draconis and Edasich
-			{X: 0.10, Y: 0.58},   // Edasich
-			{X: 0.22, Y: 0.55},   // between Edasich and Thuban
-			{X: 0.33, Y: 0.51},   // between Edasich and Thuban
-			{X: 0.45, Y: 0.48},   // Thuban
-			{X: 0.56, Y: 0.40},   // between Thuban and kappa Draconis
-			{X: 0.68, Y: 0.32},   // between Thuban and kappa Draconis
-			{X: 0.79, Y: 0.24},   // kappa Draconis
-			{X: 0.90, Y: 0.20},   // between kappa Draconis and Giausar
-			{X: 1.00, Y: 0.16},   // Giausar
+			{X: 0.04, Y: -0.19},  // between chi Draconis and Aldhibah
+			{X: 0.06, Y: -0.06},  // between chi Draconis and Aldhibah
+			{X: 0.08, Y: 0.06},   // Aldhibah
+			{X: 0.15, Y: 0.18},   // between Aldhibah and Athebyne
+			{X: 0.21, Y: 0.29},   // Athebyne
+			{X: 0.26, Y: 0.37},   // between Athebyne and theta Draconis
+			{X: 0.30, Y: 0.44},   // theta Draconis
+			{X: 0.39, Y: 0.45},   // between theta Draconis and Edasich
+			{X: 0.47, Y: 0.46},   // Edasich
+			{X: 0.57, Y: 0.43},   // between Edasich and Thuban
+			{X: 0.68, Y: 0.40},   // Thuban
+			{X: 0.78, Y: 0.33},   // between Thuban and kappa Draconis
+			{X: 0.88, Y: 0.26},   // kappa Draconis
+			{X: 1.00, Y: 0.21},   // Giausar
 			{X: -0.73, Y: 0.14},  // repulsor: inland sea in the head
 		},
-		Weights: []float64{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, -1},
-		Kin:     [][]int{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37}},
+		Weights: []float64{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.7, 0.7, 0.7, 0.7, -1},
+		Kin:     [][]int{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34}},
 	},
+
 	// Aster is Draco with a chain of islands for a body: the same figure,
 	// but only the twelve half-weight head sites are kin, ringing a repulsor
 	// that leaves a bay or an inland sea, while every body site grows its
