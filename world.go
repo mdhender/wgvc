@@ -111,6 +111,16 @@ const (
 	ElevationBandMountain
 )
 
+var elevationBands = [...]ElevationBand{
+	ElevationBandDeepWater, ElevationBandShallowWater,
+	ElevationBandLowland, ElevationBandUpland, ElevationBandHighland, ElevationBandMountain,
+}
+
+// ElevationBands returns every elevation band from lowest to highest.
+func ElevationBands() []ElevationBand {
+	return append([]ElevationBand(nil), elevationBands[:]...)
+}
+
 // HeatBand is an ordered classification from coldest to warmest.
 type HeatBand int
 
@@ -122,6 +132,13 @@ const (
 	HeatBandHot
 )
 
+var heatBands = [...]HeatBand{HeatBandPolar, HeatBandCold, HeatBandTemperate, HeatBandWarm, HeatBandHot}
+
+// HeatBands returns every heat band from coldest to warmest.
+func HeatBands() []HeatBand {
+	return append([]HeatBand(nil), heatBands[:]...)
+}
+
 // MoistureBand is an ordered classification from driest to wettest.
 type MoistureBand int
 
@@ -132,6 +149,15 @@ const (
 	MoistureBandHumid
 	MoistureBandSaturated
 )
+
+var moistureBands = [...]MoistureBand{
+	MoistureBandArid, MoistureBandDry, MoistureBandModerate, MoistureBandHumid, MoistureBandSaturated,
+}
+
+// MoistureBands returns every moisture band from driest to wettest.
+func MoistureBands() []MoistureBand {
+	return append([]MoistureBand(nil), moistureBands[:]...)
+}
 
 // World contains canonically ordered world data. Every object's ID equals its
 // index in the corresponding collection.

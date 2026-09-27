@@ -168,6 +168,15 @@ controlled by `-polar-ice` and `-peak-chill`, both expressed as percentages. Run
 prints the generator version and exits; a built binary appends the commit it
 was built from as semver build metadata.
 
+`-summary` also prints, after the status line, the number of provinces in each
+elevation band, heat band, moisture band, and terrain, followed by each
+histogram's total. Every declared value is listed in declaration order, and
+values no province has print `0`:
+
+```sh
+go run ./cmd/generate -summary -format json
+```
+
 See [Desirability-field growth](docs/x24.md) for the rules and defaults. The
 public `Generate` API uses those defaults, including zero attractants; these
 tuning flags do not expand its `Config`.
@@ -236,7 +245,9 @@ relief is `<= 0.12`.
 
 Each province stores independent `Heat` and `Moisture` values in `[0,1]` plus
 ordered bands. Heat bands are polar, cold, temperate, warm, and hot; moisture
-bands are arid, dry, moderate, humid, and saturated. Both fields use their own
+bands are arid, dry, moderate, humid, and saturated. `ElevationBands`
+(lowest to highest), `HeatBands`, and `MoistureBands` return the declared bands
+in order. Both fields use their own
 domain-separated noise stream sampled at shared corners, so climate generation
 cannot perturb terrain, elevation, island growth, or geometry.
 

@@ -234,3 +234,37 @@ func TestGenerateLargerWorldHasMultipleTerrainClasses(t *testing.T) {
 		t.Fatalf("larger world has only one terrain class: %v", terrains)
 	}
 }
+
+func TestBandListsAreOrderedAndCopied(t *testing.T) {
+	elevation := ElevationBands()
+	for index, band := range elevation {
+		if band != ElevationBand(index) {
+			t.Errorf("elevation band %d = %d", index, band)
+		}
+	}
+	if len(elevation) != int(ElevationBandMountain)+1 {
+		t.Errorf("ElevationBands() returned %d values", len(elevation))
+	}
+	heat := HeatBands()
+	for index, band := range heat {
+		if band != HeatBand(index) {
+			t.Errorf("heat band %d = %d", index, band)
+		}
+	}
+	if len(heat) != int(HeatBandHot)+1 {
+		t.Errorf("HeatBands() returned %d values", len(heat))
+	}
+	moisture := MoistureBands()
+	for index, band := range moisture {
+		if band != MoistureBand(index) {
+			t.Errorf("moisture band %d = %d", index, band)
+		}
+	}
+	if len(moisture) != int(MoistureBandSaturated)+1 {
+		t.Errorf("MoistureBands() returned %d values", len(moisture))
+	}
+	elevation[0], heat[0], moisture[0] = ElevationBandMountain, HeatBandHot, MoistureBandSaturated
+	if ElevationBands()[0] != ElevationBandDeepWater || HeatBands()[0] != HeatBandPolar || MoistureBands()[0] != MoistureBandArid {
+		t.Fatal("band lists returned mutable package storage")
+	}
+}

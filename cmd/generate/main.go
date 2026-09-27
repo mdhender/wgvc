@@ -33,6 +33,7 @@ type options struct {
 	format           string
 	outputBase       string
 	showVersion      bool
+	summary          bool
 }
 
 type outputFormats struct {
@@ -110,6 +111,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.StringVar(&options.format, "format", options.format, "output format: svg, png, json, both, all, or a comma-separated combination")
 	flags.StringVar(&options.outputBase, "output", options.outputBase, "output path without an extension")
 	flags.BoolVar(&options.showVersion, "version", false, "print the generator version and exit")
+	flags.BoolVar(&options.summary, "summary", false, "print province counts per elevation band, heat band, moisture band, and terrain")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -192,6 +194,16 @@ func run(args []string, stdout, stderr io.Writer) error {
 	fmt.Fprintf(stdout, "wrote %s%s: %d cells, %d land, %d→%d islands, merges=%d, %.0f%% ocean, %d round(s)\n",
 		options.outputBase, dimensions, len(result.Cells), options.config.ProvinceCount, result.InitialIslandCount,
 		len(result.Islands), result.MergeCount, result.FinalOcean*100, result.RoundsAttempted)
+	if options.summary {
+		sections, err := buildSummary(world)
+		if err != nil {
+			return fmt.Errorf("build summary: %w", err)
+		}
+		fmt.Fprintln(stdout)
+		if err := writeSummary(stdout, sections); err != nil {
+			return fmt.Errorf("write summary: %w", err)
+		}
+	}
 	return nil
 }
 
