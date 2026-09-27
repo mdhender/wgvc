@@ -9,8 +9,11 @@ import (
 // longer extent spanning the full range. Placement scales the frame uniformly
 // to fit the map, so the shape keeps its proportions on any aspect ratio.
 type Constellation struct {
-	Name  string
-	Sites []Point
+	Name string
+	// AspectRatio is the map shape the figure is drawn for. The generate
+	// command uses it when -aspect is not given.
+	AspectRatio string
+	Sites       []Point
 }
 
 // constellations maps a -attractors name to its sites. Positions come from
@@ -21,7 +24,8 @@ var constellations = map[string]Constellation{
 	// end through Yildun and epsilon to zeta, and the bowl is zeta, eta,
 	// Pherkad, and Kochab.
 	"ursa-minor": {
-		Name: "ursa-minor",
+		Name:        "ursa-minor",
+		AspectRatio: "2:1",
 		Sites: []Point{
 			{X: -1.00, Y: -0.01}, // Polaris
 			{X: -0.61, Y: 0.16},  // Yildun

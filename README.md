@@ -1,11 +1,12 @@
 # wgvc
 
-![TNYC map: 27 islands on 10,000 land provinces at 78% ocean](docs/tnyc.png)
+![Ursa Minor map: seven islands on 10,000 land provinces at 78% ocean](docs/tnyc.png)
 
 `wgvc` generates deterministic, province-first game worlds on one relaxed
 Voronoi mesh, with concurrently grown and merging islands, shared polygon
-topology, and spatially correlated terrain. The map above is the TNYC recipe
-from [TNYC maps](#tnyc-maps), downscaled from 5322×2255.
+topology, and spatially correlated terrain. The map above grew seven islands
+on the stars of the Little Dipper with `-attractors ursa-minor` (see
+[TNYC maps](#tnyc-maps)), downscaled from 4873×2461.
 
 The included `generate` command exposes the complete growth configuration
 and writes canonical JSON world data as well as terrain-colored SVG and PNG
@@ -166,6 +167,11 @@ go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 27 -provinces 10000 -ocean 0.78 \
   -aspect cinematic -attractors 9 -format png -output tnyc
 
+# Little Dipper (the README header): 7→7 islands, 45,455 provinces, 4873×2461
+go run ./cmd/generate -seed 0x0123456789abcdef \
+  -islands 7 -provinces 10000 -ocean 0.78 \
+  -attractors ursa-minor -format png -output ursa-minor
+
 # One continent: 25→1 islands, 18,182 provinces, 3384×1444
 go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 25 -provinces 10000 -ocean 0.45 -rival-ramp 0 \
@@ -241,9 +247,10 @@ select regions in the familiar die-face pattern, or 9 to select every region
 of the 3×3 grid. Zero disables them. A constellation name such as `ursa-minor`
 instead places one attractor per star, scaled to fill the map while keeping the
 figure's proportions, without jitter, and seeds the first islands on the star
-cells so each star grows its own island; the JSON export lists the provinces
-that hosted the sources in `generation.result.attractant_province_ids`. For
-example:
+cells so each star grows its own island. A constellation also selects the map
+shape it was drawn for (`2:1` for `ursa-minor`) unless `-aspect` is given. The
+JSON export lists the provinces that hosted the sources in
+`generation.result.attractant_province_ids`. For example:
 
 ```sh
 go run ./cmd/generate -attractors 5 -output five-attractors

@@ -272,7 +272,6 @@ func TestRunAcceptsConstellationAttractors(t *testing.T) {
 	err := run([]string{
 		"-provinces", "200",
 		"-islands", "3",
-		"-aspect", "cinematic",
 		"-attractors", "ursa-minor",
 		"-edge-ramp=-1,0",
 		"-attractant-ramp=1,0",
@@ -291,6 +290,7 @@ func TestRunAcceptsConstellationAttractors(t *testing.T) {
 			Config struct {
 				AttractantCount int    `json:"attractant_count"`
 				Constellation   string `json:"attractant_constellation"`
+				AspectRatio     string `json:"aspect_ratio"`
 			} `json:"config"`
 			Result struct {
 				AttractantProvinceIDs []int `json:"attractant_province_ids"`
@@ -305,6 +305,21 @@ func TestRunAcceptsConstellationAttractors(t *testing.T) {
 	}
 	if got := len(document.Generation.Result.AttractantProvinceIDs); got != 7 {
 		t.Errorf("attractant_province_ids has %d entries, want 7", got)
+	}
+	if document.Generation.Config.AspectRatio != "2:1" {
+		t.Errorf("aspect_ratio = %q, want the constellation default 2:1", document.Generation.Config.AspectRatio)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if err := run([]string{"-provinces", "200", "-islands", "3", "-attractors", "ursa-minor", "-aspect", "cinematic", "-edge-ramp=-1,0", "-attractant-ramp=1,0", "-format", "json", "-output", base}, &stdout, &stderr); err != nil {
+		t.Fatalf("run() with explicit aspect error = %v; stderr = %s", err, stderr.String())
+	}
+	data, _ = os.ReadFile(base + ".json")
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	if document.Generation.Config.AspectRatio != "2.39:1" && document.Generation.Config.AspectRatio != "cinematic" {
+		t.Errorf("aspect_ratio = %q, want the explicit cinematic ratio to win", document.Generation.Config.AspectRatio)
 	}
 	if err := run([]string{"-attractors", "orion", "-output", base}, &stdout, &stderr); err == nil {
 		t.Error("run() accepted an unknown constellation")

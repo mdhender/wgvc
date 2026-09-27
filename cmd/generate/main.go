@@ -155,6 +155,17 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+	if constellation, ok := x24.ConstellationByName(options.config.Constellation); ok && constellation.AspectRatio != "" {
+		aspectSet := false
+		flags.Visit(func(f *flag.Flag) {
+			if f.Name == "aspect" {
+				aspectSet = true
+			}
+		})
+		if !aspectSet {
+			options.config.AspectRatio = constellation.AspectRatio
+		}
+	}
 	if options.showVersion {
 		fmt.Fprintln(stdout, wgvc.Version())
 		return nil
