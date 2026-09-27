@@ -32,6 +32,9 @@ type options struct {
 	peakChillPercent float64
 	format           string
 	layer            string
+	region           string
+	selectIDs        string
+	radius           int
 	outputBase       string
 	showVersion      bool
 	summary          bool
@@ -112,6 +115,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Float64Var(&options.peakChillPercent, "peak-chill", options.peakChillPercent, "target percentage of warm-region high peaks classified cold or colder")
 	flags.StringVar(&options.format, "format", options.format, "output format: svg, png, json, both, all, or a comma-separated combination")
 	flags.StringVar(&options.layer, "layer", options.layer, "field that colors SVG and PNG provinces: terrain, elevation, relief, heat, moisture, or climate")
+	flags.StringVar(&options.region, "region", "", "render only provinces centered in this world-coordinate box: minx,miny,maxx,maxy")
+	flags.StringVar(&options.selectIDs, "select", "", "render only these comma-separated province IDs")
+	flags.IntVar(&options.radius, "radius", 0, "grow the -region or -select selection by this many province hops")
 	flags.StringVar(&options.outputBase, "output", options.outputBase, "output path without an extension")
 	flags.BoolVar(&options.showVersion, "version", false, "print the generator version and exit")
 	flags.BoolVar(&options.summary, "summary", false, "print province counts per elevation band, heat band, moisture band, and terrain")
@@ -133,6 +139,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	layer, err := parseLayer(options.layer)
+	if err != nil {
+		return err
+	}
+	selection, err := parseSelection(options.region, options.selectIDs, options.radius)
 	if err != nil {
 		return err
 	}
@@ -161,10 +171,15 @@ func run(args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("derive render dimensions: %w", err)
 		}
-		scene, err = buildScene(world, width, height, layer)
+		selected, err := selection.apply(world)
+		if err != nil {
+			return err
+		}
+		scene, err = buildScene(world, width, height, layer, selected)
 		if err != nil {
 			return fmt.Errorf("build render scene: %w", err)
 		}
+		width, height = scene.width, scene.height
 	}
 
 	if formats.svg {

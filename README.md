@@ -246,6 +246,21 @@ values no province has print `0`:
 go run ./cmd/generate -summary -format json
 ```
 
+`-region`, `-select`, and `-radius` render a partial map for a player who only
+knows part of the world. `-region minx,miny,maxx,maxy` selects the provinces
+whose centers lie in that world-coordinate box, `-select 12,34` names province
+IDs, and `-radius n` grows the union of both by `n` province hops. The image is
+cropped to the selection plus the usual margin at exactly the full map's scale
+and on its pixel grid, so partial maps of one world line up with each other and
+with the full map. Unselected provinces inside the crop are drawn as fog, with
+borders but no terrain, coastline, or river. JSON output is unaffected and
+always describes the whole world:
+
+```sh
+go run ./cmd/generate -select 120 -radius 4 -format png -output home
+go run ./cmd/generate -region 10,10,30,25 -format svg -output northwest
+```
+
 `-layer` chooses the province field that colors SVG and PNG maps. JSON output
 is unaffected, and cell borders, coastlines, and the background are the same
 for every layer:

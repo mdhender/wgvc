@@ -21,6 +21,8 @@ const (
 	cellBorderColor = "#69787b"
 	coastlineColor  = "#24343d"
 	riverColor      = "#2a7fd4"
+	// fogColor fills provinces outside a partial map's selection.
+	fogColor = "#dcd8cf"
 )
 
 // riverWidths is the stroke width of a river edge by the class of the flow on
@@ -91,7 +93,14 @@ type renderScene struct {
 	rivers     []renderRiverSegment
 }
 
-func buildScene(world wgvc.World, width, height int, layer mapLayer) (renderScene, error) {
+// buildScene lays out the whole world at the given image size. With a
+// non-nil selected slice it instead produces a partial map: the image is
+// cropped to the selected provinces plus the usual margin, at exactly the
+// full map's scale and on its pixel grid, so partial maps of one world line
+// up with each other and with the full map. Unselected provinces that fall
+// inside the crop are drawn as fog with borders but no fill, coastline, or
+// river.
+func buildScene(world wgvc.World, width, height int, layer mapLayer, selected []bool) (renderScene, error) {
 	if width < minimumImageSize || height < minimumImageSize {
 		return renderScene{}, fmt.Errorf("width and height must each be at least %d pixels", minimumImageSize)
 	}
@@ -118,34 +127,81 @@ func buildScene(world wgvc.World, width, height int, layer mapLayer) (renderScen
 	)
 	xOffset := (float64(width) - worldWidth*scale) / 2
 	yOffset := (float64(height) - worldHeight*scale) / 2
-	transform := func(point wgvc.Point) renderPoint {
+	fullHeight := float64(height)
+	fullTransform := func(point wgvc.Point) renderPoint {
 		return renderPoint{
 			x: xOffset + (point.X-minimum.X)*scale,
-			y: float64(height) - yOffset - (point.Y-minimum.Y)*scale,
+			y: fullHeight - yOffset - (point.Y-minimum.Y)*scale,
+		}
+	}
+	transform := fullTransform
+	isSelected := func(provinceID wgvc.ProvinceID) bool { return selected == nil || selected[provinceID] }
+	if selected != nil {
+		if len(selected) != len(world.Provinces) {
+			return renderScene{}, fmt.Errorf("selection has %d entries for %d provinces", len(selected), len(world.Provinces))
+		}
+		cropMinX, cropMinY := math.Inf(1), math.Inf(1)
+		cropMaxX, cropMaxY := math.Inf(-1), math.Inf(-1)
+		for _, province := range world.Provinces {
+			if !selected[province.ID] {
+				continue
+			}
+			for _, cornerID := range province.CornerIDs {
+				point := fullTransform(world.Corners[cornerID].Point)
+				cropMinX, cropMinY = math.Min(cropMinX, point.x), math.Min(cropMinY, point.y)
+				cropMaxX, cropMaxY = math.Max(cropMaxX, point.x), math.Max(cropMaxY, point.y)
+			}
+		}
+		if math.IsInf(cropMinX, 1) {
+			return renderScene{}, fmt.Errorf("selection contains no province")
+		}
+		originX := math.Floor(math.Max(0, cropMinX-imageMargin))
+		originY := math.Floor(math.Max(0, cropMinY-imageMargin))
+		width = int(math.Ceil(math.Min(float64(width), cropMaxX+imageMargin))) - int(originX)
+		height = int(math.Ceil(math.Min(float64(height), cropMaxY+imageMargin))) - int(originY)
+		transform = func(point wgvc.Point) renderPoint {
+			full := fullTransform(point)
+			return renderPoint{x: full.x - originX, y: full.y - originY}
 		}
 	}
 
 	scene := renderScene{width: width, height: height, polygons: make([]renderPolygon, 0, len(world.Provinces))}
 	for _, province := range world.Provinces {
-		fill, err := provinceFill(layer, province)
-		if err != nil {
-			return renderScene{}, fmt.Errorf("province %d: %w", province.ID, err)
-		}
 		if len(province.CornerIDs) < 3 {
 			return renderScene{}, fmt.Errorf("province %d has fewer than three corners", province.ID)
 		}
-		polygon := renderPolygon{fill: fill, points: make([]renderPoint, len(province.CornerIDs))}
+		polygon := renderPolygon{points: make([]renderPoint, len(province.CornerIDs))}
+		inside := false
 		for index, cornerID := range province.CornerIDs {
 			if cornerID < 0 || int(cornerID) >= len(world.Corners) {
 				return renderScene{}, fmt.Errorf("province %d references unknown corner %d", province.ID, cornerID)
 			}
 			polygon.points[index] = transform(world.Corners[cornerID].Point)
+			if p := polygon.points[index]; p.x >= 0 && p.x <= float64(width) && p.y >= 0 && p.y <= float64(height) {
+				inside = true
+			}
 		}
+		if !isSelected(province.ID) {
+			if !inside {
+				continue
+			}
+			polygon.fill = fogColor
+			scene.polygons = append(scene.polygons, polygon)
+			continue
+		}
+		fill, err := provinceFill(layer, province)
+		if err != nil {
+			return renderScene{}, fmt.Errorf("province %d: %w", province.ID, err)
+		}
+		polygon.fill = fill
 		scene.polygons = append(scene.polygons, polygon)
 	}
 
 	for _, edge := range world.Edges {
 		if len(edge.ProvinceIDs) != 2 {
+			continue
+		}
+		if !isSelected(edge.ProvinceIDs[0]) && !isSelected(edge.ProvinceIDs[1]) {
 			continue
 		}
 		firstProvince, secondProvince := edge.ProvinceIDs[0], edge.ProvinceIDs[1]
@@ -172,6 +228,9 @@ func buildScene(world wgvc.World, width, height int, layer mapLayer) (renderScen
 				return renderScene{}, fmt.Errorf("river %d references unknown edge %d", river.ID, edgeID)
 			}
 			edge := world.Edges[edgeID]
+			if !isSelected(edge.ProvinceIDs[0]) && !isSelected(edge.ProvinceIDs[1]) {
+				continue
+			}
 			width, ok := riverWidths[wgvc.ClassifyDischarge(edge.Discharge)]
 			if !ok {
 				return renderScene{}, fmt.Errorf("river %d edge %d has discharge %g below the stream threshold", river.ID, edgeID, edge.Discharge)

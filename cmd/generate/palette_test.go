@@ -61,12 +61,12 @@ func TestLayerChangesOnlyPolygonFill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
-	terrain, err := buildScene(world, 480, 360, layerTerrain)
+	terrain, err := buildScene(world, 480, 360, layerTerrain, nil)
 	if err != nil {
 		t.Fatalf("buildScene(terrain) error = %v", err)
 	}
 	for _, layer := range mapLayers[1:] {
-		scene, err := buildScene(world, 480, 360, layer)
+		scene, err := buildScene(world, 480, 360, layer, nil)
 		if err != nil {
 			t.Fatalf("buildScene(%s) error = %v", layer, err)
 		}
