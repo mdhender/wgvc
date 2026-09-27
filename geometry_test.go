@@ -2,6 +2,7 @@ package wgvc
 
 import (
 	"math"
+	"math/rand/v2"
 	"reflect"
 	"sort"
 	"strings"
@@ -347,4 +348,41 @@ func squaredDistance(first, second Point) float64 {
 	dx := first.X - second.X
 	dy := first.Y - second.Y
 	return dx*dx + dy*dy
+}
+
+// Corner IDs follow exact coordinate order, so a border corner a few ulps off
+// its side can sort differently depending on whether the platform fused a
+// multiply-add while clipping (arm64 does, amd64 does not).
+func TestTessellateRectangleSnapsBorderCornersExactly(t *testing.T) {
+	const width, height = 13.7, 9.1
+	for seed := uint64(1); seed <= 8; seed++ {
+		source := rand.New(rand.NewPCG(seed, 0xfedcba9876543210))
+		sites := make([]Point, 400)
+		for i := range sites {
+			sites[i] = Point{X: width * (0.001 + 0.998*source.Float64()), Y: height * (0.001 + 0.998*source.Float64())}
+		}
+		mesh, err := tessellateRectangle(NoIslandID, sites, width, height)
+		if err != nil {
+			t.Fatalf("seed %d: tessellateRectangle() error = %v", seed, err)
+		}
+
+		borderCorners := 0
+		for cornerID, point := range mesh.corners {
+			for _, coordinate := range []struct {
+				value, limit float64
+			}{{point.X, width}, {point.Y, height}} {
+				for _, side := range []float64{0, coordinate.limit} {
+					if near(coordinate.value, side) {
+						borderCorners++
+						if coordinate.value != side {
+							t.Errorf("seed %d: corner %d coordinate = %.17g, want exactly %g", seed, cornerID, coordinate.value, side)
+						}
+					}
+				}
+			}
+		}
+		if borderCorners == 0 {
+			t.Fatalf("seed %d: no corners on the rectangle border", seed)
+		}
+	}
 }

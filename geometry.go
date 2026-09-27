@@ -181,9 +181,9 @@ func computeBackendGeometryInBounds(sites []Point, width, height float64) (backe
 
 		ring := make([]Point, len(cell.Halfedges))
 		for i, halfedge := range cell.Halfedges {
-			start := backendPoint(halfedge.GetStartpoint())
-			end := backendPoint(halfedge.GetEndpoint())
-			next := backendPoint(cell.Halfedges[(i+1)%len(cell.Halfedges)].GetStartpoint())
+			start := backendPointInBounds(halfedge.GetStartpoint(), width, height)
+			end := backendPointInBounds(halfedge.GetEndpoint(), width, height)
+			next := backendPointInBounds(cell.Halfedges[(i+1)%len(cell.Halfedges)].GetStartpoint(), width, height)
 			if !pointsNear(end, next) {
 				return backendGeometry{}, fmt.Errorf("site %d has an open ring between %+v and %+v", index, end, next)
 			}
@@ -218,8 +218,8 @@ func computeBackendGeometryInBounds(sites []Point, width, height float64) (backe
 		}
 		geometry.edges = append(geometry.edges, backendEdge{
 			ends: [2]Point{
-				backendPoint(edge.Va.Vertex),
-				backendPoint(edge.Vb.Vertex),
+				backendPointInBounds(edge.Va.Vertex, width, height),
+				backendPointInBounds(edge.Vb.Vertex, width, height),
 			},
 			siteIndexes: incidence,
 		})
@@ -429,8 +429,26 @@ func rotateIntsToMinimum(values []int) {
 	copy(values, rotated)
 }
 
-func backendPoint(vertex voronoi.Vertex) Point {
-	return Point{X: vertex.X, Y: vertex.Y}
+// backendPointInBounds snaps coordinates within tolerance of a bounding-box
+// side exactly onto it. The backend clips edges with Liang-Barsky arithmetic,
+// so a clipped vertex lands a few ulps off the side, and the direction of that
+// error depends on whether the compiler fused a multiply-add (Go permits this
+// on arm64 but not amd64). Corner IDs are assigned by exact coordinate order,
+// so without snapping, border corners would be numbered differently on
+// different architectures.
+func backendPointInBounds(vertex voronoi.Vertex, width, height float64) Point {
+	return Point{X: snapToBounds(vertex.X, width), Y: snapToBounds(vertex.Y, height)}
+}
+
+func snapToBounds(value, limit float64) float64 {
+	switch {
+	case near(value, 0):
+		return 0
+	case near(value, limit):
+		return limit
+	default:
+		return value
+	}
 }
 
 func finitePoint(point Point) bool {

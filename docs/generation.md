@@ -77,5 +77,12 @@ number derive each growth stream through SplitMix64; terrain uses an independent
 domain-separated stream. No package-global random source is used. Identical
 configurations produce deeply identical worlds for a fixed generator version.
 
+Across CPU architectures, island membership, topology, every ID, and every band
+and terrain classification are identical. Continuous values (coordinates,
+elevation, heat, moisture) can differ in their lowest-order bits, because Go
+permits fused multiply-add on arm64 but not amd64. Mesh corners that the Voronoi
+backend clips to the world rectangle are snapped exactly onto its sides, so this
+rounding cannot reorder the canonical corner IDs.
+
 See [Single-mesh island generation](blob-islands.md) for visual fixtures and
 regression coverage.
