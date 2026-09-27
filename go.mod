@@ -4,6 +4,7 @@ go 1.22
 
 require (
 	github.com/fogleman/gg v1.3.0
+	github.com/maloquacious/semver v0.4.1
 	github.com/pzsz/voronoi v0.0.0-20130609164533-4314be88c79f
 )
 
