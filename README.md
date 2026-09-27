@@ -111,6 +111,35 @@ go run ./cmd/generate -seed 0x0123456789abcdef \
   -aspect cinematic -attractors 5 -format png -output world
 ```
 
+### TNYC maps
+
+TNYC uses about 10,000 land provinces on a cinematic map. Island separation is
+governed almost entirely by the ocean fraction: at 45% water the 25 initial
+islands grow into one continent, while 78% water with 20 initial islands keeps
+nine separate landmasses.
+
+```sh
+# One continent: 25→1 islands, 18,182 provinces, 3384×1444
+go run ./cmd/generate -seed 0x0123456789abcdef \
+  -islands 25 -provinces 10000 -ocean 0.45 \
+  -aspect cinematic -attractors 5 -format png -output tnyc-continent
+
+# Nine landmasses: 20→9 islands, 45,455 provinces, 5322×2255
+go run ./cmd/generate -seed 0x0123456789abcdef \
+  -islands 20 -provinces 10000 -ocean 0.78 \
+  -aspect cinematic -attractors 5 -format png -output tnyc
+```
+
+| Map | Landmasses (provinces each) | Wall time | Max resident memory |
+|---|---|---:|---:|
+| `tnyc-continent` | 1 (10,000) | 1.3 s | 83 MiB |
+| `tnyc` | 9 (1874, 1782, 1574, 974, 776, 765, 761, 754, 740) | 3.4 s | 204 MiB |
+
+Timings are for a built binary writing PNG only, measured with
+`/usr/bin/time -l` on an Apple M4 at v0.7.5-alpha. The final landmass count is
+seed-specific and sensitive to nearby settings (78% water with 25 or 30 initial
+islands gives 11 or 7), so sweep `-ocean` and `-islands` when changing the seed.
+
 Use `-format png` for `world.png`, `-format json` for `world.json`, or
 `-format both` to write `world.svg` and `world.png`. Comma-separated values such
 as `-format svg,json` select any combination, and `-format all` writes all three
