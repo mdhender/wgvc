@@ -156,6 +156,14 @@ func assignTerrain(world *World) {
 	for provinceID := range world.Provinces {
 		world.Provinces[provinceID].Terrain = classifyTerrain(world.Provinces[provinceID], adjacentLand[provinceID], adjacentWater[provinceID])
 	}
+	// Every member of a basin shares its basin's terrain, which takes
+	// precedence over the coastal water every enclosed province would get.
+	for _, basin := range world.Basins {
+		terrain := basinTerrain(basin)
+		for _, provinceID := range basin.ProvinceIDs {
+			world.Provinces[provinceID].Terrain = terrain
+		}
+	}
 }
 
 func classifyTerrain(province Province, adjacentLand, adjacentWater bool) Terrain {

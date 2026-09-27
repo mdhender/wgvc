@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -346,8 +347,23 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		if province.Terrain.IsWater() != (province.IslandID == NoIslandID) {
 			t.Errorf("province %d terrain %q disagrees with island ID %d", province.ID, province.Terrain, province.IslandID)
 		}
-		if province.Terrain == TerrainInlandSea || province.Terrain == TerrainLake || province.Terrain == TerrainVolcano || province.Terrain == TerrainVolcanicHighland {
+		if province.Terrain == TerrainVolcano || province.Terrain == TerrainVolcanicHighland {
 			t.Errorf("province %d received reserved terrain %q", province.ID, province.Terrain)
+		}
+		inlandWater := province.Terrain == TerrainInlandSea || province.Terrain == TerrainLake
+		if province.BasinID == NoBasinID {
+			if inlandWater {
+				t.Errorf("province %d outside any basin has inland-water terrain %q", province.ID, province.Terrain)
+			}
+		} else {
+			if province.IslandID != NoIslandID {
+				t.Errorf("land province %d has basin %d", province.ID, province.BasinID)
+			}
+			if int(province.BasinID) < 0 || int(province.BasinID) >= len(world.Basins) || !slices.Contains(world.Basins[province.BasinID].ProvinceIDs, province.ID) {
+				t.Errorf("province %d basin %d does not list it as a member", province.ID, province.BasinID)
+			} else if want := basinTerrain(world.Basins[province.BasinID]); province.Terrain != want {
+				t.Errorf("basin province %d terrain = %q, want %q", province.ID, province.Terrain, want)
+			}
 		}
 		wantElevation := elevationTotals[provinceIndex] / float64(elevationEdgeCounts[provinceIndex])
 		if province.Elevation != wantElevation {

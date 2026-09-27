@@ -127,7 +127,7 @@ top-level shape is:
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "generation": {
     "generator": { "version": "0.7.3-alpha", "build": "9a64246" },
     "config": { "seed": "0x0123456789abcdef" },
@@ -135,6 +135,7 @@ top-level shape is:
   },
   "bounds": { "minimum": { "x": 0, "y": 0 }, "maximum": { "x": 68, "y": 68 } },
   "islands": [],
+  "basins": [],
   "provinces": [],
   "corners": [],
   "edges": []
@@ -143,7 +144,8 @@ top-level shape is:
 
 The abbreviated objects above omit fields and collection entries. IDs equal
 their array indexes, polygon rings refer to shared corners, edges refer to their
-incident provinces, and water provinces use `island_id: -1`. Terrain and climate
+incident provinces, water provinces use `island_id: -1`, and provinces outside
+any basin use `basin_id: -1`. Terrain and climate
 bands are descriptive strings. The seed is a hexadecimal string so all 64 bits
 survive parsers whose numeric values use IEEE-754 doubles.
 `generation.generator` records the generator version (without build metadata)
@@ -182,9 +184,19 @@ values.
 Classification considers ocean depth first, then glacial ice, elevated terrain,
 wetlands, coastal land, rough dry or upland terrain, and finally a heat ×
 moisture cover table. Water next to growth-assigned land is coastal water; low,
-growth-assigned land next to water can be coast. `inland-sea`, `lake`, `volcano`,
-and `volcanic-highland` are reserved for topology-aware generation and are not
-currently emitted.
+growth-assigned land next to water can be coast. `volcano` and
+`volcanic-highland` are reserved for volcanism (issue #40) and are not currently
+emitted.
+
+Water that cannot reach the world boundary through other water forms a basin:
+a connected body enclosed by land. Every member of a basin shares one terrain,
+`inland-sea` for basins of 10 or more provinces and `lake` otherwise, taking
+precedence over coastal water. A basin's `SurfaceElevation` is the lowest
+elevation of the land provinces around it, the height at which it would spill;
+members keep their water elevation as depth below that surface, and `Depth` is
+the deepest. Basins come only from growth-assigned water, so they never change
+whether a province is land or water; shorelines are exactly the growth
+coastline.
 
 The seeded elevation field is sampled once per shared corner. Land-land edges occupy
 `[0.1, 1)`, water-water edges occupy `[-1, -0.1)`, and coastlines and world

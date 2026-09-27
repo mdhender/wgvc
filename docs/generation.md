@@ -16,16 +16,20 @@ requested count. Water can contain interior components such as lakes.
   collection. Membership lists use that same canonical order.
 - A province center is its Voronoi generating point, not its polygon centroid.
 - Land provinces identify their island. Water provinces use `NoIslandID`.
+- Water provinces with no water path to the world boundary belong to a basin
+  (`World.Basins`); every other province uses `NoBasinID`. Basins never change
+  whether a province is land or water.
 - An interior edge's incident provinces are the authoritative undirected
   geometric adjacency. An edge is never a game route.
 
 ## JSON export
 
 `go run ./cmd/generate -format json -output world` writes `world.json`. The
-document has `schema_version: 2`, generator identity, generation configuration
-and effective result metadata, world-coordinate bounds, and the canonical `islands`, `provinces`,
-`corners`, and `edges` collections. It uses the same IDs and references described
-above. Water provinces retain `island_id: -1`; terrain and elevation, heat, and
+document has `schema_version: 3`, generator identity, generation configuration
+and effective result metadata, world-coordinate bounds, and the canonical `islands`,
+`basins`, `provinces`, `corners`, and `edges` collections. It uses the same IDs
+and references described above. Water provinces retain `island_id: -1`, and
+provinces outside any basin have `basin_id: -1`; terrain and elevation, heat, and
 moisture bands use descriptive strings. The seed is a hexadecimal string to
 preserve the complete unsigned 64-bit value.
 
@@ -35,6 +39,8 @@ one release compare equal. `generation.generator.build` is the VCS commit the
 binary was built from, suffixed `-dirty` for an uncommitted working tree, and is
 omitted when the build recorded no VCS information (as under `go run`). Schema
 version 2 added the `generator` object; schema version 1 documents lack it.
+Schema version 3 added the `basins` collection (`id`, `province_ids`,
+`surface_elevation`, `depth`) and each province's `basin_id`.
 
 JSON uses Cartesian generation coordinates rather than the transformed pixel
 coordinates used by image renderers. Use a comma-separated format such as

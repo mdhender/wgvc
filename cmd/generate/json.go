@@ -9,13 +9,14 @@ import (
 	"github.com/mdhender/wgvc/internal/x24"
 )
 
-const jsonSchemaVersion = 2
+const jsonSchemaVersion = 3
 
 type jsonWorld struct {
 	SchemaVersion int            `json:"schema_version"`
 	Generation    jsonGeneration `json:"generation"`
 	Bounds        jsonBounds     `json:"bounds"`
 	Islands       []jsonIsland   `json:"islands"`
+	Basins        []jsonBasin    `json:"basins"`
 	Provinces     []jsonProvince `json:"provinces"`
 	Corners       []jsonCorner   `json:"corners"`
 	Edges         []jsonEdge     `json:"edges"`
@@ -79,9 +80,17 @@ type jsonIsland struct {
 	ProvinceIDs []wgvc.ProvinceID `json:"province_ids"`
 }
 
+type jsonBasin struct {
+	ID               wgvc.BasinID      `json:"id"`
+	ProvinceIDs      []wgvc.ProvinceID `json:"province_ids"`
+	SurfaceElevation float64           `json:"surface_elevation"`
+	Depth            float64           `json:"depth"`
+}
+
 type jsonProvince struct {
 	ID            wgvc.ProvinceID `json:"id"`
 	IslandID      wgvc.IslandID   `json:"island_id"`
+	BasinID       wgvc.BasinID    `json:"basin_id"`
 	Center        jsonPoint       `json:"center"`
 	CornerIDs     []wgvc.CornerID `json:"corner_ids"`
 	Terrain       wgvc.Terrain    `json:"terrain"`
@@ -154,12 +163,21 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 		},
 		Bounds:    bounds,
 		Islands:   make([]jsonIsland, len(world.Islands)),
+		Basins:    make([]jsonBasin, len(world.Basins)),
 		Provinces: make([]jsonProvince, len(world.Provinces)),
 		Corners:   make([]jsonCorner, len(world.Corners)),
 		Edges:     make([]jsonEdge, len(world.Edges)),
 	}
 	for index, island := range world.Islands {
 		document.Islands[index] = jsonIsland{ID: island.ID, ProvinceIDs: island.ProvinceIDs}
+	}
+	for index, basin := range world.Basins {
+		document.Basins[index] = jsonBasin{
+			ID:               basin.ID,
+			ProvinceIDs:      basin.ProvinceIDs,
+			SurfaceElevation: basin.SurfaceElevation,
+			Depth:            basin.Depth,
+		}
 	}
 	for index, province := range world.Provinces {
 		elevationBand, err := elevationBandName(province.ElevationBand)
@@ -177,6 +195,7 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 		document.Provinces[index] = jsonProvince{
 			ID:            province.ID,
 			IslandID:      province.IslandID,
+			BasinID:       province.BasinID,
 			Center:        toJSONPoint(province.Center),
 			CornerIDs:     province.CornerIDs,
 			Terrain:       province.Terrain,

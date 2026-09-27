@@ -6,6 +6,12 @@ type IslandID int
 // NoIslandID is the IslandID of every water province.
 const NoIslandID IslandID = -1
 
+// BasinID identifies an enclosed water body by its index in World.Basins.
+type BasinID int
+
+// NoBasinID is the BasinID of every land province and every ocean province.
+const NoBasinID BasinID = -1
+
 // ProvinceID identifies a province by its index in World.Provinces.
 type ProvinceID int
 
@@ -131,6 +137,7 @@ const (
 // index in the corresponding collection.
 type World struct {
 	Islands   []Island
+	Basins    []Basin
 	Provinces []Province
 	Corners   []Corner
 	Edges     []Edge
@@ -144,9 +151,25 @@ type Island struct {
 	ProvinceIDs []ProvinceID
 }
 
+// Basin is a connected body of water provinces with no path to the world
+// boundary: a lake or inland sea enclosed by land. ProvinceIDs is in ascending
+// canonical province order, and basins are ordered by their lowest province
+// ID. SurfaceElevation is the lowest elevation among the land provinces
+// bordering the basin, the height at which it would spill, in [0, 1). Member
+// provinces keep their water elevation as depth below that surface; Depth is
+// the greatest such depth, in [0, 1).
+type Basin struct {
+	ID               BasinID
+	ProvinceIDs      []ProvinceID
+	SurfaceElevation float64
+	Depth            float64
+}
+
 // Province is one land or water cell. IslandID identifies the containing
 // island for land and is NoIslandID for water. Only land provinces appear in
-// Island.ProvinceIDs. Center is the generating point used for its Voronoi
+// Island.ProvinceIDs. BasinID identifies the enclosing basin for water that
+// cannot reach the world boundary and is NoBasinID otherwise; it never changes
+// whether a province is land or water. Center is the generating point used for its Voronoi
 // cell, not the polygon centroid. CornerIDs is a counterclockwise polygon ring
 // without a repeated closing corner. Elevation is the mean elevation of the
 // province's boundary edges, normalized to [-1, 1]. ElevationBand preserves
@@ -158,6 +181,7 @@ type Island struct {
 type Province struct {
 	ID            ProvinceID
 	IslandID      IslandID
+	BasinID       BasinID
 	Center        Point
 	CornerIDs     []CornerID
 	Terrain       Terrain

@@ -42,14 +42,14 @@ WGVC_UPDATE_BLOB_SVG=1           go test -run TestCandidateBlobContactSheet  # d
 1. **Growth** — `internal/x24.Generate`: builds one Lloyd-relaxed Voronoi point set for the whole world (`internal/singlemesh`, wrapping `pzsz/voronoi`), then grows all islands concurrently over it with a desirability field (edge barrier/ramp, optional attractants, softmax choice, control penalty). Touching islands merge. On failure a round is discarded and retried with +3% ocean on a fresh derived stream. Algorithm and defaults: `docs/x24.md`.
 2. **Canonical tessellation** — `tessellateRectangle` (`geometry.go`) re-tessellates the x24 sites into the canonical `islandMesh` with shared, world-global corner and edge IDs and CCW rings.
 3. **Scaling** — the mesh is uniformly scaled so total land area equals the land province count (a typical land province has area ≈ 1).
-4. **Fields** — `assignElevations` (per-corner noise → edge → province mean/band), `assignRelief` (mean absolute elevation difference to same-medium edge neighbors, in `[0,1)`), `assignClimate` (heat/moisture + calibrated bands), then `assignTerrain` (deterministic classification, consumes no randomness). Terrain is always assigned last and never changes geometry, topology, or land/water membership.
+4. **Fields** — `assignElevations` (per-corner noise → edge → province mean/band), `assignRelief` (mean absolute elevation difference to same-medium edge neighbors, in `[0,1)`), `assignClimate` (heat/moisture + calibrated bands), `assignBasins` (water components with no path to the world boundary become lake/inland-sea basins), then `assignTerrain` (deterministic classification, consumes no randomness). Terrain is always assigned last and never changes geometry, topology, or land/water membership.
 
 `Generate` exposes only a small `Config` and uses `x24.DefaultConfig()` for everything else. The CLI instead builds a full `x24.Config` from flags and calls `GenerateForRenderWithClimate`, which is why tuning flags do not appear in the public `Config`.
 
 ### Invariants worth preserving
 
 - Every `Island`/`Province`/`Corner`/`Edge` ID equals its index in its `World` slice; membership lists use canonical order.
-- `Province.IslandID` (or `NoIslandID` for water) is the authority for land vs water — not terrain or elevation.
+- `Province.IslandID` (or `NoIslandID` for water) is the authority for land vs water — not terrain or elevation. Basins (`Province.BasinID`) are drawn only from growth water and never change membership.
 - Edge incidence is undirected geometric adjacency, not a game route.
 - Identical `Config` → deeply identical `World`. Each stage draws from its own domain-separated PCG stream derived via SplitMix64 (`random.go`; x24 has its own in `internal/x24/random.go`). Add a new domain constant for any new random stage rather than reusing an existing stream, so existing outputs are not perturbed.
 - `docs/generation.md` documents the public contracts (coordinates, topology, JSON schema); keep it and README in sync with behavior changes.

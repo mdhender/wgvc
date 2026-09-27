@@ -115,6 +115,50 @@ func TestRunJSONContainsCanonicalWorldData(t *testing.T) {
 	}
 }
 
+func TestRunJSONExportsBasins(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "map")
+	err := run([]string{"-seed", "42", "-provinces", "1000", "-islands", "8", "-format", "json", "-output", base}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	data, err := os.ReadFile(base + ".json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document jsonWorld
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatalf("decode JSON: %v", err)
+	}
+	if len(document.Basins) == 0 {
+		t.Fatal("JSON contains no basins")
+	}
+	members := 0
+	for index, basin := range document.Basins {
+		if basin.ID != wgvc.BasinID(index) {
+			t.Errorf("basin %d ID = %d", index, basin.ID)
+		}
+		for _, provinceID := range basin.ProvinceIDs {
+			province := document.Provinces[provinceID]
+			if province.BasinID != basin.ID || province.IslandID != wgvc.NoIslandID {
+				t.Errorf("basin %d member %d has basin_id %d and island_id %d", basin.ID, provinceID, province.BasinID, province.IslandID)
+			}
+			if province.Terrain != wgvc.TerrainLake && province.Terrain != wgvc.TerrainInlandSea {
+				t.Errorf("basin %d member %d terrain = %q, want inland water", basin.ID, provinceID, province.Terrain)
+			}
+		}
+		members += len(basin.ProvinceIDs)
+	}
+	withBasin := 0
+	for _, province := range document.Provinces {
+		if province.BasinID != wgvc.NoBasinID {
+			withBasin++
+		}
+	}
+	if withBasin != members {
+		t.Errorf("%d provinces have a basin_id, basins list %d members", withBasin, members)
+	}
+}
+
 func TestRunJSONIsDeterministic(t *testing.T) {
 	directory := t.TempDir()
 	firstBase := filepath.Join(directory, "first")
