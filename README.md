@@ -226,6 +226,9 @@ growth-assigned land next to water can be coast. `volcano` and
 `volcanic-highland` are reserved for volcanism (issue #40) and are not currently
 emitted.
 
+The [terrain legend](docs/references/terrain-legend.md) shows each terrain's
+map color and the exact rule that assigns it.
+
 Water that cannot reach the world boundary through other water forms a basin:
 a connected body enclosed by land. Every member of a basin shares one terrain,
 `inland-sea` for basins of 10 or more provinces and `lake` otherwise, taking

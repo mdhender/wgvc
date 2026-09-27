@@ -29,6 +29,7 @@ Doc SVG galleries are golden outputs produced by tests; regenerate them with an 
 WGVC_UPDATE_SINGLE_MESH_GALLERY=1 go test -run TestSingleMeshIslandGallery   # docs/blob-islands.svg
 WGVC_UPDATE_TILE_EXPERIMENT=1    go test -run TestCenteredIslandTileGallery  # docs/tile-experiment.svg
 WGVC_UPDATE_BLOB_SVG=1           go test -run TestCandidateBlobContactSheet  # docs/blob-selection.svg
+WGVC_UPDATE_TERRAIN_LEGEND=1     go test -run TestTerrainLegend ./cmd/generate  # docs/references/terrain-legend.png
 ```
 
 ## Architecture
