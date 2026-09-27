@@ -45,7 +45,7 @@ func TestRunOutputFormatsWithGrowthOptions(t *testing.T) {
 				"-attractant-ramp=1,0",
 				"-attractant-jitter", "0.5",
 				"-temperature", "0.3",
-				"-control-penalty", "-0.7",
+				"-rival-ramp=-0.7,0",
 				"-rounds", "5",
 				"-relaxations", "1",
 				"-polar-ice", "5",

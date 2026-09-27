@@ -16,8 +16,8 @@ For every successful generation:
 4. Build one Voronoi adjacency graph for the complete world.
 5. Mark a permanent ocean barrier, propagate the configured edge ramp, and add
    jittered regional attractants wherever their edge clearance can be met.
-6. Plant one uniformly selected seed per initial island and apply the same
-   one-hop control rule used by every later claim.
+6. Plant one uniformly selected seed per initial island; seeds ignore the
+   rival ramp, so a seed can land beside another island.
 7. Draw islands randomly and select frontier cells with a desirability-weighted
    softmax until exactly the requested land count has been claimed. Merge every
    rival island directly connected by a claim.

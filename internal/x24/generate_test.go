@@ -15,8 +15,11 @@ func TestDefaultConfig(t *testing.T) {
 	if got.WorldSeed != 0x0123456789abcdef || got.ProvinceCount != 1_500 || got.IslandCount != 15 || got.AspectRatio != "1:1" || got.OceanPercentage != 0.68 {
 		t.Fatalf("DefaultConfig() required values = %+v", got)
 	}
-	if got.EdgeBarrierWidth != 0.02 || !reflect.DeepEqual(got.EdgeRamp, []float64{-1, -0.65, -0.40, -0.22, -0.10, -0.04, 0}) || got.ControlPenalty != -0.82 {
+	if got.EdgeBarrierWidth != 0.02 || !reflect.DeepEqual(got.EdgeRamp, []float64{-1, -0.65, -0.40, -0.22, -0.10, -0.04, 0}) {
 		t.Fatalf("DefaultConfig() issue #25 values = %+v", got)
+	}
+	if !reflect.DeepEqual(got.RivalRamp, []float64{-1, -1, -0.5, 0}) {
+		t.Fatalf("DefaultConfig() issue #42 values = %+v", got)
 	}
 	if got.AttractantCount != 0 || !reflect.DeepEqual(got.AttractantRamp, []float64{1, 0.78, 0.58, 0.42, 0.29, 0.18, 0.10, 0.04, 0.01, 0}) || got.AttractantJitter != 0.65 {
 		t.Fatalf("DefaultConfig() issue #26 values = %+v", got)
@@ -47,7 +50,8 @@ func TestGenerateDefaultIsDeterministicAndValid(t *testing.T) {
 
 func TestClaimMergesOnlyWithDirectlyAdjacentLand(t *testing.T) {
 	cells := lineCells(4)
-	state := newGrowthState(cells, []float64{0, 0, 0, 0}, allEligible(4), -0.82)
+	ramp := []float64{-1, -0.5, 0}
+	state := newGrowthState(cells, []float64{0, 0, 0, 0}, allEligible(4), ramp)
 	state.islands = []islandState{{seedID: 0, active: true}, {seedID: 1, active: true}}
 	state.frontiers = make([]randomSet, 2)
 
@@ -55,37 +59,44 @@ func TestClaimMergesOnlyWithDirectlyAdjacentLand(t *testing.T) {
 		t.Fatalf("first claim absorbed islands %v", losers)
 	}
 	if losers := state.claim(1, 1); !reflect.DeepEqual(losers, []int{0}) {
-		t.Fatalf("adjacent controlled claim absorbed %v, want [0]", losers)
+		t.Fatalf("adjacent claim absorbed %v, want [0]", losers)
 	}
-	if state.islands[0].active || state.owners[0] != 1 || state.controllers[1] != Water {
-		t.Fatalf("merge did not transfer loser state: islands=%+v owners=%v controllers=%v", state.islands, state.owners, state.controllers)
+	if state.islands[0].active || state.owners[0] != 1 {
+		t.Fatalf("merge did not transfer loser state: islands=%+v owners=%v", state.islands, state.owners)
+	}
+	if got := state.visibleValue(2, 1); got != 0 {
+		t.Fatalf("after the merge the winner still sees a rival penalty %g on cell 2", got)
 	}
 
-	state = newGrowthState(cells, []float64{0, 0, 0, 0}, allEligible(4), -0.82)
+	state = newGrowthState(cells, []float64{0, 0, 0, 0}, allEligible(4), ramp)
 	state.islands = []islandState{{seedID: 0, active: true}, {seedID: 2, active: true}}
 	state.frontiers = make([]randomSet, 2)
 	state.claim(0, 0)
-	state.controllers[2] = 0 // Simulate a future multi-hop control ripple.
+	if got := state.visibleValue(2, 1); got != -0.5 {
+		t.Fatalf("cell two hops from rival land is worth %g, want ramp value -0.5", got)
+	}
 	if losers := state.claim(2, 1); len(losers) != 0 {
-		t.Fatalf("non-adjacent controlled claim absorbed islands %v", losers)
+		t.Fatalf("non-adjacent penalized claim absorbed islands %v", losers)
 	}
 	if !state.islands[0].active || state.mergeCount != 0 {
-		t.Fatalf("non-adjacent control caused a merge: islands=%+v merges=%d", state.islands, state.mergeCount)
+		t.Fatalf("rival penalty caused a merge: islands=%+v merges=%d", state.islands, state.mergeCount)
 	}
 }
 
-func TestClaimAbsorbsEveryAdjacentIslandRegardlessOfController(t *testing.T) {
+func TestClaimAbsorbsEveryAdjacentIslandRegardlessOfPenalty(t *testing.T) {
 	cells := []singlemesh.Cell{
 		{ID: 0, Neighbors: []int{2}},
 		{ID: 1, Neighbors: []int{2}},
 		{ID: 2, Neighbors: []int{0, 1}},
 	}
-	state := newGrowthState(cells, []float64{0, 0, 0}, allEligible(3), -0.82)
+	state := newGrowthState(cells, []float64{0, 0, 0}, allEligible(3), []float64{-1, 0})
 	state.islands = []islandState{{seedID: 0, active: true}, {seedID: 1, active: true}, {seedID: 2, active: true}}
 	state.frontiers = make([]randomSet, 3)
 	state.claim(0, 0)
 	state.claim(1, 1)
-	state.controllers[2] = 0
+	if got := state.visibleValue(2, 2); got != -1 {
+		t.Fatalf("cell touching two rivals is worth %g, want -1", got)
+	}
 
 	if losers := state.claim(2, 2); !reflect.DeepEqual(losers, []int{0, 1}) {
 		t.Fatalf("claim absorbed islands %v, want [0 1]", losers)
@@ -95,14 +106,96 @@ func TestClaimAbsorbsEveryAdjacentIslandRegardlessOfController(t *testing.T) {
 	}
 }
 
-func TestVisibleValueUsesHonestFieldForController(t *testing.T) {
-	state := newGrowthState(lineCells(2), []float64{0.75, 0.50}, allEligible(2), -0.82)
-	state.controllers[1] = 0
-	if got := state.visibleValue(1, 0); got != 0.50 {
-		t.Errorf("controller sees %g, want honest field 0.5", got)
+func TestVisibleValueKeepsHarsherOfFieldAndRivalRamp(t *testing.T) {
+	// Island 0 owns cell 0; island 1 owns cell 5. Cells 1..4 lie between.
+	cells := lineCells(6)
+	state := newGrowthState(cells, []float64{0, 0.75, 0.30, -0.8, 0, 0}, allEligible(6), []float64{-1, -0.5, 0})
+	state.islands = []islandState{{seedID: 0, active: true}, {seedID: 5, active: true}}
+	state.frontiers = make([]randomSet, 2)
+	state.claim(0, 0)
+	state.claim(5, 1)
+
+	tests := []struct {
+		cellID, islandID int
+		want             float64
+	}{
+		{1, 0, 0.75}, // own land adjacent, rival land four hops away: static value
+		{1, 1, -1},   // adjacent to rival land: an attractant cannot cancel the penalty
+		{2, 0, 0.30},
+		{2, 1, -0.5}, // two hops from rival land
+		{3, 0, -0.8}, // two hops from island 1, but the edge field is harsher than -0.5
+		{3, 1, -0.8}, // three hops from island 0: beyond the ramp
+		{4, 0, -1},
+		{4, 1, 0},
 	}
-	if got := state.visibleValue(1, 1); got != -0.82 {
-		t.Errorf("rival sees %g, want control penalty -0.82", got)
+	for _, test := range tests {
+		if got := state.visibleValue(test.cellID, test.islandID); math.Abs(got-test.want) > 1e-12 {
+			t.Errorf("island %d sees cell %d as %g, want %g", test.islandID, test.cellID, got, test.want)
+		}
+	}
+}
+
+func TestRivalFieldTracksNearestTwoIslands(t *testing.T) {
+	// Three islands on a line: 0 owns cell 0, 1 owns cell 3, 2 owns cell 6.
+	cells := lineCells(7)
+	field := newRivalField(cells, []float64{-1, -0.5, -0.25, 0})
+	field.claim(0, 0)
+	field.claim(3, 1)
+	field.claim(6, 2)
+	// Cell 2 is one hop from island 1 and two hops from island 0.
+	if got, _ := field.penalty(2, 1); got != -0.5 {
+		t.Errorf("island 1 sees cell 2 at %g, want -0.5 (two hops from island 0)", got)
+	}
+	if got, _ := field.penalty(2, 0); got != -1 {
+		t.Errorf("island 0 sees cell 2 at %g, want -1 (adjacent to island 1)", got)
+	}
+	if got, _ := field.penalty(2, 2); got != -1 {
+		t.Errorf("island 2 sees cell 2 at %g, want -1 (adjacent to island 1)", got)
+	}
+	// Merging 0 into 1 must drop the penalty island 1 saw from island 0.
+	owners := []int{1, Water, Water, 1, Water, Water, 2}
+	field.rebuild(owners)
+	if got, ok := field.penalty(2, 1); ok {
+		t.Errorf("after the merge island 1 still sees a penalty %g on cell 2", got)
+	}
+	if got, _ := field.penalty(4, 1); got != -0.5 {
+		t.Errorf("after the merge island 1 sees cell 4 at %g, want -0.5 (two hops from island 2)", got)
+	}
+}
+
+func TestRivalRampReducesMerging(t *testing.T) {
+	config := DefaultConfig()
+	config.ProvinceCount = 3_000
+	config.IslandCount = 12
+	config.OceanPercentage = 0.60
+	config.AspectRatio = "cinematic"
+	ramps := [][]float64{
+		{0},
+		{-1, 0},
+		DefaultConfig().RivalRamp,
+	}
+	var previous, first int
+	for i, ramp := range ramps {
+		merges := 0
+		for seed := uint64(1); seed <= 3; seed++ {
+			config.WorldSeed = seed
+			config.RivalRamp = ramp
+			result, err := Generate(config)
+			if err != nil {
+				t.Fatalf("Generate(seed %d, ramp %v) error = %v", seed, ramp, err)
+			}
+			merges += result.MergeCount
+		}
+		t.Logf("ramp %v: %d merges over 3 seeds", ramp, merges)
+		if i == 0 {
+			first = merges
+		} else if merges > previous {
+			t.Errorf("ramp %v merged %d times, more than the weaker ramp %v (%d)", ramp, merges, ramps[i-1], previous)
+		}
+		previous = merges
+	}
+	if first == 0 || previous*2 > first {
+		t.Errorf("default rival ramp merged %d times over 3 seeds, want well under the %d without a ramp", previous, first)
 	}
 }
 
@@ -239,7 +332,10 @@ func TestGenerateRejectsInvalidConfig(t *testing.T) {
 		withConfig(valid, func(c *Config) { c.AttractantRamp = []float64{0.5, 0.7, 0} }),
 		withConfig(valid, func(c *Config) { c.AttractantJitter = 1.01 }),
 		withConfig(valid, func(c *Config) { c.SoftmaxTemperature = 0 }),
-		withConfig(valid, func(c *Config) { c.ControlPenalty = -1.01 }),
+		withConfig(valid, func(c *Config) { c.RivalRamp = nil }),
+		withConfig(valid, func(c *Config) { c.RivalRamp = []float64{-1.01, 0} }),
+		withConfig(valid, func(c *Config) { c.RivalRamp = []float64{-1, -0.5} }),
+		withConfig(valid, func(c *Config) { c.RivalRamp = []float64{-0.4, -0.6, 0} }),
 		withConfig(valid, func(c *Config) { c.MaxRounds = 0 }),
 		withConfig(valid, func(c *Config) { c.Relaxations = -1 }),
 	}
@@ -325,12 +421,9 @@ func assertValidResult(t *testing.T, result Result, config Config) {
 		}
 		if !cell.LandEligible {
 			barrierCount++
-			if cell.IslandID != Water || cell.ControllerID != Water {
-				t.Errorf("barrier cell %d has owner %d or controller %d", cellID, cell.IslandID, cell.ControllerID)
+			if cell.IslandID != Water {
+				t.Errorf("barrier cell %d has owner %d", cellID, cell.IslandID)
 			}
-		}
-		if cell.ControllerID >= len(result.Islands) {
-			t.Errorf("cell %d has invalid controller %d", cellID, cell.ControllerID)
 		}
 	}
 	if barrierCount == 0 {

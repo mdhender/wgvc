@@ -1,5 +1,5 @@
 // Package x24 implements the desirability-field single-mesh growth algorithm
-// described by issues #24 through #26.
+// described by issues #24 through #26 and the rival ramp from issue #42.
 package x24
 
 import (
@@ -29,7 +29,7 @@ type Config struct {
 	AttractantRamp     []float64
 	AttractantJitter   float64
 	SoftmaxTemperature float64
-	ControlPenalty     float64
+	RivalRamp          []float64
 	MaxRounds          int
 	Relaxations        int
 }
@@ -47,7 +47,7 @@ func DefaultConfig() Config {
 		AttractantRamp:     []float64{1, 0.78, 0.58, 0.42, 0.29, 0.18, 0.10, 0.04, 0.01, 0},
 		AttractantJitter:   0.65,
 		SoftmaxTemperature: 0.20,
-		ControlPenalty:     -0.82,
+		RivalRamp:          []float64{-1, -1, -0.5, 0},
 		MaxRounds:          10,
 		Relaxations:        2,
 	}
@@ -109,14 +109,34 @@ func (c Config) validate() error {
 	if !(c.SoftmaxTemperature > 0) || math.IsInf(c.SoftmaxTemperature, 0) {
 		return fmt.Errorf("softmax temperature must be finite and positive: %g", c.SoftmaxTemperature)
 	}
-	if math.IsNaN(c.ControlPenalty) || c.ControlPenalty < -1 || c.ControlPenalty > 1 {
-		return fmt.Errorf("control penalty must be in [-1, 1]: %g", c.ControlPenalty)
+	if err := validateRivalRamp(c.RivalRamp); err != nil {
+		return err
 	}
 	if c.MaxRounds < 1 {
 		return fmt.Errorf("maximum rounds must be at least 1: %d", c.MaxRounds)
 	}
 	if c.Relaxations < 0 {
 		return fmt.Errorf("relaxations must not be negative: %d", c.Relaxations)
+	}
+	return nil
+}
+
+// validateRivalRamp accepts a nondecreasing ramp of penalties in [-1, 0] that
+// ends at 0, indexed by hop distance to the nearest rival land minus one.
+func validateRivalRamp(ramp []float64) error {
+	if len(ramp) == 0 {
+		return fmt.Errorf("rival ramp must not be empty")
+	}
+	for i, value := range ramp {
+		if math.IsNaN(value) || math.IsInf(value, 0) || value < -1 || value > 0 {
+			return fmt.Errorf("rival ramp value %d must be finite and in [-1, 0]: %g", i, value)
+		}
+		if i > 0 && value < ramp[i-1] {
+			return fmt.Errorf("rival ramp must be nondecreasing: value %d is %g after %g", i, value, ramp[i-1])
+		}
+	}
+	if ramp[len(ramp)-1] != 0 {
+		return fmt.Errorf("rival ramp must end at 0: %g", ramp[len(ramp)-1])
 	}
 	return nil
 }
@@ -129,7 +149,6 @@ type Cell struct {
 	LandEligible bool
 	Desirability float64
 	IslandID     int
-	ControllerID int
 }
 
 type Island struct {

@@ -122,8 +122,10 @@ The generator creates and Lloyd-relaxes one point set for the entire world,
 then plants one seed per island and grows all islands concurrently across that
 mesh using a static desirability field. A permanent ocean barrier keeps land
 off the map boundary, while optional regional attractants can bias growth
-toward selected parts of the interior. Directly connected islands merge, and
-interior lakes remain valid. The coastline can form bays and promontories while
+toward selected parts of the interior. A rival ramp makes cells near another
+island's land undesirable, so islands keep a channel of one to three water
+provinces between them and rarely merge; directly connected islands still
+merge, and interior lakes remain valid. The coastline can form bays and promontories while
 every province remains one convex polygon.
 
 The deterministic [single-mesh island gallery](docs/blob-islands.svg) shows tiny,
@@ -145,32 +147,35 @@ go run ./cmd/generate -seed 0x0123456789abcdef \
 
 ### TNYC maps
 
-TNYC uses about 10,000 land provinces on a cinematic map. Island separation is
-governed almost entirely by the ocean fraction: at 45% water the 25 initial
-islands grow into one continent, while 78% water with 20 initial islands keeps
-nine separate landmasses.
+TNYC uses about 10,000 land provinces on a cinematic map. The rival ramp keeps
+islands apart, so the initial island count is normally the final landmass
+count: at 78% water, 9 initial islands stay 9 separate landmasses of similar
+size, and a single initial island at 45% water grows into one continent.
 
 ```sh
-# One continent: 25→1 islands, 18,182 provinces, 3384×1444
+# One continent: 1→1 islands, 18,182 provinces, 3384×1444
 go run ./cmd/generate -seed 0x0123456789abcdef \
-  -islands 25 -provinces 10000 -ocean 0.45 \
+  -islands 1 -provinces 10000 -ocean 0.45 \
   -aspect cinematic -attractors 5 -format png -output tnyc-continent
 
-# Nine landmasses: 20→9 islands, 45,455 provinces, 5322×2255
+# Nine landmasses: 9→9 islands, 45,455 provinces, 5322×2255
 go run ./cmd/generate -seed 0x0123456789abcdef \
-  -islands 20 -provinces 10000 -ocean 0.78 \
+  -islands 9 -provinces 10000 -ocean 0.78 \
   -aspect cinematic -attractors 5 -format png -output tnyc
 ```
 
 | Map | Landmasses (provinces each) | Wall time | Max resident memory |
 |---|---|---:|---:|
-| `tnyc-continent` | 1 (10,000) | 1.3 s | 83 MiB |
-| `tnyc` | 9 (1874, 1782, 1574, 974, 776, 765, 761, 754, 740) | 3.4 s | 204 MiB |
+| `tnyc-continent` | 1 (10,000) | 1.9 s | 98 MiB |
+| `tnyc` | 9 (1172, 1134, 1131, 1122, 1112, 1098, 1088, 1086, 1057) | 4.7 s | 239 MiB |
 
 Timings are for a built binary writing PNG only, measured with
-`/usr/bin/time -l` on an Apple M4 at v0.7.5-alpha. The final landmass count is
-seed-specific and sensitive to nearby settings (78% water with 25 or 30 initial
-islands gives 11 or 7), so sweep `-ocean` and `-islands` when changing the seed.
+`/usr/bin/time -l` on an Apple M4 at v0.7.19-alpha. Crowded maps can still
+merge a few islands at the default temperature: 12 initial islands at 65%
+water ended with 10 or 11 landmasses across five seeds. Lowering
+`-temperature` to 0.05 makes the ramp decisive (12 of 12 on every seed), a
+wider ramp such as `-rival-ramp=-1,-1,-1,-0.5,0` widens the channels, and
+`-rival-ramp 0` restores free merging so that only `-ocean` separates islands.
 
 Use `-format png` for `world.png`, `-format json` for `world.json`, or
 `-format both` to write `world.svg` and `world.png`. Comma-separated values such
@@ -231,7 +236,7 @@ go run ./cmd/generate -attractors 5 -output five-attractors
 
 The command exposes all growth controls, including `-ocean`, `-edge-barrier`,
 `-edge-ramp`, `-attractant-ramp`, `-attractant-jitter`, `-temperature`,
-`-control-penalty`, `-rounds`, and `-relaxations`. Climate calibration is
+`-rival-ramp`, `-rounds`, and `-relaxations`. Climate calibration is
 controlled by `-polar-ice` and `-peak-chill`, both expressed as percentages. Run
 `go run ./cmd/generate -h` for their defaults and descriptions. `-version`
 prints the generator version and exits; a built binary appends the commit it
@@ -380,8 +385,8 @@ is set by the discharge on its last edge: `stream` from 4, `river` from 16, and
 `major-river` from 64; rivers and major rivers are navigable. The thresholds
 are absolute because a province is a fixed real size, so a default
 1,500-province world has a few dozen rivers and no major river, while a
-10,000-province TNYC map has about a dozen major rivers reaching the ocean and
-a few hundred rivers in all. Rivers are ordered by descending discharge. The
+10,000-province TNYC map has a few dozen major rivers and a few hundred rivers
+in all. Rivers are ordered by descending discharge. The
 pass consumes no randomness, so adding rivers changed no existing field.
 
 ## Seas, straits, and necks
@@ -399,15 +404,15 @@ ocean component, and each ocean province joins its nearest seed with ties to
 the lower seed, which keeps every zone connected. A zone larger than 400 is
 partitioned again within itself, so zones range from a few provinces in an
 isolated pocket to 400. A default world has about 18 zones; the 10,000-province
-TNYC maps have 40 (one continent) or about 200 (nine landmasses).
+TNYC maps have about 50 (one continent) or about 200 (nine landmasses).
 
 Straits are narrow water crossings between two islands: from each island's
 coastal water a bounded BFS counts the water provinces to that island, and a
 water province is narrow between islands A and B when a path of at most 3
 water provinces joins them through it. Narrow provinces of one island pair that
 touch by water form one strait, with its shortest width and the land provinces
-on each shore. Today's growth stage keeps islands 5 or more water provinces
-apart on the TNYC maps, so straits rarely appear until island spacing changes.
+on each shore. The rival ramp leaves channels of one to three water provinces
+between neighboring islands, so the nine-landmass TNYC map has about 8 straits.
 
 Necks are narrow isthmuses, found as small vertex cuts of each island's land
 graph: articulation points, and paths of two or three adjacent land provinces
@@ -448,8 +453,10 @@ met by noise alone. If no pair reaches both targets, the lowest total error
 wins. The floor on `warmth` keeps a visible gradient even when a target is
 unreachable. Bands use population shares of 5%, 15%, 45%, 25%, and 10%, so a
 normal world always receives every band. Only a population too small for the
-shares, a world without ocean, or an empty peak slice falls back to the middle
-band for every province; continuous values remain available either way.
+shares or a world without ocean falls back to the middle band for every
+province; a world whose northernmost land decile holds no top-decile elevation
+has no peak slice and is calibrated against the polar target alone. Continuous
+values remain available either way.
 
 ## Tests
 

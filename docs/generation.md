@@ -119,7 +119,7 @@ requested count. Water can contain interior components such as lakes.
 ## JSON export
 
 `go run ./cmd/generate -format json -output world` writes `world.json`. The
-document has `schema_version: 9`, generator identity, generation configuration
+document has `schema_version: 10`, generator identity, generation configuration
 and effective result metadata, world-coordinate bounds, and the canonical `islands`,
 `basins`, `provinces`, `corners`, `edges`, `rivers`, `sea_zones`, `straits`,
 `necks`, and `features` collections. It uses the same IDs
@@ -172,10 +172,12 @@ neutral in the interior. The default configuration has no attractants;
 calibration can add up to nine jittered regional attractants where the
 configured edge and attractant ramps leave enough clearance.
 
-Each island receives one uniformly selected seed. Claims give the island
-one-hop control over neighboring cells, making those cells less desirable to
-rivals while preserving their original value for the controller. Islands are
-drawn from a deterministic deck and choose frontier cells through a softmax
+Each island receives one uniformly selected seed. Every island sees a rival
+ramp on the cells near land it does not own: a cell one hop from rival land
+takes the first ramp value, two hops the second, and so on, keeping the harsher
+of the ramp and the static field. The default ramp is `-1,-1,-0.5,0`, so a claim
+that would merge two islands is worth -1 against about 0 for open water. Islands
+are drawn from a deterministic deck and choose frontier cells through a softmax
 weighted by the visible desirability. When a claim directly connects rival
 land, all connected rivals merge immediately. Growth stops after exactly the
 requested number of land cells has been claimed. No water-connectivity filter

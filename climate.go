@@ -109,12 +109,18 @@ func calibrateHeat(provinces []Province, heatSource, latitudes []float64, config
 	}
 
 	counts, classifiable := climatePopulationCounts(len(provinces))
-	if !classifiable || oceanCount == 0 || len(peakSlice) == 0 {
+	if !classifiable || oceanCount == 0 {
 		return middleHeatCalibration(provinces, heatSource, latitudes, (minimumWarmthScale+maximumWarmthScale)/2, maximumCoolingStrength/2)
 	}
 
+	// A world whose northernmost land decile holds no top-decile elevation
+	// has no peak slice to calibrate against. Its heat bands are still well
+	// defined, so calibration then serves the polar target alone.
 	polarTolerance := max(climateTargetTolerance, 0.5/float64(oceanCount))
-	peakTolerance := max(climateTargetTolerance, 0.5/float64(len(peakSlice)))
+	peakTolerance := math.Inf(1)
+	if len(peakSlice) > 0 {
+		peakTolerance = max(climateTargetTolerance, 0.5/float64(len(peakSlice)))
+	}
 	warmthLow, warmthHigh := minimumWarmthScale, maximumWarmthScale
 	coolingLow, coolingHigh := 0.0, maximumCoolingStrength
 	var best heatCalibration
@@ -162,15 +168,19 @@ func evaluateHeatCandidate(provinces []Province, heatSource, latitudes []float64
 	values := adjustedHeatValues(provinces, heatSource, latitudes, warmth, cooling)
 	bands := classifyClimatePopulationWithCounts(provinces, values, counts)
 	polarFraction := heatBandFraction(provinces, bands, nil, int(HeatBandPolar))
-	peakFraction := heatBandFraction(provinces, bands, peakSlice, int(HeatBandCold))
+	peakError := 0.0
+	if len(peakSlice) > 0 {
+		peakFraction := heatBandFraction(provinces, bands, peakSlice, int(HeatBandCold))
+		peakError = math.Abs(peakFraction - config.PeakChill)
+	}
 	return heatCalibration{
 		values:          values,
 		bands:           bands,
 		warmthScale:     warmth,
 		coolingStrength: cooling,
-		error:           math.Abs(polarFraction-config.PolarIce) + math.Abs(peakFraction-config.PeakChill),
+		error:           math.Abs(polarFraction-config.PolarIce) + peakError,
 		polarReached:    math.Abs(polarFraction-config.PolarIce) <= polarTolerance,
-		peakReached:     math.Abs(peakFraction-config.PeakChill) <= peakTolerance,
+		peakReached:     peakError <= peakTolerance,
 	}
 }
 

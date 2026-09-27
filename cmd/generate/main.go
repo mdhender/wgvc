@@ -67,7 +67,7 @@ func (f rampFlag) Set(input string) error {
 	for i, part := range parts {
 		value, err := strconv.ParseFloat(strings.TrimSpace(part), 64)
 		if err != nil {
-			return fmt.Errorf("parse edge ramp value %q: %w", part, err)
+			return fmt.Errorf("parse ramp value %q: %w", part, err)
 		}
 		values[i] = value
 	}
@@ -108,7 +108,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Var(rampFlag{values: &options.config.AttractantRamp}, "attractant-ramp", "comma-separated attractant values by hop from its source")
 	flags.Float64Var(&options.config.AttractantJitter, "attractant-jitter", options.config.AttractantJitter, "maximum placement jitter as a fraction of half a region")
 	flags.Float64Var(&options.config.SoftmaxTemperature, "temperature", options.config.SoftmaxTemperature, "softmax temperature for frontier selection")
-	flags.Float64Var(&options.config.ControlPenalty, "control-penalty", options.config.ControlPenalty, "value rivals see for a controlled cell")
+	flags.Var(rampFlag{values: &options.config.RivalRamp}, "rival-ramp", "comma-separated penalties by hop distance to the nearest rival land")
 	flags.IntVar(&options.config.MaxRounds, "rounds", options.config.MaxRounds, "maximum generation rounds")
 	flags.IntVar(&options.config.Relaxations, "relaxations", options.config.Relaxations, "Lloyd relaxation passes per round")
 	flags.Float64Var(&options.polarIcePercent, "polar-ice", options.polarIcePercent, "target percentage of ocean provinces in the polar heat band")

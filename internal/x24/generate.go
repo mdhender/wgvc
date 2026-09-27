@@ -33,7 +33,7 @@ func Generate(config Config) (Result, error) {
 		edgeValues, landEligible, edgeDistances := edgeField(mesh, bounds, config.EdgeBarrierWidth, config.EdgeRamp)
 		attractants, skips := makeAttractants(mesh, bounds, edgeDistances, config.EdgeRamp, config.AttractantRamp, config.AttractantCount, config.AttractantJitter, random)
 		desirability := desirabilityField(mesh, edgeValues, landEligible, attractants, config.AttractantRamp)
-		state := newGrowthState(mesh, desirability, landEligible, config.ControlPenalty)
+		state := newGrowthState(mesh, desirability, landEligible, config.RivalRamp)
 		if state.seedAndGrow(config.IslandCount, config.ProvinceCount, config.SoftmaxTemperature, random) {
 			result := state.result(attractants, skips, config.IslandCount)
 			result.RoundsAttempted = round + 1
@@ -226,31 +226,135 @@ type islandState struct {
 }
 
 type growthState struct {
-	cells          []singlemesh.Cell
-	desirability   []float64
-	landEligible   []bool
-	controlPenalty float64
-	owners         []int
-	controllers    []int
-	islands        []islandState
-	frontiers      []randomSet
-	mergeCount     int
+	cells        []singlemesh.Cell
+	desirability []float64
+	landEligible []bool
+	owners       []int
+	rivals       rivalField
+	islands      []islandState
+	frontiers    []randomSet
+	mergeCount   int
 }
 
-func newGrowthState(cells []singlemesh.Cell, desirability []float64, landEligible []bool, controlPenalty float64) *growthState {
+func newGrowthState(cells []singlemesh.Cell, desirability []float64, landEligible []bool, rivalRamp []float64) *growthState {
 	owners := make([]int, len(cells))
-	controllers := make([]int, len(cells))
 	for i := range cells {
 		owners[i] = Water
-		controllers[i] = Water
 	}
 	return &growthState{
-		cells:          cells,
-		desirability:   desirability,
-		landEligible:   landEligible,
-		controlPenalty: controlPenalty,
-		owners:         owners,
-		controllers:    controllers,
+		cells:        cells,
+		desirability: desirability,
+		landEligible: landEligible,
+		owners:       owners,
+		rivals:       newRivalField(cells, rivalRamp),
+	}
+}
+
+// noRival marks a cell with no island land within the rival ramp's reach.
+const noRival = math.MaxInt
+
+// rivalField tracks, for every cell, the hop distance to the nearest land of
+// each island, compressed to the nearest island and the nearest land of any
+// other island. That is enough to answer "how far is this cell from land that
+// is not mine?" for any island in constant time. Distances beyond the ramp's
+// reach are not tracked because they carry no penalty.
+type rivalField struct {
+	cells      []singlemesh.Cell
+	ramp       []float64
+	reach      int
+	nearest    []int // island whose land is nearest, or Water
+	nearestHop []int // hops to that land, or noRival
+	otherHop   []int // hops to the nearest land of any island other than nearest, or noRival
+	visited    []int // BFS stamp per cell
+	hops       []int // BFS depth per cell, valid when visited matches stamp
+	stamp      int
+	queue      []int
+}
+
+func newRivalField(cells []singlemesh.Cell, ramp []float64) rivalField {
+	field := rivalField{
+		cells:      cells,
+		ramp:       ramp,
+		reach:      lastNonzeroIndex(ramp) + 1,
+		nearest:    make([]int, len(cells)),
+		nearestHop: make([]int, len(cells)),
+		otherHop:   make([]int, len(cells)),
+		visited:    make([]int, len(cells)),
+		hops:       make([]int, len(cells)),
+	}
+	field.reset()
+	return field
+}
+
+func (f *rivalField) reset() {
+	for i := range f.cells {
+		f.nearest[i] = Water
+		f.nearestHop[i] = noRival
+		f.otherHop[i] = noRival
+	}
+}
+
+// penalty returns the ramp value islandID sees on cellID, by hop distance to
+// the nearest land it does not own, and false when that land is beyond the
+// ramp's reach.
+func (f *rivalField) penalty(cellID, islandID int) (float64, bool) {
+	hop := f.nearestHop[cellID]
+	if f.nearest[cellID] == islandID {
+		hop = f.otherHop[cellID]
+	}
+	if hop < 1 || hop > f.reach {
+		return 0, false
+	}
+	return f.ramp[hop-1], true
+}
+
+// claim records that islandID now owns cellID and propagates the new land's
+// distance to every cell within the ramp's reach.
+func (f *rivalField) claim(cellID, islandID int) {
+	f.stamp++
+	f.queue = append(f.queue[:0], cellID)
+	f.visited[cellID] = f.stamp
+	f.hops[cellID] = 0
+	for head := 0; head < len(f.queue); head++ {
+		current := f.queue[head]
+		hop := f.hops[current]
+		f.record(current, islandID, hop)
+		if hop >= f.reach {
+			continue
+		}
+		for _, neighbor := range f.cells[current].Neighbors {
+			if f.visited[neighbor] == f.stamp {
+				continue
+			}
+			f.visited[neighbor] = f.stamp
+			f.hops[neighbor] = hop + 1
+			f.queue = append(f.queue, neighbor)
+		}
+	}
+}
+
+func (f *rivalField) record(cellID, islandID, hop int) {
+	switch {
+	case f.nearest[cellID] == Water:
+		f.nearest[cellID], f.nearestHop[cellID] = islandID, hop
+	case f.nearest[cellID] == islandID:
+		f.nearestHop[cellID] = min(f.nearestHop[cellID], hop)
+	case hop < f.nearestHop[cellID]:
+		f.otherHop[cellID] = f.nearestHop[cellID]
+		f.nearest[cellID], f.nearestHop[cellID] = islandID, hop
+	default:
+		f.otherHop[cellID] = min(f.otherHop[cellID], hop)
+	}
+}
+
+// rebuild recomputes every distance from the current owners. Merges change
+// island identity, which the two-entry compression cannot relabel in place.
+func (f *rivalField) rebuild(owners []int) {
+	f.reset()
+	for cellID, owner := range owners {
+		if owner != Water {
+			f.claim(cellID, owner)
+		}
 	}
 }
 
@@ -322,16 +426,21 @@ func (s *growthState) weightedFrontier(islandID int, temperature float64, random
 	return frontier[len(frontier)-1], true
 }
 
+// visibleValue is the static desirability, or the rival ramp value for the
+// cell's hop distance to the nearest land islandID does not own, whichever is
+// harsher. Cells beyond the ramp's reach keep the static field, so an
+// attractant cannot cancel the penalty on a cell whose claim would merge.
 func (s *growthState) visibleValue(cellID, islandID int) float64 {
-	controller := s.controllers[cellID]
-	if controller != Water && controller != islandID {
-		return s.controlPenalty
+	value := s.desirability[cellID]
+	if penalty, ok := s.rivals.penalty(cellID, islandID); ok {
+		value = min(value, penalty)
 	}
-	return s.desirability[cellID]
+	return value
 }
 
 // claim returns every island absorbed because its claimed land directly
-// touches cellID. Control affects desirability, but never decides connectivity.
+// touches cellID. The rival ramp affects desirability, but never decides
+// connectivity.
 func (s *growthState) claim(cellID, islandID int) []int {
 	losers := make([]int, 0)
 	seen := make(map[int]bool)
@@ -344,7 +453,7 @@ func (s *growthState) claim(cellID, islandID int) []int {
 	}
 
 	s.owners[cellID] = islandID
-	s.controllers[cellID] = Water
+	s.rivals.claim(cellID, islandID)
 	s.islands[islandID].cellIDs = append(s.islands[islandID].cellIDs, cellID)
 	for i := range s.frontiers {
 		s.frontiers[i].remove(cellID)
@@ -354,12 +463,12 @@ func (s *growthState) claim(cellID, islandID int) []int {
 			continue
 		}
 		s.frontiers[islandID].add(neighbor)
-		if s.controllers[neighbor] == Water {
-			s.controllers[neighbor] = islandID
-		}
 	}
 	for _, loser := range losers {
 		s.absorb(islandID, loser)
+	}
+	if len(losers) > 0 {
+		s.rivals.rebuild(s.owners)
 	}
 	return losers
 }
@@ -368,9 +477,6 @@ func (s *growthState) absorb(winner, loser int) {
 	for cellID := range s.cells {
 		if s.owners[cellID] == loser {
 			s.owners[cellID] = winner
-		}
-		if s.controllers[cellID] == loser {
-			s.controllers[cellID] = winner
 		}
 	}
 	s.islands[winner].cellIDs = append(s.islands[winner].cellIDs, s.islands[loser].cellIDs...)
@@ -400,12 +506,9 @@ func (s *growthState) result(attractants []Attractant, skips []AttractantSkip, i
 	}
 	cells := make([]Cell, len(s.cells))
 	for cellID, cell := range s.cells {
-		owner, controller := s.owners[cellID], s.controllers[cellID]
+		owner := s.owners[cellID]
 		if owner != Water {
 			owner = canonicalIDs[owner]
-		}
-		if controller != Water {
-			controller = canonicalIDs[controller]
 		}
 		cells[cellID] = Cell{
 			ID:           cell.ID,
@@ -415,7 +518,6 @@ func (s *growthState) result(attractants []Attractant, skips []AttractantSkip, i
 			LandEligible: s.landEligible[cellID],
 			Desirability: s.desirability[cellID],
 			IslandID:     owner,
-			ControllerID: controller,
 		}
 	}
 	return Result{

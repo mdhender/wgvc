@@ -116,7 +116,7 @@ func TestAssignTerrainGivesBasinMembersBasinTerrain(t *testing.T) {
 }
 
 func TestGenerateAssignsBasinsWithoutChangingOtherFields(t *testing.T) {
-	config := Config{WorldSeed: 42, ProvinceCount: 1000, IslandCount: 8}
+	config := Config{WorldSeed: 12, ProvinceCount: 1000, IslandCount: 8}
 	world, err := Generate(config)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)

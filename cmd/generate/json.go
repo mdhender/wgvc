@@ -9,7 +9,7 @@ import (
 	"github.com/mdhender/wgvc/internal/x24"
 )
 
-const jsonSchemaVersion = 9
+const jsonSchemaVersion = 10
 
 type jsonWorld struct {
 	SchemaVersion int            `json:"schema_version"`
@@ -83,7 +83,7 @@ type jsonGenerationConfig struct {
 	AttractantRamp     []float64 `json:"attractant_ramp"`
 	AttractantJitter   float64   `json:"attractant_jitter"`
 	SoftmaxTemperature float64   `json:"softmax_temperature"`
-	ControlPenalty     float64   `json:"control_penalty"`
+	RivalRamp          []float64 `json:"rival_ramp"`
 	MaxRounds          int       `json:"max_rounds"`
 	Relaxations        int       `json:"relaxations"`
 	PolarIceFraction   float64   `json:"polar_ice_fraction"`
@@ -219,7 +219,7 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 				AttractantRamp:     config.AttractantRamp,
 				AttractantJitter:   config.AttractantJitter,
 				SoftmaxTemperature: config.SoftmaxTemperature,
-				ControlPenalty:     config.ControlPenalty,
+				RivalRamp:          config.RivalRamp,
 				MaxRounds:          config.MaxRounds,
 				Relaxations:        config.Relaxations,
 				PolarIceFraction:   climateConfig.PolarIce,
