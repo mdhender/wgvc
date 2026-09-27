@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/mdhender/wgvc"
+	"github.com/mdhender/wgvc/internal/x24"
 )
 
 func TestRunOutputFormatsWithGrowthOptions(t *testing.T) {
@@ -320,6 +321,33 @@ func TestRunAcceptsConstellationAttractors(t *testing.T) {
 	}
 	if document.Generation.Config.AspectRatio != "2.39:1" && document.Generation.Config.AspectRatio != "cinematic" {
 		t.Errorf("aspect_ratio = %q, want the explicit cinematic ratio to win", document.Generation.Config.AspectRatio)
+	}
+	var oceanDocument struct {
+		Generation struct {
+			Config struct {
+				OceanFraction float64 `json:"ocean_fraction"`
+			} `json:"config"`
+		} `json:"generation"`
+	}
+	for _, test := range []struct {
+		args []string
+		want float64
+	}{
+		{[]string{"-attractors", "draco"}, 0.86},
+		{[]string{"-attractors", "draco", "-ocean", "0.7"}, 0.7},
+		{[]string{"-attractors", "ursa-minor"}, x24.DefaultConfig().OceanPercentage},
+	} {
+		args := append([]string{"-provinces", "200", "-islands", "3", "-edge-ramp=-1,0", "-attractant-ramp=1,0", "-format", "json", "-output", base}, test.args...)
+		if err := run(args, &stdout, &stderr); err != nil {
+			t.Fatalf("run(%v) error = %v; stderr = %s", test.args, err, stderr.String())
+		}
+		data, _ = os.ReadFile(base + ".json")
+		if err := json.Unmarshal(data, &oceanDocument); err != nil {
+			t.Fatal(err)
+		}
+		if got := oceanDocument.Generation.Config.OceanFraction; got != test.want {
+			t.Errorf("run(%v): ocean_fraction = %g, want %g", test.args, got, test.want)
+		}
 	}
 	if err := run([]string{"-attractors", "orion", "-output", base}, &stdout, &stderr); err == nil {
 		t.Error("run() accepted an unknown constellation")

@@ -156,15 +156,21 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if constellation, ok := x24.ConstellationByName(options.config.Constellation); ok && constellation.AspectRatio != "" {
-		aspectSet := false
+	if constellation, ok := x24.ConstellationByName(options.config.Constellation); ok {
+		aspectSet, oceanSet := false, false
 		flags.Visit(func(f *flag.Flag) {
-			if f.Name == "aspect" {
+			switch f.Name {
+			case "aspect":
 				aspectSet = true
+			case "ocean":
+				oceanSet = true
 			}
 		})
-		if !aspectSet {
+		if !aspectSet && constellation.AspectRatio != "" {
 			options.config.AspectRatio = constellation.AspectRatio
+		}
+		if !oceanSet && constellation.Ocean > 0 {
+			options.config.OceanPercentage = constellation.Ocean
 		}
 	}
 	if options.showVersion {

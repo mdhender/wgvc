@@ -172,6 +172,11 @@ go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 21 -provinces 10000 -ocean 0.78 \
   -attractors subaru -format png -output subaru
 
+# Draco: 37→1 islands with an inland sea in the head, 71,429 provinces, 5750×3256
+go run ./cmd/generate -seed 0x0123456789abcdef \
+  -islands 37 -provinces 10000 \
+  -attractors draco -format png -output draco
+
 # Little Dipper: 7→7 islands, 45,455 provinces, 4873×2461
 go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 7 -provinces 10000 -ocean 0.78 \
@@ -251,12 +256,15 @@ Attractants are disabled by default. Use `-attractors` with 1 through 6 to
 select regions in the familiar die-face pattern, or 9 to select every region
 of the 3×3 grid. Zero disables them. A constellation name (`ursa-minor`, the
 seven stars of the Little Dipper; `cygnus`, eight stars of the Northern Cross;
-`virgo`, eleven stars spread along the ecliptic; or `subaru`, twenty-one sites
+`virgo`, eleven stars spread along the ecliptic; `draco`, a winding dragon of
+thirty-seven kin sites with an inland sea in its head; or `subaru`, twenty-one sites
 laid out like the Japanese archipelago) instead places one attractor per star, scaled to fill the map while keeping the
 figure's proportions, without jitter, and seeds the first islands on the star
 cells so each star grows its own island. A constellation also selects the map
 shape it was drawn for (`2:1` for `ursa-minor` and `virgo`, `3:2` for
-`cygnus`, `5:2` for `subaru`) unless `-aspect` is given. A constellation can
+`cygnus`, `5:2` for `subaru`, `16:9` for `draco`) unless `-aspect` is given,
+and may select an ocean fraction the same way (`draco` uses 86% so its single
+winding landmass stays thin) unless `-ocean` is given. A constellation can
 mark stars as kin: their islands ignore each other's rival ramp, merge when
 they touch, and the merged landmass keeps every star's share of growth, which
 is how `subaru` grows a twelve-star mainland and a four-star northern island
