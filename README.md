@@ -177,9 +177,9 @@ go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 37 -provinces 10000 \
   -attractors draco -format png -output draco
 
-# Aster: the dragon as 28→17 islands behind a kin head, 45,455 provinces, 4597×2607
+# Aster: the dragon as 27→16 islands behind a kin head, 45,455 provinces, 4597×2607
 go run ./cmd/generate -seed 0x0123456789abcdef \
-  -islands 28 -provinces 10000 \
+  -islands 27 -provinces 10000 \
   -attractors aster -format png -output aster
 
 # Little Dipper: 7→7 islands, 45,455 provinces, 4873×2461

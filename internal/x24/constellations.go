@@ -232,7 +232,7 @@ var constellations = map[string]Constellation{
 	// but only the twelve half-weight head sites are kin, ringing a repulsor
 	// that leaves a bay or an inland sea, while every body site grows its
 	// own island held apart from its neighbors by the rival ramp. Body sites
-	// are spaced every 0.25 of the frame so the beads nearly touch.
+	// are spaced every 0.30 of the frame so the beads stay distinct.
 	"aster": {
 		Name:        "aster",
 		AspectRatio: "16:9",
@@ -257,7 +257,6 @@ var constellations = map[string]Constellation{
 			{X: 0.02, Y: -0.31},  // chi Draconis
 			{X: -0.03, Y: -0.13}, // between chi Draconis and Aldhibah
 			{X: -0.08, Y: 0.05},  // Aldhibah
-			{X: -0.07, Y: 0.18},  // between Aldhibah and Athebyne
 			{X: -0.06, Y: 0.32},  // Athebyne
 			{X: -0.04, Y: 0.49},  // theta Draconis
 			{X: 0.10, Y: 0.58},   // Edasich
@@ -268,7 +267,7 @@ var constellations = map[string]Constellation{
 			{X: 1.00, Y: 0.16},   // Giausar
 			{X: -0.73, Y: 0.14},  // repulsor: bay or inland sea in the head
 		},
-		Weights: []float64{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.7, 0.7, 0.7, 0.7, -1},
+		Weights: []float64{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.7, 0.7, 0.7, 0.7, -1},
 		Kin:     [][]int{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}},
 	},
 }
