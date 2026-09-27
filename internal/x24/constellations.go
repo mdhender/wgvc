@@ -92,27 +92,27 @@ var constellations = map[string]Constellation{
 		Name:        "subaru",
 		AspectRatio: "5:2",
 		Sites: []Point{
-			{X: -0.64, Y: -0.20}, // mainland, west end
-			{X: -0.54, Y: -0.18},
-			{X: -0.44, Y: -0.15},
-			{X: -0.34, Y: -0.11},
-			{X: -0.24, Y: -0.08},
-			{X: -0.14, Y: -0.05},
-			{X: -0.04, Y: -0.01},
-			{X: 0.06, Y: 0.02},
-			{X: 0.16, Y: 0.06},
-			{X: 0.26, Y: 0.11},
-			{X: 0.36, Y: 0.17},
-			{X: 0.46, Y: 0.24}, // mainland, northeast end
-			{X: 0.70, Y: 0.30}, // northern island
-			{X: 0.84, Y: 0.20},
-			{X: 0.86, Y: 0.34},
-			{X: 1.00, Y: 0.28},
-			{X: -0.80, Y: -0.20}, // southwestern island
-			{X: -0.76, Y: -0.34},
-			{X: -0.42, Y: -0.34}, // island south of the mainland
-			{X: -0.93, Y: 0.02},  // small western islands
-			{X: -1.00, Y: -0.30},
+			{X: -0.59, Y: -0.25}, // mainland, west end
+			{X: -0.47, Y: -0.24},
+			{X: -0.36, Y: -0.23},
+			{X: -0.24, Y: -0.20},
+			{X: -0.13, Y: -0.17},
+			{X: -0.01, Y: -0.14},
+			{X: 0.10, Y: -0.11},
+			{X: 0.22, Y: -0.06}, // the bend
+			{X: 0.32, Y: 0.00},
+			{X: 0.41, Y: 0.08},
+			{X: 0.49, Y: 0.16},
+			{X: 0.56, Y: 0.24}, // mainland, northeast end
+			{X: 0.72, Y: 0.33}, // northern island
+			{X: 0.86, Y: 0.26},
+			{X: 0.84, Y: 0.38},
+			{X: 1.00, Y: 0.33},
+			{X: -0.77, Y: -0.25}, // southwestern island
+			{X: -0.72, Y: -0.38},
+			{X: -0.33, Y: -0.38}, // island south of the mainland
+			{X: -0.92, Y: -0.05}, // small western islands
+			{X: -1.00, Y: -0.34},
 		},
 		Kin: [][]int{
 			{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
