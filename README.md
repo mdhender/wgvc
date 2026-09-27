@@ -244,11 +244,13 @@ and, when available, the commit the binary was built from; see
 
 Attractants are disabled by default. Use `-attractors` with 1 through 6 to
 select regions in the familiar die-face pattern, or 9 to select every region
-of the 3×3 grid. Zero disables them. A constellation name such as `ursa-minor`
-instead places one attractor per star, scaled to fill the map while keeping the
+of the 3×3 grid. Zero disables them. A constellation name (`ursa-minor`, the
+seven stars of the Little Dipper, or `cygnus`, eight stars of the Northern
+Cross) instead places one attractor per star, scaled to fill the map while keeping the
 figure's proportions, without jitter, and seeds the first islands on the star
 cells so each star grows its own island. A constellation also selects the map
-shape it was drawn for (`2:1` for `ursa-minor`) unless `-aspect` is given. The
+shape it was drawn for (`2:1` for `ursa-minor`, `4:3` for `cygnus`) unless
+`-aspect` is given. The
 JSON export lists the provinces that hosted the sources in
 `generation.result.attractant_province_ids`. For example:
 

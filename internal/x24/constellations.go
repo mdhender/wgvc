@@ -36,6 +36,24 @@ var constellations = map[string]Constellation{
 			{X: 0.73, Y: -0.30},  // Kochab
 		},
 	},
+	// Cygnus, the Northern Cross: the body runs north to south from Deneb
+	// through Sadr and eta to Albireo, and the wings run from zeta through
+	// Gienah, Sadr, and delta to iota. Kappa is omitted because it sits too
+	// close to iota for two islands.
+	"cygnus": {
+		Name:        "cygnus",
+		AspectRatio: "4:3",
+		Sites: []Point{
+			{X: -0.03, Y: 0.76},  // Deneb
+			{X: -0.04, Y: 0.33},  // Sadr
+			{X: 0.01, Y: -0.16},  // eta Cygni
+			{X: -0.03, Y: -0.76}, // Albireo
+			{X: 0.56, Y: 0.28},   // delta Cygni
+			{X: 1.00, Y: 0.51},   // iota Cygni
+			{X: -0.56, Y: 0.19},  // Gienah
+			{X: -1.00, Y: 0.21},  // zeta Cygni
+		},
+	},
 }
 
 // ConstellationByName returns the named constellation.

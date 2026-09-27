@@ -596,3 +596,29 @@ func TestConstellationSeedsIslandsOnStarCells(t *testing.T) {
 		}
 	}
 }
+
+func TestEveryConstellationIsWellFormed(t *testing.T) {
+	for _, name := range ConstellationNames() {
+		constellation, ok := ConstellationByName(name)
+		if !ok || constellation.Name != name {
+			t.Errorf("constellation %q is not retrievable by its name", name)
+			continue
+		}
+		if len(constellation.Sites) < 3 {
+			t.Errorf("constellation %q has %d sites, want at least 3", name, len(constellation.Sites))
+		}
+		spanX, spanY := 0.0, 0.0
+		for i, site := range constellation.Sites {
+			if math.Abs(site.X) > 1 || math.Abs(site.Y) > 1 {
+				t.Errorf("constellation %q site %d is outside the unit frame: %+v", name, i, site)
+			}
+			spanX, spanY = max(spanX, math.Abs(site.X)), max(spanY, math.Abs(site.Y))
+		}
+		if math.Abs(max(spanX, spanY)-1) > 1e-9 {
+			t.Errorf("constellation %q spans %.2f×%.2f, want the longer extent to reach 1", name, spanX, spanY)
+		}
+		if _, _, err := aspectratio.Dimensions(constellation.AspectRatio); err != nil {
+			t.Errorf("constellation %q aspect ratio %q: %v", name, constellation.AspectRatio, err)
+		}
+	}
+}
