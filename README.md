@@ -1,11 +1,11 @@
 # wgvc
 
-![Nine-landmass TNYC map: 10,000 land provinces at 78% ocean](docs/tnyc.png)
+![TNYC map: 27 islands on 10,000 land provinces at 78% ocean](docs/tnyc.png)
 
 `wgvc` generates deterministic, province-first game worlds on one relaxed
 Voronoi mesh, with concurrently grown and merging islands, shared polygon
-topology, and spatially correlated terrain. The map above is the nine-landmass
-TNYC recipe from [TNYC maps](#tnyc-maps), downscaled from 5322×2255.
+topology, and spatially correlated terrain. The map above is the TNYC recipe
+from [TNYC maps](#tnyc-maps), downscaled from 5322×2255.
 
 The included `generate` command exposes the complete growth configuration
 and writes canonical JSON world data as well as terrain-colored SVG and PNG
@@ -150,37 +150,42 @@ go run ./cmd/generate -seed 0x0123456789abcdef \
 
 ### TNYC maps
 
-TNYC uses about 10,000 land provinces on a cinematic map. The rival ramp keeps
-islands apart, so the initial island count is normally the final landmass
-count: at 78% water, 9 initial islands stay 9 separate landmasses of similar
-size. A continent is best grown the other way, by disabling the ramp so that 25
-islands at 45% water merge into one landmass with inland seas and bays; a single
-initial island instead grows into one featureless block against the map edge.
+TNYC uses about 10,000 land provinces on a cinematic map. The goal map is 27
+initial islands at 78% water with all nine attractors, which fills every region
+of the map with an island of 330 to 410 provinces and leaves neighbors separated
+by straits of one to three water provinces. The rival ramp keeps the islands
+apart, so the initial island count is normally the final landmass count; this
+seed merges one pair in the crowded center for 26 landmasses. A continent is
+grown the other way, by disabling the ramp so that 25 islands at 45% water merge
+into one landmass with inland seas and bays; a single initial island instead
+grows into one featureless block against the map edge.
 
 ```sh
+# Goal map: 27→26 islands, 45,455 provinces, 5322×2255
+go run ./cmd/generate -seed 0x0123456789abcdef \
+  -islands 27 -provinces 10000 -ocean 0.78 \
+  -aspect cinematic -attractors 9 -format png -output tnyc
+
 # One continent: 25→1 islands, 18,182 provinces, 3384×1444
 go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 25 -provinces 10000 -ocean 0.45 -rival-ramp 0 \
   -aspect cinematic -attractors 5 -format png -output tnyc-continent
-
-# Nine landmasses: 9→9 islands, 45,455 provinces, 5322×2255
-go run ./cmd/generate -seed 0x0123456789abcdef \
-  -islands 9 -provinces 10000 -ocean 0.78 \
-  -aspect cinematic -attractors 5 -format png -output tnyc
 ```
 
 | Map | Landmasses (provinces each) | Wall time | Max resident memory |
 |---|---|---:|---:|
+| `tnyc` | 26 (692, then 25 between 326 and 408) | 4.6 s | 244 MiB |
 | `tnyc-continent` | 1 (10,000) | 2.4 s | 99 MiB |
-| `tnyc` | 9 (1172, 1134, 1131, 1122, 1112, 1098, 1088, 1086, 1057) | 4.7 s | 239 MiB |
 
 Timings are for a built binary writing PNG only, measured with
-`/usr/bin/time -l` on an Apple M4 at v0.7.19-alpha. Crowded maps can still
-merge a few islands at the default temperature: 12 initial islands at 65%
-water ended with 10 or 11 landmasses across five seeds. Lowering
-`-temperature` to 0.05 makes the ramp decisive (12 of 12 on every seed), a
-wider ramp such as `-rival-ramp=-1,-1,-1,-0.5,0` widens the channels, and
-`-rival-ramp 0` restores free merging so that only `-ocean` separates islands.
+`/usr/bin/time -l` on an Apple M4 at v0.7.21-alpha. The remaining merges happen
+where islands are crowded against each other or the map edge: 15 initial
+islands with nine attractors ended with 12 landmasses, two of them fused along
+the map edge, and 12 islands with five attractors at 65% water ended with 10 or
+11 across five seeds. Lowering `-temperature` to 0.05 makes the ramp decisive
+(12 of 12 on every seed), a wider ramp such as `-rival-ramp=-1,-1,-1,-0.5,0`
+widens the channels, and `-rival-ramp 0` restores free merging so that only
+`-ocean` separates islands.
 
 Use `-format png` for `world.png`, `-format json` for `world.json`, or
 `-format both` to write `world.svg` and `world.png`. Comma-separated values such
@@ -390,8 +395,8 @@ is set by the discharge on its last edge: `stream` from 4, `river` from 16, and
 `major-river` from 64; rivers and major rivers are navigable. The thresholds
 are absolute because a province is a fixed real size, so a default
 1,500-province world has a few dozen rivers and no major river, while a
-10,000-province TNYC map has a few dozen major rivers and a few hundred rivers
-in all. Rivers are ordered by descending discharge. The
+10,000-province TNYC map has a few hundred rivers in all, of which a handful are
+major rivers on the 27-island goal map and a few dozen on a nine-landmass map. Rivers are ordered by descending discharge. The
 pass consumes no randomness, so adding rivers changed no existing field.
 
 ## Seas, straits, and necks
@@ -409,7 +414,7 @@ ocean component, and each ocean province joins its nearest seed with ties to
 the lower seed, which keeps every zone connected. A zone larger than 400 is
 partitioned again within itself, so zones range from a few provinces in an
 isolated pocket to 400. A default world has about 18 zones; the 10,000-province
-TNYC maps have about 50 (one continent) or about 200 (nine landmasses).
+TNYC maps have about 50 (one continent) or about 210 (the 27-island goal map).
 
 Straits are narrow water crossings between two islands: from each island's
 coastal water a bounded BFS counts the water provinces to that island, and a
@@ -417,7 +422,8 @@ water province is narrow between islands A and B when a path of at most 3
 water provinces joins them through it. Narrow provinces of one island pair that
 touch by water form one strait, with its shortest width and the land provinces
 on each shore. The rival ramp leaves channels of one to three water provinces
-between neighboring islands, so the nine-landmass TNYC map has about 8 straits.
+between neighboring islands, so the 27-island TNYC goal map has about 21
+straits.
 
 Necks are narrow isthmuses, found as small vertex cuts of each island's land
 graph: articulation points, and paths of two or three adjacent land provinces
