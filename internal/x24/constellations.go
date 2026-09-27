@@ -152,7 +152,7 @@ var constellations = map[string]Constellation{
 			{X: -0.92, Y: 0.13},  // small western islands
 			{X: -1.00, Y: -0.16},
 			{X: -0.35, Y: -0.30}, // repulsor: inland sea
-			{X: 0.14, Y: -0.24},  // repulsor: bay on the south coast
+			{X: 0.14, Y: -0.19},  // repulsor: bay on the south coast
 			{X: 0.64, Y: 0.20},   // repulsor: strait to the northern island
 		},
 		Weights: []float64{

@@ -1,12 +1,12 @@
 # wgvc
 
-![Ursa Minor map: seven islands on 10,000 land provinces at 78% ocean](docs/tnyc.png)
+![Subaru map: an archipelago of 10,000 land provinces at 78% ocean](docs/tnyc.png)
 
 `wgvc` generates deterministic, province-first game worlds on one relaxed
 Voronoi mesh, with concurrently grown and merging islands, shared polygon
-topology, and spatially correlated terrain. The map above grew seven islands
-on the stars of the Little Dipper with `-attractors ursa-minor` (see
-[TNYC maps](#tnyc-maps)), downscaled from 4873×2461.
+topology, and spatially correlated terrain. The map above is the `subaru`
+archipelago, grown from 21 weighted sites and three repulsors with
+`-attractors subaru` (see [TNYC maps](#tnyc-maps)), downscaled from 5442×2206.
 
 The included `generate` command exposes the complete growth configuration
 and writes canonical JSON world data as well as terrain-colored SVG and PNG
@@ -167,7 +167,12 @@ go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 27 -provinces 10000 -ocean 0.78 \
   -aspect cinematic -attractors 9 -format png -output tnyc
 
-# Little Dipper (the README header): 7→7 islands, 45,455 provinces, 4873×2461
+# Subaru archipelago (the README header): 21→6 islands, 45,455 provinces, 5442×2206
+go run ./cmd/generate -seed 0x0123456789abcdef \
+  -islands 21 -provinces 10000 -ocean 0.78 \
+  -attractors subaru -format png -output subaru
+
+# Little Dipper: 7→7 islands, 45,455 provinces, 4873×2461
 go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 7 -provinces 10000 -ocean 0.78 \
   -attractors ursa-minor -format png -output ursa-minor
