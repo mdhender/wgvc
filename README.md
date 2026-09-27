@@ -1,8 +1,11 @@
 # wgvc
 
+![Nine-landmass TNYC map: 10,000 land provinces at 78% ocean](docs/tnyc.png)
+
 `wgvc` generates deterministic, province-first game worlds on one relaxed
 Voronoi mesh, with concurrently grown and merging islands, shared polygon
-topology, and spatially correlated terrain.
+topology, and spatially correlated terrain. The map above is the nine-landmass
+TNYC recipe from [TNYC maps](#tnyc-maps), downscaled from 5322×2255.
 
 The included `generate` command exposes the complete growth configuration
 and writes canonical JSON world data as well as terrain-colored SVG and PNG
@@ -150,12 +153,14 @@ go run ./cmd/generate -seed 0x0123456789abcdef \
 TNYC uses about 10,000 land provinces on a cinematic map. The rival ramp keeps
 islands apart, so the initial island count is normally the final landmass
 count: at 78% water, 9 initial islands stay 9 separate landmasses of similar
-size, and a single initial island at 45% water grows into one continent.
+size. A continent is best grown the other way, by disabling the ramp so that 25
+islands at 45% water merge into one landmass with inland seas and bays; a single
+initial island instead grows into one featureless block against the map edge.
 
 ```sh
-# One continent: 1→1 islands, 18,182 provinces, 3384×1444
+# One continent: 25→1 islands, 18,182 provinces, 3384×1444
 go run ./cmd/generate -seed 0x0123456789abcdef \
-  -islands 1 -provinces 10000 -ocean 0.45 \
+  -islands 25 -provinces 10000 -ocean 0.45 -rival-ramp 0 \
   -aspect cinematic -attractors 5 -format png -output tnyc-continent
 
 # Nine landmasses: 9→9 islands, 45,455 provinces, 5322×2255
@@ -166,7 +171,7 @@ go run ./cmd/generate -seed 0x0123456789abcdef \
 
 | Map | Landmasses (provinces each) | Wall time | Max resident memory |
 |---|---|---:|---:|
-| `tnyc-continent` | 1 (10,000) | 1.9 s | 98 MiB |
+| `tnyc-continent` | 1 (10,000) | 2.4 s | 99 MiB |
 | `tnyc` | 9 (1172, 1134, 1131, 1122, 1112, 1098, 1088, 1086, 1057) | 4.7 s | 239 MiB |
 
 Timings are for a built binary writing PNG only, measured with
