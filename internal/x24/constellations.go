@@ -42,7 +42,7 @@ var constellations = map[string]Constellation{
 	// close to iota for two islands.
 	"cygnus": {
 		Name:        "cygnus",
-		AspectRatio: "4:3",
+		AspectRatio: "3:2",
 		Sites: []Point{
 			{X: -0.03, Y: 0.76},  // Deneb
 			{X: -0.04, Y: 0.33},  // Sadr
@@ -52,6 +52,28 @@ var constellations = map[string]Constellation{
 			{X: 1.00, Y: 0.51},   // iota Cygni
 			{X: -0.56, Y: 0.19},  // Gienah
 			{X: -1.00, Y: 0.21},  // zeta Cygni
+		},
+	},
+	// Virgo: a sprawling figure along the ecliptic. One arm runs from
+	// Zavijava in the east through Zaniah, Porrima, and Auva up to
+	// Vindemiatrix; the body drops from Porrima through theta to Spica and
+	// back up through Heze to tau; the tail runs from Heze through Syrma to
+	// mu in the west.
+	"virgo": {
+		Name:        "virgo",
+		AspectRatio: "2:1",
+		Sites: []Point{
+			{X: 1.00, Y: 0.09},   // Zavijava
+			{X: 0.66, Y: -0.03},  // Zaniah
+			{X: 0.41, Y: -0.06},  // Porrima
+			{X: 0.25, Y: 0.16},   // Auva
+			{X: 0.17, Y: 0.51},   // Vindemiatrix
+			{X: 0.08, Y: -0.25},  // theta Virginis
+			{X: -0.10, Y: -0.51}, // Spica
+			{X: -0.21, Y: -0.02}, // Heze
+			{X: -0.52, Y: 0.08},  // tau Virginis
+			{X: -0.69, Y: -0.27}, // Syrma
+			{X: -1.00, Y: -0.26}, // mu Virginis
 		},
 	},
 }
