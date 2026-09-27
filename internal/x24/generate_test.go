@@ -567,3 +567,32 @@ func TestGenerateRejectsUnknownConstellation(t *testing.T) {
 		t.Errorf("ConstellationNames() = %v, want ursa-minor", names)
 	}
 }
+
+func TestConstellationSeedsIslandsOnStarCells(t *testing.T) {
+	config := DefaultConfig()
+	config.AspectRatio = "cinematic"
+	config.Constellation = "ursa-minor"
+	config.EdgeRamp = []float64{-1, 0}
+	config.AttractantRamp = []float64{1, 0}
+	for _, islandCount := range []int{3, 7, 12} {
+		config.IslandCount = islandCount
+		result, err := Generate(config)
+		if err != nil {
+			t.Fatalf("islands=%d: Generate() error = %v", islandCount, err)
+		}
+		seeds := make(map[int]bool)
+		for _, island := range result.Islands {
+			seeds[island.SeedID] = true
+		}
+		want := min(islandCount, len(result.Attractants))
+		got := 0
+		for _, attractant := range result.Attractants[:want] {
+			if seeds[attractant.CellID] || result.Cells[attractant.CellID].IslandID != Water {
+				got++
+			}
+		}
+		if got != want {
+			t.Errorf("islands=%d: %d of the first %d star cells are seeds or land, want all", islandCount, got, want)
+		}
+	}
+}

@@ -40,7 +40,13 @@ func Generate(config Config) (Result, error) {
 		}
 		desirability := desirabilityField(mesh, edgeValues, landEligible, attractants, config.AttractantRamp)
 		state := newGrowthState(mesh, desirability, landEligible, config.RivalRamp)
-		if state.seedAndGrow(config.IslandCount, config.ProvinceCount, config.SoftmaxTemperature, random) {
+		var pinnedSeeds []int
+		if config.Constellation != "" {
+			for _, attractant := range attractants {
+				pinnedSeeds = append(pinnedSeeds, attractant.CellID)
+			}
+		}
+		if state.seedAndGrow(config.IslandCount, config.ProvinceCount, config.SoftmaxTemperature, pinnedSeeds, random) {
 			result := state.result(attractants, skips, config.IslandCount)
 			result.RoundsAttempted = round + 1
 			result.FinalOcean = ocean
@@ -428,7 +434,10 @@ func (f *rivalField) rebuild(owners []int) {
 	}
 }
 
-func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature float64, random *rand.Rand) bool {
+// seedAndGrow plants one seed per island and grows them to provinceCount.
+// The first len(pinnedSeeds) islands are seeded on those cells when they are
+// still unclaimed and eligible; every other island draws a uniform seed.
+func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature float64, pinnedSeeds []int, random *rand.Rand) bool {
 	seedOrder := random.Perm(islandCount)
 	s.islands = make([]islandState, islandCount)
 	s.frontiers = make([]randomSet, islandCount)
@@ -443,6 +452,9 @@ func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature fl
 			return false
 		}
 		seedID := unclaimed[random.IntN(len(unclaimed))]
+		if islandID < len(pinnedSeeds) && s.owners[pinnedSeeds[islandID]] == Water && s.landEligible[pinnedSeeds[islandID]] {
+			seedID = pinnedSeeds[islandID]
+		}
 		s.islands[islandID] = islandState{seedID: seedID, active: true}
 		s.claim(seedID, islandID)
 	}

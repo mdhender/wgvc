@@ -240,8 +240,10 @@ Attractants are disabled by default. Use `-attractors` with 1 through 6 to
 select regions in the familiar die-face pattern, or 9 to select every region
 of the 3×3 grid. Zero disables them. A constellation name such as `ursa-minor`
 instead places one attractor per star, scaled to fill the map while keeping the
-figure's proportions, without jitter; the JSON export lists the provinces that
-hosted the sources in `generation.result.attractant_province_ids`. For example:
+figure's proportions, without jitter, and seeds the first islands on the star
+cells so each star grows its own island; the JSON export lists the provinces
+that hosted the sources in `generation.result.attractant_province_ids`. For
+example:
 
 ```sh
 go run ./cmd/generate -attractors 5 -output five-attractors
