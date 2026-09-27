@@ -255,7 +255,14 @@ shape it was drawn for (`2:1` for `ursa-minor` and `virgo`, `3:2` for
 mark stars as kin: their islands ignore each other's rival ramp, merge when
 they touch, and the merged landmass keeps every star's share of growth, which
 is how `subaru` grows a twelve-star mainland and a four-star northern island
-beside single-star ones. The
+beside single-star ones. Each site may also carry a weight. A positive weight
+is the island's share of growth draws relative to the others, so `subaru`'s
+two western islands weigh 0.5 and grow to half size. A negative weight makes
+the site a repulsor that seeds nothing and lowers desirability around itself
+by `-repulsor-ramp` scaled by the weight's magnitude, reaching about twenty
+hops by default; `subaru` uses three to hold open an inland sea, a bay on the
+mainland's south coast, and the strait to the northern island. The JSON
+result lists repulsor provinces in `generation.result.repulsor_province_ids`. The
 JSON export lists the provinces that hosted the sources in
 `generation.result.attractant_province_ids`. For example:
 
@@ -265,7 +272,7 @@ go run ./cmd/generate -attractors 5 -output five-attractors
 
 The command exposes all growth controls, including `-ocean`, `-edge-barrier`,
 `-edge-ramp`, `-attractant-ramp`, `-attractant-jitter`, `-temperature`,
-`-rival-ramp`, `-rounds`, and `-relaxations`. Climate calibration is
+`-rival-ramp`, `-repulsor-ramp`, `-rounds`, and `-relaxations`. Climate calibration is
 controlled by `-polar-ice` and `-peak-chill`, both expressed as percentages. Run
 `go run ./cmd/generate -h` for their defaults and descriptions. `-version`
 prints the generator version and exits; a built binary appends the commit it

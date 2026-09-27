@@ -32,23 +32,29 @@ func Generate(config Config) (Result, error) {
 		}
 		edgeValues, landEligible, edgeDistances := edgeField(mesh, bounds, config.EdgeBarrierWidth, config.EdgeRamp)
 		var attractants []Attractant
+		var repulsors []Repulsor
 		var skips []AttractantSkip
-		if constellation, ok := ConstellationByName(config.Constellation); ok {
-			attractants, skips = makeConstellationAttractants(mesh, bounds, edgeDistances, config.EdgeRamp, config.AttractantRamp, constellation)
+		constellation, constellated := ConstellationByName(config.Constellation)
+		if constellated {
+			attractants, repulsors, skips = makeConstellationSites(mesh, bounds, edgeDistances, config.EdgeRamp, config.AttractantRamp, constellation)
 		} else {
 			attractants, skips = makeAttractants(mesh, bounds, edgeDistances, config.EdgeRamp, config.AttractantRamp, config.AttractantCount, config.AttractantJitter, random)
 		}
 		desirability := desirabilityField(mesh, edgeValues, landEligible, attractants, config.AttractantRamp)
+		repulsorField(mesh, desirability, repulsors, config.RepulsorRamp)
 		state := newGrowthState(mesh, desirability, landEligible, config.RivalRamp)
 		var pinnedSeeds, groups []int
-		if constellation, ok := ConstellationByName(config.Constellation); ok {
+		var weights []float64
+		if constellated {
 			for _, attractant := range attractants {
 				pinnedSeeds = append(pinnedSeeds, attractant.CellID)
 			}
 			groups = kinGroups(constellation, config.IslandCount)
+			weights = islandWeights(constellation, config.IslandCount)
 		}
-		if state.seedAndGrow(config.IslandCount, config.ProvinceCount, config.SoftmaxTemperature, pinnedSeeds, groups, random) {
+		if state.seedAndGrow(config.IslandCount, config.ProvinceCount, config.SoftmaxTemperature, pinnedSeeds, groups, weights, random) {
 			result := state.result(attractants, skips, config.IslandCount)
+			result.Repulsors = repulsors
 			result.RoundsAttempted = round + 1
 			result.FinalOcean = ocean
 			return result, nil
@@ -102,24 +108,98 @@ func makeAttractants(cells []singlemesh.Cell, bounds singlemesh.Bounds, edgeDist
 	return attractants, skips
 }
 
+// islandBySite maps each site index to the island seeded on it, or -1 for a
+// repulsor site or a star beyond the island count.
+func islandBySite(constellation Constellation, islandCount int) []int {
+	islands := make([]int, len(constellation.Sites))
+	for i := range islands {
+		islands[i] = -1
+	}
+	for islandID, site := range constellation.starSites() {
+		if islandID < islandCount {
+			islands[site] = islandID
+		}
+	}
+	return islands
+}
+
 // kinGroups maps each island to its kin group: islands seeded on the sites of
 // one Kin list share a group, and every other island is its own group.
 func kinGroups(constellation Constellation, islandCount int) []int {
 	if len(constellation.Kin) == 0 {
 		return nil
 	}
+	islands := islandBySite(constellation, islandCount)
 	groups := make([]int, islandCount)
 	for islandID := range groups {
 		groups[islandID] = islandID
 	}
 	for _, kin := range constellation.Kin {
+		leader := -1
 		for _, site := range kin {
-			if site < islandCount && kin[0] < islandCount {
-				groups[site] = kin[0]
+			if site >= len(islands) || islands[site] < 0 {
+				continue
 			}
+			if leader < 0 {
+				leader = islands[site]
+			}
+			groups[islands[site]] = leader
 		}
 	}
 	return groups
+}
+
+// islandWeights returns each island's share of growth draws from its site's
+// weight, or nil when the constellation carries no weights. Islands beyond
+// the stars weigh 1.
+func islandWeights(constellation Constellation, islandCount int) []float64 {
+	if len(constellation.Weights) == 0 {
+		return nil
+	}
+	weights := make([]float64, islandCount)
+	for islandID := range weights {
+		weights[islandID] = 1
+	}
+	for islandID, site := range constellation.starSites() {
+		if islandID < islandCount {
+			weights[islandID] = constellation.weight(site)
+		}
+	}
+	return weights
+}
+
+// repulsorField subtracts each repulsor's ramp, scaled by its strength, from
+// every cell within the ramp's reach, then clips the field to [-1, 1].
+func repulsorField(cells []singlemesh.Cell, values []float64, repulsors []Repulsor, ramp []float64) {
+	reach := lastNonzeroIndex(ramp)
+	if reach < 0 || len(repulsors) == 0 {
+		return
+	}
+	distances := make([]int, len(cells))
+	for _, repulsor := range repulsors {
+		for i := range distances {
+			distances[i] = -1
+		}
+		distances[repulsor.CellID] = 0
+		queue := []int{repulsor.CellID}
+		for head := 0; head < len(queue); head++ {
+			cellID := queue[head]
+			distance := distances[cellID]
+			values[cellID] += repulsor.Strength * ramp[distance]
+			if distance >= reach {
+				continue
+			}
+			for _, neighbor := range cells[cellID].Neighbors {
+				if distances[neighbor] == -1 {
+					distances[neighbor] = distance + 1
+					queue = append(queue, neighbor)
+				}
+			}
+		}
+	}
+	for cellID := range values {
+		values[cellID] = max(-1, min(1, values[cellID]))
+	}
 }
 
 // Constellation sites fill this much of the map's width and height, whichever
@@ -129,11 +209,12 @@ const (
 	constellationHeightFill = 0.70
 )
 
-// makeConstellationAttractants scales the constellation's centered frame to
-// fit the map and places each site on the nearest cell that clears the edge
-// barrier by the combined ramp reach. Sites keep the constellation's order.
-// A site is skipped only when no cell on the map has that clearance.
-func makeConstellationAttractants(cells []singlemesh.Cell, bounds singlemesh.Bounds, edgeDistances []int, edgeRamp, attractantRamp []float64, constellation Constellation) ([]Attractant, []AttractantSkip) {
+// makeConstellationSites scales the constellation's centered frame to fit
+// the map and places each star on the nearest cell that clears the edge
+// barrier by the combined ramp reach, and each repulsor on the nearest cell
+// of any kind. Stars keep the constellation's order. A star is skipped only
+// when no cell on the map has that clearance.
+func makeConstellationSites(cells []singlemesh.Cell, bounds singlemesh.Bounds, edgeDistances []int, edgeRamp, attractantRamp []float64, constellation Constellation) ([]Attractant, []Repulsor, []AttractantSkip) {
 	const regions = 3
 	clearance := edgeRampReach(edgeRamp) + attractantRampReach(attractantRamp)
 	maxX, maxY := 0.0, 0.0
@@ -152,14 +233,16 @@ func makeConstellationAttractants(cells []singlemesh.Cell, bounds singlemesh.Bou
 		scale = 0
 	}
 	attractants := make([]Attractant, 0, len(constellation.Sites))
+	repulsors := make([]Repulsor, 0)
 	skips := make([]AttractantSkip, 0)
-	for _, site := range constellation.Sites {
+	for index, site := range constellation.Sites {
 		target := Point{X: bounds.Width/2 + site.X*scale, Y: bounds.Height/2 + site.Y*scale}
 		regionX := min(int(target.X/bounds.Width*regions), regions-1)
 		regionY := min(int(target.Y/bounds.Height*regions), regions-1)
+		repulsor := constellation.weight(index) < 0
 		bestCell, bestDistance := -1, math.Inf(1)
 		for cellID, cell := range cells {
-			if edgeDistances[cellID] <= clearance {
+			if !repulsor && edgeDistances[cellID] <= clearance {
 				continue
 			}
 			dx, dy := cell.Site.X-target.X, cell.Site.Y-target.Y
@@ -176,6 +259,14 @@ func makeConstellationAttractants(cells []singlemesh.Cell, bounds singlemesh.Bou
 			})
 			continue
 		}
+		if repulsor {
+			repulsors = append(repulsors, Repulsor{
+				CellID:   bestCell,
+				Point:    cells[bestCell].Site,
+				Strength: min(1, -constellation.weight(index)),
+			})
+			continue
+		}
 		attractants = append(attractants, Attractant{
 			CellID:  bestCell,
 			Point:   cells[bestCell].Site,
@@ -183,7 +274,7 @@ func makeConstellationAttractants(cells []singlemesh.Cell, bounds singlemesh.Bou
 			RegionY: regionY,
 		})
 	}
-	return attractants, skips
+	return attractants, repulsors, skips
 }
 
 func validAttractantCount(count int) bool {
@@ -468,13 +559,24 @@ func (s *growthState) group(islandID int) int {
 
 // deck holds one entry per active island, plus one more for every kin island
 // it has absorbed, so a merged kin landmass keeps its stars' share of growth.
-// Removal swaps with the last entry, matching the order randomSet produced.
+// Entries carry weights only when a constellation supplies them; an
+// unweighted deck draws uniformly with the same random calls as before, so
+// worlds without weights are unchanged. Removal swaps with the last entry,
+// matching the order randomSet produced.
 type deck struct {
-	entries []int
+	entries  []int
+	weights  []float64 // nil when every entry weighs 1
+	total    float64
+	weighted bool
 }
 
-func (d *deck) add(islandID int) {
+func (d *deck) add(islandID int, weight float64) {
 	d.entries = append(d.entries, islandID)
+	if weight != 1 {
+		d.weighted = true
+	}
+	d.weights = append(d.weights, weight)
+	d.total += weight
 }
 
 func (d *deck) remove(islandID int) {
@@ -483,8 +585,9 @@ func (d *deck) remove(islandID int) {
 			continue
 		}
 		last := len(d.entries) - 1
-		d.entries[i] = d.entries[last]
-		d.entries = d.entries[:last]
+		d.total -= d.weights[i]
+		d.entries[i], d.weights[i] = d.entries[last], d.weights[last]
+		d.entries, d.weights = d.entries[:last], d.weights[:last]
 	}
 }
 
@@ -497,7 +600,17 @@ func (d *deck) transfer(loser, winner int) {
 }
 
 func (d *deck) random(random *rand.Rand) int {
-	return d.entries[random.IntN(len(d.entries))]
+	if !d.weighted {
+		return d.entries[random.IntN(len(d.entries))]
+	}
+	draw := random.Float64() * d.total
+	for i, weight := range d.weights {
+		draw -= weight
+		if draw < 0 {
+			return d.entries[i]
+		}
+	}
+	return d.entries[len(d.entries)-1]
 }
 
 func (d *deck) len() int {
@@ -507,8 +620,9 @@ func (d *deck) len() int {
 // seedAndGrow plants one seed per island and grows them to provinceCount.
 // The first len(pinnedSeeds) islands are seeded on those cells when they are
 // still unclaimed and eligible; every other island draws a uniform seed.
-// groups assigns each island a kin group, or nil for no kinship.
-func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature float64, pinnedSeeds, groups []int, random *rand.Rand) bool {
+// groups assigns each island a kin group, or nil for no kinship. weights
+// gives each island's share of growth draws, or nil for equal shares.
+func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature float64, pinnedSeeds, groups []int, weights []float64, random *rand.Rand) bool {
 	s.groups = groups
 	seedOrder := random.Perm(islandCount)
 	s.islands = make([]islandState, islandCount)
@@ -534,7 +648,11 @@ func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature fl
 	deck := deck{}
 	for islandID := range s.islands {
 		if s.islands[islandID].active {
-			deck.add(islandID)
+			weight := 1.0
+			if islandID < len(weights) {
+				weight = weights[islandID]
+			}
+			deck.add(islandID, weight)
 		}
 	}
 	remaining := provinceCount - islandCount

@@ -34,8 +34,11 @@ type Config struct {
 	AttractantJitter   float64
 	SoftmaxTemperature float64
 	RivalRamp          []float64
-	MaxRounds          int
-	Relaxations        int
+	// RepulsorRamp is the desirability a repulsor of full strength subtracts
+	// by hop distance from its cell; weaker repulsors scale it.
+	RepulsorRamp []float64
+	MaxRounds    int
+	Relaxations  int
 }
 
 func DefaultConfig() Config {
@@ -52,6 +55,7 @@ func DefaultConfig() Config {
 		AttractantJitter:   0.65,
 		SoftmaxTemperature: 0.20,
 		RivalRamp:          []float64{-1, -1, -0.5, 0},
+		RepulsorRamp:       []float64{-1, -0.95, -0.90, -0.84, -0.78, -0.71, -0.64, -0.56, -0.48, -0.40, -0.33, -0.26, -0.20, -0.15, -0.10, -0.06, -0.03, -0.02, -0.01, 0},
 		MaxRounds:          10,
 		Relaxations:        2,
 	}
@@ -121,6 +125,9 @@ func (c Config) validate() error {
 	if err := validateRivalRamp(c.RivalRamp); err != nil {
 		return err
 	}
+	if err := validatePenaltyRamp("repulsor", c.RepulsorRamp); err != nil {
+		return err
+	}
 	if c.MaxRounds < 1 {
 		return fmt.Errorf("maximum rounds must be at least 1: %d", c.MaxRounds)
 	}
@@ -133,19 +140,23 @@ func (c Config) validate() error {
 // validateRivalRamp accepts a nondecreasing ramp of penalties in [-1, 0] that
 // ends at 0, indexed by hop distance to the nearest rival land minus one.
 func validateRivalRamp(ramp []float64) error {
+	return validatePenaltyRamp("rival", ramp)
+}
+
+func validatePenaltyRamp(name string, ramp []float64) error {
 	if len(ramp) == 0 {
-		return fmt.Errorf("rival ramp must not be empty")
+		return fmt.Errorf("%s ramp must not be empty", name)
 	}
 	for i, value := range ramp {
 		if math.IsNaN(value) || math.IsInf(value, 0) || value < -1 || value > 0 {
-			return fmt.Errorf("rival ramp value %d must be finite and in [-1, 0]: %g", i, value)
+			return fmt.Errorf("%s ramp value %d must be finite and in [-1, 0]: %g", name, i, value)
 		}
 		if i > 0 && value < ramp[i-1] {
-			return fmt.Errorf("rival ramp must be nondecreasing: value %d is %g after %g", i, value, ramp[i-1])
+			return fmt.Errorf("%s ramp must be nondecreasing: value %d is %g after %g", name, i, value, ramp[i-1])
 		}
 	}
 	if ramp[len(ramp)-1] != 0 {
-		return fmt.Errorf("rival ramp must end at 0: %g", ramp[len(ramp)-1])
+		return fmt.Errorf("%s ramp must end at 0: %g", name, ramp[len(ramp)-1])
 	}
 	return nil
 }
@@ -173,6 +184,14 @@ type Attractant struct {
 	RegionY int
 }
 
+// Repulsor is a placed repulsor site: its cell, position, and strength in
+// (0, 1], which scales the repulsor ramp.
+type Repulsor struct {
+	CellID   int
+	Point    Point
+	Strength float64
+}
+
 type AttractantSkip struct {
 	RegionX int
 	RegionY int
@@ -183,6 +202,7 @@ type Result struct {
 	Cells              []Cell
 	Islands            []Island
 	Attractants        []Attractant
+	Repulsors          []Repulsor
 	AttractantSkips    []AttractantSkip
 	InitialIslandCount int
 	MergeCount         int

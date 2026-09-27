@@ -85,6 +85,7 @@ type jsonGenerationConfig struct {
 	AttractantJitter   float64   `json:"attractant_jitter"`
 	SoftmaxTemperature float64   `json:"softmax_temperature"`
 	RivalRamp          []float64 `json:"rival_ramp"`
+	RepulsorRamp       []float64 `json:"repulsor_ramp"`
 	MaxRounds          int       `json:"max_rounds"`
 	Relaxations        int       `json:"relaxations"`
 	PolarIceFraction   float64   `json:"polar_ice_fraction"`
@@ -102,6 +103,9 @@ type jsonGenerationResult struct {
 	// AttractantProvinceIDs lists the provinces that hosted attractant
 	// sources, in placement order; a cell's ID is its province's ID.
 	AttractantProvinceIDs []int `json:"attractant_province_ids"`
+	// RepulsorProvinceIDs lists the provinces that hosted constellation
+	// repulsors, in placement order.
+	RepulsorProvinceIDs []int `json:"repulsor_province_ids"`
 }
 
 type jsonBounds struct {
@@ -225,6 +229,7 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 				AttractantJitter:   config.AttractantJitter,
 				SoftmaxTemperature: config.SoftmaxTemperature,
 				RivalRamp:          config.RivalRamp,
+				RepulsorRamp:       config.RepulsorRamp,
 				MaxRounds:          config.MaxRounds,
 				Relaxations:        config.Relaxations,
 				PolarIceFraction:   climateConfig.PolarIce,
@@ -239,6 +244,7 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 				RoundsAttempted:       result.RoundsAttempted,
 				OceanFraction:         result.FinalOcean,
 				AttractantProvinceIDs: attractantProvinceIDs(result),
+				RepulsorProvinceIDs:   repulsorProvinceIDs(result),
 			},
 		},
 		Bounds:    bounds,
@@ -442,6 +448,14 @@ func attractantProvinceIDs(result x24.Result) []int {
 	ids := make([]int, len(result.Attractants))
 	for i, attractant := range result.Attractants {
 		ids[i] = attractant.CellID
+	}
+	return ids
+}
+
+func repulsorProvinceIDs(result x24.Result) []int {
+	ids := make([]int, len(result.Repulsors))
+	for i, repulsor := range result.Repulsors {
+		ids[i] = repulsor.CellID
 	}
 	return ids
 }

@@ -3,6 +3,7 @@ package x24
 import (
 	"errors"
 	"math"
+	"math/rand/v2"
 	"reflect"
 	"slices"
 	"testing"
@@ -588,9 +589,9 @@ func TestKinIslandsIgnoreEachOtherAndKeepDeckShare(t *testing.T) {
 		t.Errorf("island 2 sees cell 3 (adjacent to island 1) at %g, want -1", got)
 	}
 	d := deck{}
-	d.add(0)
-	d.add(1)
-	d.add(2)
+	d.add(0, 1)
+	d.add(1, 1)
+	d.add(2, 1)
 	losers := state.claim(1, 0)
 	if !reflect.DeepEqual(losers, []int{1}) {
 		t.Fatalf("kin claim absorbed %v, want [1]", losers)
@@ -605,8 +606,64 @@ func TestKinIslandsIgnoreEachOtherAndKeepDeckShare(t *testing.T) {
 	}
 }
 
+func TestWeightedDeckDrawsInProportion(t *testing.T) {
+	d := deck{}
+	d.add(0, 3)
+	d.add(1, 1)
+	random := rand.New(rand.NewPCG(1, 2))
+	counts := [2]int{}
+	for range 10_000 {
+		counts[d.random(random)]++
+	}
+	if ratio := float64(counts[0]) / float64(counts[1]); ratio < 2.7 || ratio > 3.3 {
+		t.Errorf("weight-3 island drew %d times to weight-1's %d, want about 3:1", counts[0], counts[1])
+	}
+	d.remove(0)
+	if len(d.entries) != 1 || d.entries[0] != 1 || d.total != 1 {
+		t.Errorf("deck after removing island 0 = %+v", d)
+	}
+	unweighted := deck{}
+	unweighted.add(0, 1)
+	unweighted.add(1, 1)
+	if unweighted.weighted {
+		t.Error("unit weights marked the deck weighted")
+	}
+}
+
+func TestRepulsorFieldLowersAndClips(t *testing.T) {
+	cells := lineCells(5)
+	values := []float64{0.5, 0, 0, -0.9, 0}
+	repulsorField(cells, values, []Repulsor{{CellID: 2, Strength: 0.5}}, []float64{-1, -0.4, 0})
+	want := []float64{0.5, -0.2, -0.5, -1, 0}
+	for i := range want {
+		if math.Abs(values[i]-want[i]) > 1e-12 {
+			t.Errorf("cell %d = %g, want %g (values %v)", i, values[i], want[i], values)
+		}
+	}
+}
+
+func TestNegativeWeightSitesAreRepulsors(t *testing.T) {
+	constellation := Constellation{
+		Sites:   []Point{{X: -1, Y: 0}, {X: 0, Y: 0}, {X: 1, Y: 0}},
+		Weights: []float64{2, -0.5, 0},
+		Kin:     [][]int{{0, 2}},
+	}
+	if got := constellation.starSites(); !reflect.DeepEqual(got, []int{0, 2}) {
+		t.Errorf("starSites() = %v, want [0 2]", got)
+	}
+	if got := constellation.repulsorSites(); !reflect.DeepEqual(got, []int{1}) {
+		t.Errorf("repulsorSites() = %v, want [1]", got)
+	}
+	if got := islandWeights(constellation, 3); !reflect.DeepEqual(got, []float64{2, 1, 1}) {
+		t.Errorf("islandWeights(3) = %v, want [2 1 1] (site 2 defaults to 1, extra island weighs 1)", got)
+	}
+	if got := kinGroups(constellation, 3); !reflect.DeepEqual(got, []int{0, 0, 2}) {
+		t.Errorf("kinGroups(3) = %v, want islands 0 and 1 (sites 0 and 2) kin: [0 0 2]", got)
+	}
+}
+
 func TestKinGroupsFollowConstellationLists(t *testing.T) {
-	constellation := Constellation{Kin: [][]int{{0, 1, 2}, {3, 4}}}
+	constellation := Constellation{Sites: make([]Point, 6), Kin: [][]int{{0, 1, 2}, {3, 4}}}
 	if got := kinGroups(constellation, 6); !reflect.DeepEqual(got, []int{0, 0, 0, 3, 3, 5}) {
 		t.Errorf("kinGroups(6) = %v, want [0 0 0 3 3 5]", got)
 	}
@@ -625,17 +682,30 @@ func TestSubaruMainlandFormsOneLandmass(t *testing.T) {
 	config.ProvinceCount = 6_000
 	config.OceanPercentage = 0.78
 	constellation, _ := ConstellationByName("subaru")
-	config.IslandCount = len(constellation.Sites)
+	config.IslandCount = len(constellation.starSites())
 	result, err := Generate(config)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
-	groups := len(constellation.Sites)
+	groups := len(constellation.starSites())
 	for _, kin := range constellation.Kin {
 		groups -= len(kin) - 1
 	}
 	if len(result.Islands) != groups {
 		t.Errorf("subaru produced %d landmasses, want one per kin group: %d", len(result.Islands), groups)
+	}
+	if len(result.Repulsors) != len(constellation.repulsorSites()) {
+		t.Errorf("subaru placed %d repulsors, want %d", len(result.Repulsors), len(constellation.repulsorSites()))
+	}
+	for _, repulsor := range result.Repulsors {
+		if repulsor.Strength <= 0 || repulsor.Strength > 1 {
+			t.Errorf("repulsor strength %g outside (0, 1]", repulsor.Strength)
+		}
+		for _, island := range result.Islands {
+			if island.SeedID == repulsor.CellID {
+				t.Errorf("repulsor cell %d seeded island %d", repulsor.CellID, island.ID)
+			}
+		}
 	}
 	mainland := result.Cells[result.Attractants[0].CellID].IslandID
 	for _, site := range constellation.Kin[0] {
@@ -703,6 +773,16 @@ func TestEveryConstellationIsWellFormed(t *testing.T) {
 		}
 		if _, _, err := aspectratio.Dimensions(constellation.AspectRatio); err != nil {
 			t.Errorf("constellation %q aspect ratio %q: %v", name, constellation.AspectRatio, err)
+		}
+		if len(constellation.Weights) != 0 && len(constellation.Weights) != len(constellation.Sites) {
+			t.Errorf("constellation %q has %d weights for %d sites", name, len(constellation.Weights), len(constellation.Sites))
+		}
+		for _, kin := range constellation.Kin {
+			for _, site := range kin {
+				if site < 0 || site >= len(constellation.Sites) || constellation.weight(site) < 0 {
+					t.Errorf("constellation %q kin site %d is missing or a repulsor", name, site)
+				}
+			}
 		}
 	}
 }

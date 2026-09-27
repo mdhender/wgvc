@@ -140,6 +140,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Float64Var(&options.config.AttractantJitter, "attractant-jitter", options.config.AttractantJitter, "maximum placement jitter as a fraction of half a region")
 	flags.Float64Var(&options.config.SoftmaxTemperature, "temperature", options.config.SoftmaxTemperature, "softmax temperature for frontier selection")
 	flags.Var(rampFlag{values: &options.config.RivalRamp}, "rival-ramp", "comma-separated penalties by hop distance to the nearest rival land")
+	flags.Var(rampFlag{values: &options.config.RepulsorRamp}, "repulsor-ramp", "comma-separated penalties by hop distance from a constellation repulsor at full strength")
 	flags.IntVar(&options.config.MaxRounds, "rounds", options.config.MaxRounds, "maximum generation rounds")
 	flags.IntVar(&options.config.Relaxations, "relaxations", options.config.Relaxations, "Lloyd relaxation passes per round")
 	flags.Float64Var(&options.polarIcePercent, "polar-ice", options.polarIcePercent, "target percentage of ocean provinces in the polar heat band")

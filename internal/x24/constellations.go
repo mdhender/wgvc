@@ -14,11 +14,47 @@ type Constellation struct {
 	// command uses it when -aspect is not given.
 	AspectRatio string
 	Sites       []Point
+	// Weights is optional and parallel to Sites. A positive weight is the
+	// site's share of growth draws relative to the others (a missing or
+	// zero entry counts as 1). A negative weight makes the site a repulsor:
+	// it seeds no island and no attractant, and pushes every frontier away
+	// with the repulsor ramp scaled by the weight's magnitude.
+	Weights []float64
 	// Kin lists site indexes whose islands form one landmass: they ignore
 	// each other's rival ramp, merge when they touch, and the merged
 	// landmass keeps every member's share of growth. Sites not listed grow
-	// their own island.
+	// their own island. Repulsor sites must not be listed.
 	Kin [][]int
+}
+
+// weight returns the site's weight, defaulting to 1.
+func (c Constellation) weight(site int) float64 {
+	if site < len(c.Weights) && c.Weights[site] != 0 {
+		return c.Weights[site]
+	}
+	return 1
+}
+
+// starSites lists the sites that seed islands, in order.
+func (c Constellation) starSites() []int {
+	stars := make([]int, 0, len(c.Sites))
+	for site := range c.Sites {
+		if c.weight(site) > 0 {
+			stars = append(stars, site)
+		}
+	}
+	return stars
+}
+
+// repulsorSites lists the sites with negative weight, in order.
+func (c Constellation) repulsorSites() []int {
+	repulsors := make([]int, 0)
+	for site := range c.Sites {
+		if c.weight(site) < 0 {
+			repulsors = append(repulsors, site)
+		}
+	}
+	return repulsors
 }
 
 // constellations maps a -attractors name to its sites. Positions come from
@@ -85,9 +121,11 @@ var constellations = map[string]Constellation{
 	// Japan: a twelve-star mainland arcing from southwest to northeast, a
 	// four-star northern island beyond a strait at its northeast end, a
 	// two-star southwestern island, one island south of the mainland's
-	// western half, and two small islands off the western edge. Sites are
-	// ordered so the mainland is seeded first when fewer islands are asked
-	// for than stars.
+	// western half, and two half-weight islands off the western edge. Three
+	// repulsors hold open an inland sea between the mainland and the
+	// southern island, a bay on the mainland's south coast, and the strait
+	// to the northern island. Sites are ordered so the mainland is seeded
+	// first when fewer islands are asked for than stars.
 	"subaru": {
 		Name:        "subaru",
 		AspectRatio: "5:2",
@@ -113,6 +151,17 @@ var constellations = map[string]Constellation{
 			{X: -0.33, Y: -0.38}, // island south of the mainland
 			{X: -0.92, Y: -0.05}, // small western islands
 			{X: -1.00, Y: -0.34},
+			{X: -0.35, Y: -0.30}, // repulsor: inland sea
+			{X: 0.14, Y: -0.24},  // repulsor: bay on the south coast
+			{X: 0.64, Y: 0.29},   // repulsor: strait to the northern island
+		},
+		Weights: []float64{
+			1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+			1, 1, 1, 1,
+			1, 1,
+			1,
+			0.5, 0.5,
+			-0.8, -0.6, -0.4,
 		},
 		Kin: [][]int{
 			{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
