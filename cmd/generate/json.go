@@ -9,7 +9,7 @@ import (
 	"github.com/mdhender/wgvc/internal/x24"
 )
 
-const jsonSchemaVersion = 7
+const jsonSchemaVersion = 8
 
 type jsonWorld struct {
 	SchemaVersion int            `json:"schema_version"`
@@ -125,6 +125,12 @@ type jsonProvince struct {
 	Area          float64         `json:"area"`
 	CoastDistance int             `json:"coast_distance"`
 	SeaZoneID     wgvc.SeaZoneID  `json:"sea_zone_id"`
+	OceanEdges    int             `json:"ocean_edges"`
+	BasinEdges    int             `json:"basin_edges"`
+	Shelter       float64         `json:"shelter"`
+	RiverIDs      []wgvc.RiverID  `json:"river_ids"`
+	RiverMouthIDs []wgvc.RiverID  `json:"river_mouth_ids"`
+	ConfluenceIDs []wgvc.RiverID  `json:"confluence_ids"`
 	Terrain       wgvc.Terrain    `json:"terrain"`
 	Elevation     float64         `json:"elevation"`
 	ElevationBand string          `json:"elevation_band"`
@@ -277,6 +283,12 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 			Area:          province.Area,
 			CoastDistance: province.CoastDistance,
 			SeaZoneID:     province.SeaZoneID,
+			OceanEdges:    province.OceanEdges,
+			BasinEdges:    province.BasinEdges,
+			Shelter:       province.Shelter,
+			RiverIDs:      emptyIfNil(province.RiverIDs),
+			RiverMouthIDs: emptyIfNil(province.RiverMouthIDs),
+			ConfluenceIDs: emptyIfNil(province.ConfluenceIDs),
 			Terrain:       province.Terrain,
 			Elevation:     province.Elevation,
 			ElevationBand: elevationBand,
@@ -326,6 +338,14 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 		return nil, err
 	}
 	return append(data, '\n'), nil
+}
+
+// emptyIfNil keeps list fields as [] rather than null in the export.
+func emptyIfNil[T any](values []T) []T {
+	if values == nil {
+		return []T{}
+	}
+	return values
 }
 
 func worldBounds(world wgvc.World) (jsonBounds, error) {

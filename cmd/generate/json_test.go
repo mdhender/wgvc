@@ -103,6 +103,12 @@ func TestRunJSONContainsCanonicalWorldData(t *testing.T) {
 		if province.CoastDistance < 0 {
 			t.Errorf("province %d coast distance = %d, want non-negative", province.ID, province.CoastDistance)
 		}
+		if province.Shelter < 0 || province.Shelter > 1 || province.OceanEdges < 0 || province.BasinEdges < 0 {
+			t.Errorf("province %d harbor fields are out of range: shelter %g, ocean %d, basin %d", province.ID, province.Shelter, province.OceanEdges, province.BasinEdges)
+		}
+		if province.RiverIDs == nil || province.RiverMouthIDs == nil || province.ConfluenceIDs == nil {
+			t.Errorf("province %d river lists are null, want [] when empty", province.ID)
+		}
 		ocean := province.IslandID == wgvc.NoIslandID && province.BasinID == wgvc.NoBasinID
 		if ocean != (province.SeaZoneID != wgvc.NoSeaZoneID) || province.SeaZoneID != wgvc.NoSeaZoneID && int(province.SeaZoneID) >= len(document.SeaZones) {
 			t.Errorf("province %d (ocean %t) has sea zone %d", province.ID, ocean, province.SeaZoneID)

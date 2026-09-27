@@ -100,6 +100,11 @@ The returned geometry is indexed:
   islands, and `World.Necks` are land isthmuses of at most 3 provinces whose
   removal splits an island into two regions of at least 10. See
   [Seas, straits, and necks](#seas-straits-and-necks).
+- Coastal land provinces carry siting inputs: `OceanEdges` and `BasinEdges`,
+  `Shelter` (how enclosed the adjacent water is, in `[0, 1]`), and the rivers
+  along them (`RiverIDs`), ending at them (`RiverMouthIDs`), and joining at
+  them (`ConfluenceIDs`). They are measures for a consumer's own settlement
+  placement, not placements.
 - Corners and edges are shared objects. An `Edge` references two corners and
   either one province at the outside of the world or two provinces inside it.
   A coastline edge joins one land province to one water province.
@@ -180,7 +185,7 @@ top-level shape is:
 
 ```json
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "generation": {
     "generator": { "version": "0.7.3-alpha", "build": "9a64246" },
     "config": { "seed": "0x0123456789abcdef" },

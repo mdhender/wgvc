@@ -268,7 +268,17 @@ type Basin struct {
 // Area is the polygon area in world units. CoastDistance is the number of
 // hops through the province's own medium to the nearest edge shared with the
 // other medium, so coastal land and coastal water are 0. SeaZoneID is the
-// zone of an ocean province and NoSeaZoneID for land and basin water. Elevation is the mean elevation of the
+// zone of an ocean province and NoSeaZoneID for land and basin water.
+//
+// The remaining fields are siting inputs for a coastal land province and are
+// zero elsewhere. OceanEdges and BasinEdges count its edges onto ocean and
+// onto lakes or inland seas. Shelter in [0, 1] is how enclosed its adjacent
+// water is: the mean, over the water provinces it touches, of the fraction
+// of that water province's neighbors that are land, so a bay scores high and
+// an exposed promontory low. RiverIDs lists the rivers along any of its
+// edges; RiverMouthIDs those whose ocean or basin mouth is at one of its
+// corners; ConfluenceIDs the tributaries that join another river at one of
+// its corners. All three are ascending. Elevation is the mean elevation of the
 // province's boundary edges, normalized to [-1, 1]. ElevationBand preserves
 // the growth-assigned land/water classification even at sea level. Relief is
 // the mean absolute elevation difference to neighbors across shared edges,
@@ -286,6 +296,12 @@ type Province struct {
 	Area          float64
 	CoastDistance int
 	SeaZoneID     SeaZoneID
+	OceanEdges    int
+	BasinEdges    int
+	Shelter       float64
+	RiverIDs      []RiverID
+	RiverMouthIDs []RiverID
+	ConfluenceIDs []RiverID
 	Terrain       Terrain
 	Elevation     float64
 	ElevationBand ElevationBand

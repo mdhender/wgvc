@@ -494,6 +494,94 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 	}
 	assertValidRivers(t, world)
 	assertValidSeas(t, world)
+	assertValidHarbors(t, world)
+}
+
+// assertValidHarbors recomputes each land province's water edge counts,
+// shelter, and river lists from edges, rivers, and corners.
+func assertValidHarbors(t *testing.T, world World) {
+	t.Helper()
+	neighbors := provinceNeighbors(&world)
+	isLand := func(id ProvinceID) bool { return world.Provinces[id].IslandID != NoIslandID }
+	for _, province := range world.Provinces {
+		if !isLand(province.ID) {
+			if province.OceanEdges != 0 || province.BasinEdges != 0 || province.Shelter != 0 || province.RiverIDs != nil || province.RiverMouthIDs != nil || province.ConfluenceIDs != nil {
+				t.Errorf("water province %d has harbor fields set", province.ID)
+			}
+			continue
+		}
+		ocean, basin, shelter := 0, 0, 0.0
+		var rivers []RiverID
+		for _, edgeID := range province.EdgeIDs {
+			edge := world.Edges[edgeID]
+			if edge.RiverID != NoRiverID && !slices.Contains(rivers, edge.RiverID) {
+				rivers = append(rivers, edge.RiverID)
+			}
+			for _, otherID := range edge.ProvinceIDs {
+				if otherID == province.ID || isLand(otherID) {
+					continue
+				}
+				land := 0
+				for _, n := range neighbors[otherID] {
+					if isLand(n) {
+						land++
+					}
+				}
+				shelter += float64(land) / float64(len(neighbors[otherID]))
+				if world.Provinces[otherID].BasinID == NoBasinID {
+					ocean++
+				} else {
+					basin++
+				}
+			}
+		}
+		if ocean+basin > 0 {
+			shelter /= float64(ocean + basin)
+		}
+		slices.Sort(rivers)
+		if province.OceanEdges != ocean || province.BasinEdges != basin || math.Abs(province.Shelter-shelter) > 1e-12 || province.Shelter < 0 || province.Shelter > 1 {
+			t.Errorf("province %d harbor = %d ocean, %d basin, shelter %g; want %d, %d, %g", province.ID, province.OceanEdges, province.BasinEdges, province.Shelter, ocean, basin, shelter)
+		}
+		if (province.CoastDistance == 0) != (ocean+basin > 0) {
+			t.Errorf("province %d coast distance %d disagrees with %d water edges", province.ID, province.CoastDistance, ocean+basin)
+		}
+		if !slices.Equal(province.RiverIDs, rivers) && !(len(rivers) == 0 && len(province.RiverIDs) == 0) {
+			t.Errorf("province %d rivers = %v, want %v", province.ID, province.RiverIDs, rivers)
+		}
+		for _, list := range [][]RiverID{province.RiverMouthIDs, province.ConfluenceIDs} {
+			if !slices.IsSorted(list) {
+				t.Errorf("province %d river end list %v is not sorted", province.ID, list)
+			}
+			for _, riverID := range list {
+				river := world.Rivers[riverID]
+				mouth := river.CornerIDs[len(river.CornerIDs)-1]
+				last := world.Edges[river.EdgeIDs[len(river.EdgeIDs)-1]]
+				if !slices.Contains(province.CornerIDs, mouth) || !slices.Contains(last.ProvinceIDs, province.ID) {
+					t.Errorf("province %d lists river %d ending elsewhere", province.ID, riverID)
+				}
+				if slices.Contains(province.ConfluenceIDs, riverID) != (river.Mouth.Kind == RiverEndRiver) {
+					t.Errorf("province %d files river %d (mouth %s) in the wrong list", province.ID, riverID, river.Mouth.Kind)
+				}
+			}
+		}
+	}
+	mouths, confluences := 0, 0
+	for _, province := range world.Provinces {
+		mouths += len(province.RiverMouthIDs)
+		confluences += len(province.ConfluenceIDs)
+	}
+	riverMouths, riverConfluences := 0, 0
+	for _, river := range world.Rivers {
+		if river.Mouth.Kind == RiverEndRiver {
+			riverConfluences++
+		} else {
+			riverMouths++
+		}
+	}
+	// Each river ends between its last edge's two land provinces.
+	if mouths != 2*riverMouths || confluences != 2*riverConfluences {
+		t.Errorf("provinces list %d mouths and %d confluences for %d and %d rivers", mouths, confluences, riverMouths, riverConfluences)
+	}
 }
 
 // assertValidSeas checks coast distances against a fresh BFS, and the sea

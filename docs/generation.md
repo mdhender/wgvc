@@ -84,6 +84,15 @@ requested count. Water can contain interior components such as lakes.
   province.
 - Coast distance, sea zones, straits, and necks are derived from topology and
   IDs alone and consume no randomness.
+- Siting inputs on land provinces, zero on water: `OceanEdges` and
+  `BasinEdges` count edges onto ocean and onto lakes or inland seas;
+  `Shelter` in `[0, 1]` is the mean, over the water provinces it touches, of
+  the fraction of that water province's neighbors that are land, so a bay
+  scores high and a promontory low; `RiverIDs` are the rivers along its
+  edges, `RiverMouthIDs` those ending on ocean or a basin at one of its
+  corners, and `ConfluenceIDs` the tributaries joining another river at one
+  of its corners. Both bank provinces of a river's last edge list its end.
+  These are measures, not placements; where settlements go is a game rule.
 - `Province.Area` is the polygon area and `Edge.Length` is the distance between
   the edge's corners, both in world units. The mesh is scaled so the land
   provinces have a mean area of exactly 1; coarse ocean cells near the world
@@ -99,7 +108,7 @@ requested count. Water can contain interior components such as lakes.
 ## JSON export
 
 `go run ./cmd/generate -format json -output world` writes `world.json`. The
-document has `schema_version: 7`, generator identity, generation configuration
+document has `schema_version: 8`, generator identity, generation configuration
 and effective result metadata, world-coordinate bounds, and the canonical `islands`,
 `basins`, `provinces`, `corners`, `edges`, `rivers`, `sea_zones`, `straits`,
 and `necks` collections. It uses the same IDs
@@ -126,7 +135,9 @@ and `mouth` objects with `kind`, `basin_id`, and `river_id`). Schema version 7
 added each province's `coast_distance` and `sea_zone_id`, and the `sea_zones`
 (`id`, `center_province_id`, `province_ids`), `straits` (`id`, `island_ids`,
 `width`, `province_ids`, `shores`), and `necks` (`id`, `island_id`, `width`,
-`province_ids`, `ends`, `end_sizes`) collections.
+`province_ids`, `ends`, `end_sizes`) collections. Schema version 8 added each
+province's `ocean_edges`, `basin_edges`, `shelter`, `river_ids`,
+`river_mouth_ids`, and `confluence_ids`.
 
 JSON uses Cartesian generation coordinates rather than the transformed pixel
 coordinates used by image renderers. Use a comma-separated format such as
