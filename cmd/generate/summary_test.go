@@ -35,6 +35,7 @@ func TestRunSummaryListsEveryValueInOrderWithTotals(t *testing.T) {
 		{"heat band", heatBandNames(t)},
 		{"moisture band", moistureBandNames(t)},
 		{"terrain", terrainNames()},
+		{"river class", riverClassNames()},
 	}
 	if len(sections) != len(want) {
 		t.Fatalf("summary has %d sections, want %d:\n%s", len(sections), len(want), firstSummary)
@@ -57,6 +58,9 @@ func TestRunSummaryListsEveryValueInOrderWithTotals(t *testing.T) {
 		total := section.rows[len(section.rows)-1]
 		if total.name != "total" || total.count != sum {
 			t.Errorf("section %q total row = %+v, want total %d", section.title, total, sum)
+		}
+		if section.title == "river class" {
+			continue // counts rivers, not provinces
 		}
 		if provinceCount == -1 {
 			provinceCount = sum
@@ -83,10 +87,13 @@ func TestRunWithoutSummaryPrintsOnlyStatusLine(t *testing.T) {
 }
 
 func TestBuildSummaryCountsAbsentValuesAsZero(t *testing.T) {
-	world := wgvc.World{Provinces: []wgvc.Province{
-		{ID: 0, Terrain: wgvc.TerrainLake, ElevationBand: wgvc.ElevationBandShallowWater, HeatBand: wgvc.HeatBandCold, MoistureBand: wgvc.MoistureBandHumid},
-		{ID: 1, Terrain: wgvc.TerrainLake, ElevationBand: wgvc.ElevationBandShallowWater, HeatBand: wgvc.HeatBandCold, MoistureBand: wgvc.MoistureBandHumid},
-	}}
+	world := wgvc.World{
+		Provinces: []wgvc.Province{
+			{ID: 0, Terrain: wgvc.TerrainLake, ElevationBand: wgvc.ElevationBandShallowWater, HeatBand: wgvc.HeatBandCold, MoistureBand: wgvc.MoistureBandHumid},
+			{ID: 1, Terrain: wgvc.TerrainLake, ElevationBand: wgvc.ElevationBandShallowWater, HeatBand: wgvc.HeatBandCold, MoistureBand: wgvc.MoistureBandHumid},
+		},
+		Rivers: []wgvc.River{{ID: 0, Class: wgvc.RiverClassRiver}, {ID: 1, Class: wgvc.RiverClassRiver}},
+	}
 	sections, err := buildSummary(world)
 	if err != nil {
 		t.Fatalf("buildSummary() error = %v", err)
@@ -187,6 +194,14 @@ func terrainNames() []string {
 	var names []string
 	for _, terrain := range wgvc.Terrains() {
 		names = append(names, string(terrain))
+	}
+	return names
+}
+
+func riverClassNames() []string {
+	var names []string
+	for _, class := range wgvc.RiverClasses() {
+		names = append(names, string(class))
 	}
 	return names
 }

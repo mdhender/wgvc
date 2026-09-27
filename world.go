@@ -24,6 +24,12 @@ type CornerID int
 // EdgeID identifies an edge by its index in World.Edges.
 type EdgeID int
 
+// RiverID identifies a river by its index in World.Rivers.
+type RiverID int
+
+// NoRiverID is the RiverID of every edge that carries no river.
+const NoRiverID RiverID = -1
+
 // Point is a Cartesian coordinate.
 type Point struct {
 	X float64
@@ -170,6 +176,7 @@ type World struct {
 	Provinces []Province
 	Corners   []Corner
 	Edges     []Edge
+	Rivers    []River
 }
 
 // Island groups the land provinces in one connected component. ProvinceIDs is
@@ -260,10 +267,76 @@ const (
 	CompassNorthwest Compass = "NW"
 )
 
-// Corner is a vertex shared by province polygons.
+// Corner is a vertex shared by province polygons. Elevation is the seeded
+// elevation noise at the corner on the same scale as Edge.Elevation: a corner
+// whose provinces are all land lies in [0.1, 1), one whose provinces are all
+// water in (-1, -0.1], and a corner on a coastline is exactly 0, sea level.
+// An edge's elevation is the mean of its two corners.
 type Corner struct {
-	ID    CornerID
-	Point Point
+	ID        CornerID
+	Point     Point
+	Elevation float64
+}
+
+// RiverClass is a river's size at its mouth, from its discharge.
+type RiverClass string
+
+const (
+	RiverClassStream     RiverClass = "stream"
+	RiverClassRiver      RiverClass = "river"
+	RiverClassMajorRiver RiverClass = "major-river"
+)
+
+// RiverClasses returns the river classes in ascending order of size.
+func RiverClasses() []RiverClass {
+	return []RiverClass{RiverClassStream, RiverClassRiver, RiverClassMajorRiver}
+}
+
+// Navigable reports whether boats can use a river of this class: rivers and
+// major rivers, not streams.
+func (class RiverClass) Navigable() bool {
+	return class == RiverClassRiver || class == RiverClassMajorRiver
+}
+
+// RiverEndKind says what a river rises from or empties into.
+type RiverEndKind string
+
+const (
+	// RiverEndSpring is a source with no upstream river.
+	RiverEndSpring RiverEndKind = "spring"
+	// RiverEndBasin is a lake or inland sea: a source that is its outflow,
+	// or a mouth that feeds it.
+	RiverEndBasin RiverEndKind = "basin"
+	// RiverEndOcean is a mouth on ocean water.
+	RiverEndOcean RiverEndKind = "ocean"
+	// RiverEndRiver is a mouth at a confluence with a larger river.
+	RiverEndRiver RiverEndKind = "river"
+)
+
+// RiverEnd is one end of a river. BasinID is set for RiverEndBasin and
+// RiverID for RiverEndRiver; each is -1 otherwise.
+type RiverEnd struct {
+	Kind    RiverEndKind
+	BasinID BasinID
+	RiverID RiverID
+}
+
+// River is a chain of province edges that water flows along, from source to
+// mouth. CornerIDs lists the corners in flow order, one more than EdgeIDs;
+// EdgeIDs[i] joins CornerIDs[i] to CornerIDs[i+1]. Every edge lies between
+// two land provinces, so rivers never cross water. Discharge is the flow on
+// the last edge, in moisture-weighted province-area units, and Class is
+// derived from it. At a confluence the branch with the larger discharge
+// continues and the smaller ends with a RiverEndRiver mouth, so each edge
+// belongs to exactly one river. Rivers are ordered by descending discharge.
+type River struct {
+	ID        RiverID
+	CornerIDs []CornerID
+	EdgeIDs   []EdgeID
+	Class     RiverClass
+	Discharge float64
+	Source    RiverEnd
+	Mouth     RiverEnd
 }
 
 // Edge is an undirected geometric boundary, never a route. CornerIDs contains
@@ -271,11 +344,16 @@ type Corner struct {
 // world or two provinces inside it. A coastline has one land and one water
 // province; incidence is authoritative geometric adjacency. Length is the
 // Euclidean distance between the two corners in world units. Elevation is
-// normalized to [-1, 1], with zero representing sea level.
+// normalized to [-1, 1], with zero representing sea level. RiverID names the
+// river flowing along the edge, or NoRiverID; Discharge is the water flowing
+// along it in moisture-weighted province-area units, and is set on every
+// edge drainage uses, river or not.
 type Edge struct {
 	ID          EdgeID
 	CornerIDs   [2]CornerID
 	ProvinceIDs []ProvinceID
 	Length      float64
 	Elevation   float64
+	RiverID     RiverID
+	Discharge   float64
 }

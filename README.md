@@ -85,6 +85,13 @@ The returned geometry is indexed:
   [About exits, bearings, and compass points](docs/explanations/bearing-not-compass.md).
 - `Province.Area` and `Edge.Length` are in world units, where the mesh is
   scaled so land provinces have a mean area of exactly 1.
+- `Corner.Elevation` is the elevation noise at the corner; an edge's elevation
+  is the mean of its corners'.
+- `World.Rivers` are chains of land-land edges from source to mouth, with
+  discharge, a class (stream, river, major river), and where each rises and
+  ends (spring, basin outflow, ocean, basin, or a confluence). `Edge.RiverID`
+  and `Edge.Discharge` link edges back to them. See
+  [Rivers](#rivers) below and the [contracts](docs/generation.md).
 - Corners and edges are shared objects. An `Edge` references two corners and
   either one province at the outside of the world or two provinces inside it.
   A coastline edge joins one land province to one water province.
@@ -154,7 +161,8 @@ as `-format svg,json` select any combination, and `-format all` writes all three
 files. The `-output` value is a path without an extension. SVG and PNG dimensions
 are derived from the requested land-province count, the effective ocean
 percentage, and the aspect ratio. Both image formats use the same terrain fills,
-thin cell borders, and heavier coastline.
+thin cell borders, heavier coastline, and blue river lines whose width follows
+the flow on each edge.
 The `-aspect` flag accepts `landscape`, `portrait`, `widescreen`, and
 `cinematic` as aliases for their corresponding numeric ratios.
 
@@ -164,7 +172,7 @@ top-level shape is:
 
 ```json
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "generation": {
     "generator": { "version": "0.7.3-alpha", "build": "9a64246" },
     "config": { "seed": "0x0123456789abcdef" },
@@ -175,7 +183,8 @@ top-level shape is:
   "basins": [],
   "provinces": [],
   "corners": [],
-  "edges": []
+  "edges": [],
+  "rivers": []
 }
 ```
 
@@ -208,8 +217,8 @@ prints the generator version and exits; a built binary appends the commit it
 was built from as semver build metadata.
 
 `-summary` also prints, after the status line, the number of provinces in each
-elevation band, heat band, moisture band, and terrain, followed by each
-histogram's total. Every declared value is listed in declaration order, and
+elevation band, heat band, moisture band, and terrain, and the number of rivers
+in each class, followed by each histogram's total. Every declared value is listed in declaration order, and
 values no province has print `0`:
 
 ```sh
@@ -309,6 +318,34 @@ Terrain reads relief at four thresholds: highland with relief `>= 0.16` is
 mountain rather than hills, upland with relief `>= 0.14` is hills, dry land with
 relief `>= 0.20` is badlands, and humid lowland is a wetland only when its
 relief is `<= 0.12`.
+
+## Rivers
+
+Rivers run along province edges, corner to corner, between two land provinces;
+they never cross water, and they leave geometry and membership untouched.
+Drainage works on the corner graph. Every corner touching ocean is an outlet,
+and a priority-flood from the outlets visits the remaining corners in order of
+filled elevation, so each gets one downstream neighbor and a monotone path to
+the sea while depressions fill to their spill level instead of trapping flow.
+Ties fall to the lower corner ID, and the filled surface is not exported. Lakes
+and inland seas are ordinary nodes: rivers flowing in end at the shore with a
+`basin` mouth, and the basin's water leaves at its spill corner as a river with
+a `basin` source. Each land province spreads `Area * Moisture` over its corners
+as runoff, so wet regions grow larger rivers, and runoff accumulates downstream
+into `Edge.Discharge`.
+
+An edge carrying at least 4 units of discharge is a river edge (a province of
+mean area and moisture contributes about half a unit). Chains are traced from
+each edge that is not the main stem into its downstream corner, the main stem
+being the inflowing river edge with the most flow, so tributaries end at
+confluences and every river edge belongs to exactly one river. A river's class
+is set by the discharge on its last edge: `stream` from 4, `river` from 16, and
+`major-river` from 64; rivers and major rivers are navigable. The thresholds
+are absolute because a province is a fixed real size, so a default
+1,500-province world has a few dozen rivers and no major river, while a
+10,000-province TNYC map has about a dozen major rivers reaching the ocean and
+a few hundred rivers in all. Rivers are ordered by descending discharge. The
+pass consumes no randomness, so adding rivers changed no existing field.
 
 ## Climate
 

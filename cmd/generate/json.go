@@ -9,7 +9,7 @@ import (
 	"github.com/mdhender/wgvc/internal/x24"
 )
 
-const jsonSchemaVersion = 5
+const jsonSchemaVersion = 6
 
 type jsonWorld struct {
 	SchemaVersion int            `json:"schema_version"`
@@ -20,6 +20,7 @@ type jsonWorld struct {
 	Provinces     []jsonProvince `json:"provinces"`
 	Corners       []jsonCorner   `json:"corners"`
 	Edges         []jsonEdge     `json:"edges"`
+	Rivers        []jsonRiver    `json:"rivers"`
 }
 
 type jsonGeneration struct {
@@ -115,8 +116,25 @@ type jsonExit struct {
 }
 
 type jsonCorner struct {
-	ID    wgvc.CornerID `json:"id"`
-	Point jsonPoint     `json:"point"`
+	ID        wgvc.CornerID `json:"id"`
+	Point     jsonPoint     `json:"point"`
+	Elevation float64       `json:"elevation"`
+}
+
+type jsonRiver struct {
+	ID        wgvc.RiverID    `json:"id"`
+	Class     wgvc.RiverClass `json:"class"`
+	Discharge float64         `json:"discharge"`
+	CornerIDs []wgvc.CornerID `json:"corner_ids"`
+	EdgeIDs   []wgvc.EdgeID   `json:"edge_ids"`
+	Source    jsonRiverEnd    `json:"source"`
+	Mouth     jsonRiverEnd    `json:"mouth"`
+}
+
+type jsonRiverEnd struct {
+	Kind    wgvc.RiverEndKind `json:"kind"`
+	BasinID wgvc.BasinID      `json:"basin_id"`
+	RiverID wgvc.RiverID      `json:"river_id"`
 }
 
 type jsonEdge struct {
@@ -125,6 +143,8 @@ type jsonEdge struct {
 	ProvinceIDs []wgvc.ProvinceID `json:"province_ids"`
 	Length      float64           `json:"length"`
 	Elevation   float64           `json:"elevation"`
+	RiverID     wgvc.RiverID      `json:"river_id"`
+	Discharge   float64           `json:"discharge"`
 }
 
 func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateConfig, result x24.Result) ([]byte, error) {
@@ -179,6 +199,7 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 		Provinces: make([]jsonProvince, len(world.Provinces)),
 		Corners:   make([]jsonCorner, len(world.Corners)),
 		Edges:     make([]jsonEdge, len(world.Edges)),
+		Rivers:    make([]jsonRiver, len(world.Rivers)),
 	}
 	for index, island := range world.Islands {
 		document.Islands[index] = jsonIsland{ID: island.ID, ProvinceIDs: island.ProvinceIDs}
@@ -234,7 +255,7 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 		}
 	}
 	for index, corner := range world.Corners {
-		document.Corners[index] = jsonCorner{ID: corner.ID, Point: toJSONPoint(corner.Point)}
+		document.Corners[index] = jsonCorner{ID: corner.ID, Point: toJSONPoint(corner.Point), Elevation: corner.Elevation}
 	}
 	for index, edge := range world.Edges {
 		document.Edges[index] = jsonEdge{
@@ -243,6 +264,19 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 			ProvinceIDs: edge.ProvinceIDs,
 			Length:      edge.Length,
 			Elevation:   edge.Elevation,
+			RiverID:     edge.RiverID,
+			Discharge:   edge.Discharge,
+		}
+	}
+	for index, river := range world.Rivers {
+		document.Rivers[index] = jsonRiver{
+			ID:        river.ID,
+			Class:     river.Class,
+			Discharge: river.Discharge,
+			CornerIDs: river.CornerIDs,
+			EdgeIDs:   river.EdgeIDs,
+			Source:    jsonRiverEnd{Kind: river.Source.Kind, BasinID: river.Source.BasinID, RiverID: river.Source.RiverID},
+			Mouth:     jsonRiverEnd{Kind: river.Mouth.Kind, BasinID: river.Mouth.BasinID, RiverID: river.Mouth.RiverID},
 		}
 	}
 	data, err := json.MarshalIndent(document, "", "  ")

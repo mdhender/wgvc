@@ -125,6 +125,9 @@ func TestRunJSONContainsCanonicalWorldData(t *testing.T) {
 		if corner.ID != wgvc.CornerID(index) {
 			t.Errorf("corner %d ID = %d", index, corner.ID)
 		}
+		if corner.Elevation < -1 || corner.Elevation > 1 {
+			t.Errorf("corner %d elevation = %g, want [-1, 1]", corner.ID, corner.Elevation)
+		}
 	}
 	for index, edge := range document.Edges {
 		if edge.ID != wgvc.EdgeID(index) {
@@ -142,6 +145,78 @@ func TestRunJSONContainsCanonicalWorldData(t *testing.T) {
 		}
 		if !(edge.Length > 0) {
 			t.Errorf("edge %d length = %g, want positive", edge.ID, edge.Length)
+		}
+		if edge.RiverID != wgvc.NoRiverID && (edge.RiverID < 0 || int(edge.RiverID) >= len(document.Rivers)) {
+			t.Errorf("edge %d references unknown river %d", edge.ID, edge.RiverID)
+		}
+	}
+}
+
+func TestRunJSONExportsRivers(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "map")
+	err := run([]string{"-seed", "42", "-provinces", "1000", "-islands", "8", "-format", "json", "-output", base}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	data, err := os.ReadFile(base + ".json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document jsonWorld
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatalf("decode JSON: %v", err)
+	}
+	if len(document.Rivers) == 0 {
+		t.Fatal("JSON contains no rivers")
+	}
+	for index, river := range document.Rivers {
+		if river.ID != wgvc.RiverID(index) {
+			t.Errorf("river %d ID = %d", index, river.ID)
+		}
+		if len(river.CornerIDs) != len(river.EdgeIDs)+1 || len(river.EdgeIDs) == 0 {
+			t.Errorf("river %d has %d corners for %d edges", river.ID, len(river.CornerIDs), len(river.EdgeIDs))
+			continue
+		}
+		if river.Class != wgvc.ClassifyDischarge(river.Discharge) || river.Class == "" {
+			t.Errorf("river %d class %q does not match discharge %g", river.ID, river.Class, river.Discharge)
+		}
+		if index > 0 && river.Discharge > document.Rivers[index-1].Discharge {
+			t.Errorf("river %d discharge %g exceeds river %d's %g", river.ID, river.Discharge, index-1, document.Rivers[index-1].Discharge)
+		}
+		for position, edgeID := range river.EdgeIDs {
+			if edgeID < 0 || int(edgeID) >= len(document.Edges) {
+				t.Errorf("river %d references unknown edge %d", river.ID, edgeID)
+				continue
+			}
+			edge := document.Edges[edgeID]
+			if edge.RiverID != river.ID {
+				t.Errorf("river %d edge %d has river_id %d", river.ID, edgeID, edge.RiverID)
+			}
+			first, second := river.CornerIDs[position], river.CornerIDs[position+1]
+			if !(edge.CornerIDs == [2]wgvc.CornerID{first, second} || edge.CornerIDs == [2]wgvc.CornerID{second, first}) {
+				t.Errorf("river %d edge %d joins %v, want %d and %d", river.ID, edgeID, edge.CornerIDs, first, second)
+			}
+			for _, provinceID := range edge.ProvinceIDs {
+				if document.Provinces[provinceID].IslandID == wgvc.NoIslandID {
+					t.Errorf("river %d edge %d borders water province %d", river.ID, edgeID, provinceID)
+				}
+			}
+		}
+		switch river.Mouth.Kind {
+		case wgvc.RiverEndOcean:
+		case wgvc.RiverEndBasin:
+			if river.Mouth.BasinID < 0 || int(river.Mouth.BasinID) >= len(document.Basins) {
+				t.Errorf("river %d mouth basin %d is unknown", river.ID, river.Mouth.BasinID)
+			}
+		case wgvc.RiverEndRiver:
+			if river.Mouth.RiverID < 0 || int(river.Mouth.RiverID) >= len(document.Rivers) || river.Mouth.RiverID == river.ID {
+				t.Errorf("river %d mouth river %d is invalid", river.ID, river.Mouth.RiverID)
+			}
+		default:
+			t.Errorf("river %d has mouth kind %q", river.ID, river.Mouth.Kind)
+		}
+		if river.Source.Kind != wgvc.RiverEndSpring && river.Source.Kind != wgvc.RiverEndBasin {
+			t.Errorf("river %d has source kind %q", river.ID, river.Source.Kind)
 		}
 	}
 }

@@ -70,7 +70,7 @@ func TestLayerChangesOnlyPolygonFill(t *testing.T) {
 		if err != nil {
 			t.Fatalf("buildScene(%s) error = %v", layer, err)
 		}
-		if !reflect.DeepEqual(scene.coastlines, terrain.coastlines) || scene.width != terrain.width || scene.height != terrain.height {
+		if !reflect.DeepEqual(scene.coastlines, terrain.coastlines) || !reflect.DeepEqual(scene.rivers, terrain.rivers) || scene.width != terrain.width || scene.height != terrain.height {
 			t.Errorf("layer %s changed the scene outside polygon fills", layer)
 		}
 		for i := range scene.polygons {

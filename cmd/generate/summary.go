@@ -20,8 +20,9 @@ type summarySection struct {
 }
 
 // buildSummary counts provinces per elevation band, heat band, moisture band,
-// and terrain. Every declared value gets a row, including values with a count
-// of zero, and rows follow the library's ordered lists.
+// and terrain, and rivers per class. Every declared value gets a row,
+// including values with a count of zero, and rows follow the library's
+// ordered lists.
 func buildSummary(world wgvc.World) ([]summarySection, error) {
 	elevation, err := countRows(wgvc.ElevationBands(), elevationBandName, world.Provinces, func(p wgvc.Province) wgvc.ElevationBand { return p.ElevationBand })
 	if err != nil {
@@ -40,11 +41,22 @@ func buildSummary(world wgvc.World) ([]summarySection, error) {
 	if err != nil {
 		return nil, err
 	}
+	rivers := make([]summaryRow, 0, len(wgvc.RiverClasses()))
+	for _, class := range wgvc.RiverClasses() {
+		row := summaryRow{name: string(class)}
+		for _, river := range world.Rivers {
+			if river.Class == class {
+				row.count++
+			}
+		}
+		rivers = append(rivers, row)
+	}
 	return []summarySection{
 		{title: "elevation band", rows: elevation},
 		{title: "heat band", rows: heat},
 		{title: "moisture band", rows: moisture},
 		{title: "terrain", rows: terrain},
+		{title: "river class", rows: rivers},
 	}, nil
 }
 

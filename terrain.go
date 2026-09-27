@@ -72,8 +72,48 @@ func assignElevations(world *World, worldSeed uint64) {
 	for cornerID, corner := range world.Corners {
 		cornerValues[cornerID] = noise.sample(corner.Point)
 	}
+	assignCornerElevations(world, cornerValues)
 	assignEdgeElevations(world, cornerValues)
 	assignProvinceElevations(world)
+}
+
+// assignCornerElevations maps each corner's noise onto the elevation scale by
+// the medium of its provinces: all land, all water, or, on a coastline, sea
+// level. Edges are computed from the raw noise separately so their values are
+// unchanged by this pass.
+func assignCornerElevations(world *World, cornerValues []float64) {
+	const (
+		cornerUnclassified = iota
+		cornerLand
+		cornerWater
+		cornerCoast
+	)
+	kinds := make([]int, len(world.Corners))
+	for _, province := range world.Provinces {
+		kind := cornerWater
+		if province.IslandID != NoIslandID {
+			kind = cornerLand
+		}
+		for _, cornerID := range province.CornerIDs {
+			switch kinds[cornerID] {
+			case cornerUnclassified:
+				kinds[cornerID] = kind
+			case kind, cornerCoast:
+			default:
+				kinds[cornerID] = cornerCoast
+			}
+		}
+	}
+	for cornerID := range world.Corners {
+		switch kinds[cornerID] {
+		case cornerLand:
+			world.Corners[cornerID].Elevation = elevationLandMargin + (1-elevationLandMargin)*cornerValues[cornerID]
+		case cornerWater:
+			world.Corners[cornerID].Elevation = -1 + (1-elevationWaterMargin)*cornerValues[cornerID]
+		default:
+			world.Corners[cornerID].Elevation = 0
+		}
+	}
 }
 
 func assignEdgeElevations(world *World, cornerValues []float64) {

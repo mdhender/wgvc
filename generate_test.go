@@ -243,12 +243,37 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		}
 	}
 
+	cornerLand := make([]bool, len(world.Corners))
+	cornerWater := make([]bool, len(world.Corners))
+	for _, province := range world.Provinces {
+		for _, cornerID := range province.CornerIDs {
+			if province.IslandID == NoIslandID {
+				cornerWater[cornerID] = true
+			} else {
+				cornerLand[cornerID] = true
+			}
+		}
+	}
 	for cornerID, corner := range world.Corners {
 		if corner.ID != CornerID(cornerID) {
 			t.Errorf("corner at index %d has ID %d", cornerID, corner.ID)
 		}
 		if !finitePoint(corner.Point) {
 			t.Errorf("corner %d is not finite: %+v", corner.ID, corner.Point)
+		}
+		switch {
+		case cornerLand[cornerID] && cornerWater[cornerID]:
+			if corner.Elevation != 0 {
+				t.Errorf("coast corner %d elevation = %g, want 0", corner.ID, corner.Elevation)
+			}
+		case cornerLand[cornerID]:
+			if corner.Elevation < elevationLandMargin || corner.Elevation >= 1 {
+				t.Errorf("land corner %d elevation = %g, want [%g, 1)", corner.ID, corner.Elevation, elevationLandMargin)
+			}
+		default:
+			if corner.Elevation <= -1 || corner.Elevation > -elevationWaterMargin {
+				t.Errorf("water corner %d elevation = %g, want (-1, %g]", corner.ID, corner.Elevation, -elevationWaterMargin)
+			}
 		}
 	}
 
@@ -467,6 +492,110 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 	for _, island := range world.Islands {
 		assertIslandConnected(t, island, neighbors)
 	}
+	assertValidRivers(t, world)
+}
+
+// assertValidRivers checks the river contracts: chains are contiguous edges
+// between land provinces in flow order with non-decreasing discharge, each
+// river edge belongs to exactly the river that lists it, mouths and sources
+// name the right kind of end, and rivers are ordered by discharge.
+func assertValidRivers(t *testing.T, world World) {
+	t.Helper()
+	edgeRivers := make([]int, len(world.Edges))
+	for riverIndex, river := range world.Rivers {
+		if river.ID != RiverID(riverIndex) {
+			t.Errorf("river at index %d has ID %d", riverIndex, river.ID)
+		}
+		if len(river.EdgeIDs) == 0 || len(river.CornerIDs) != len(river.EdgeIDs)+1 {
+			t.Errorf("river %d has %d corners for %d edges", river.ID, len(river.CornerIDs), len(river.EdgeIDs))
+			continue
+		}
+		if river.Class != ClassifyDischarge(river.Discharge) || river.Class == "" {
+			t.Errorf("river %d class %q does not match discharge %g", river.ID, river.Class, river.Discharge)
+		}
+		if riverIndex > 0 && river.Discharge > world.Rivers[riverIndex-1].Discharge {
+			t.Errorf("river %d discharge %g exceeds river %d's %g", river.ID, river.Discharge, riverIndex-1, world.Rivers[riverIndex-1].Discharge)
+		}
+		previousDischarge := 0.0
+		for position, edgeID := range river.EdgeIDs {
+			if int(edgeID) < 0 || int(edgeID) >= len(world.Edges) {
+				t.Fatalf("river %d references unknown edge %d", river.ID, edgeID)
+			}
+			edge := world.Edges[edgeID]
+			edgeRivers[edgeID]++
+			if edge.RiverID != river.ID {
+				t.Errorf("river %d edge %d has RiverID %d", river.ID, edgeID, edge.RiverID)
+			}
+			first, second := river.CornerIDs[position], river.CornerIDs[position+1]
+			if edge.CornerIDs != orderedCornerIDs(first, second) {
+				t.Errorf("river %d edge %d joins %v, want %d and %d", river.ID, edgeID, edge.CornerIDs, first, second)
+			}
+			if len(edge.ProvinceIDs) != 2 || world.Provinces[edge.ProvinceIDs[0]].IslandID == NoIslandID || world.Provinces[edge.ProvinceIDs[1]].IslandID == NoIslandID {
+				t.Errorf("river %d edge %d is not between two land provinces: %v", river.ID, edgeID, edge.ProvinceIDs)
+			}
+			if edge.Discharge < riverStreamDischarge || edge.Discharge < previousDischarge {
+				t.Errorf("river %d edge %d discharge %g is below the stream threshold or below upstream %g", river.ID, edgeID, edge.Discharge, previousDischarge)
+			}
+			previousDischarge = edge.Discharge
+		}
+		if last := world.Edges[river.EdgeIDs[len(river.EdgeIDs)-1]]; last.Discharge != river.Discharge {
+			t.Errorf("river %d discharge %g differs from its last edge's %g", river.ID, river.Discharge, last.Discharge)
+		}
+		mouthCorner := river.CornerIDs[len(river.CornerIDs)-1]
+		switch river.Mouth.Kind {
+		case RiverEndOcean:
+			if !cornerTouchesWater(world, mouthCorner, NoBasinID) || river.Mouth.BasinID != NoBasinID || river.Mouth.RiverID != NoRiverID {
+				t.Errorf("river %d ocean mouth %+v at corner %d is not on ocean", river.ID, river.Mouth, mouthCorner)
+			}
+		case RiverEndBasin:
+			if river.Mouth.BasinID == NoBasinID || !cornerTouchesWater(world, mouthCorner, river.Mouth.BasinID) || river.Mouth.RiverID != NoRiverID {
+				t.Errorf("river %d basin mouth %+v at corner %d is not on that basin", river.ID, river.Mouth, mouthCorner)
+			}
+		case RiverEndRiver:
+			if river.Mouth.RiverID == NoRiverID || river.Mouth.RiverID == river.ID || int(river.Mouth.RiverID) >= len(world.Rivers) || river.Mouth.BasinID != NoBasinID {
+				t.Errorf("river %d confluence mouth %+v is invalid", river.ID, river.Mouth)
+			} else if trunk := world.Rivers[river.Mouth.RiverID]; !slices.Contains(trunk.CornerIDs[:len(trunk.CornerIDs)-1], mouthCorner) || trunk.Discharge < river.Discharge {
+				t.Errorf("river %d joins river %d away from its course or into a smaller river", river.ID, river.Mouth.RiverID)
+			}
+		default:
+			t.Errorf("river %d has mouth kind %q", river.ID, river.Mouth.Kind)
+		}
+		sourceCorner := river.CornerIDs[0]
+		switch river.Source.Kind {
+		case RiverEndSpring:
+			if river.Source.BasinID != NoBasinID || river.Source.RiverID != NoRiverID {
+				t.Errorf("river %d spring source %+v carries an ID", river.ID, river.Source)
+			}
+		case RiverEndBasin:
+			if river.Source.BasinID == NoBasinID || !cornerTouchesWater(world, sourceCorner, river.Source.BasinID) {
+				t.Errorf("river %d basin source %+v at corner %d is not on that basin", river.ID, river.Source, sourceCorner)
+			}
+		default:
+			t.Errorf("river %d has source kind %q", river.ID, river.Source.Kind)
+		}
+	}
+	for edgeID, edge := range world.Edges {
+		if (edge.RiverID != NoRiverID) != (edgeRivers[edgeID] == 1) || edgeRivers[edgeID] > 1 {
+			t.Errorf("edge %d has RiverID %d but appears in %d rivers", edgeID, edge.RiverID, edgeRivers[edgeID])
+		}
+		if math.IsNaN(edge.Discharge) || edge.Discharge < 0 {
+			t.Errorf("edge %d discharge = %g, want non-negative", edgeID, edge.Discharge)
+		}
+	}
+}
+
+// cornerTouchesWater reports whether a corner belongs to a water province in
+// the given basin, or to ocean when basinID is NoBasinID.
+func cornerTouchesWater(world World, cornerID CornerID, basinID BasinID) bool {
+	for _, province := range world.Provinces {
+		if province.IslandID != NoIslandID || province.BasinID != basinID {
+			continue
+		}
+		if slices.Contains(province.CornerIDs, cornerID) {
+			return true
+		}
+	}
+	return false
 }
 
 // assertValidExits checks that exits are the province's edges numbered

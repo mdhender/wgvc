@@ -20,7 +20,17 @@ const (
 	backgroundColor = "#f7f5ef"
 	cellBorderColor = "#69787b"
 	coastlineColor  = "#24343d"
+	riverColor      = "#2a7fd4"
 )
+
+// riverWidths is the stroke width of a river edge by the class of the flow on
+// that edge, so a river thickens downstream. Streams stay thinner than the
+// coastline; major rivers are the heaviest line on the map.
+var riverWidths = map[wgvc.RiverClass]float64{
+	wgvc.RiverClassStream:     1.5,
+	wgvc.RiverClassRiver:      2.5,
+	wgvc.RiverClassMajorRiver: 4.0,
+}
 
 var terrainColors = map[wgvc.Terrain]string{
 	wgvc.TerrainDeepOcean:        "#04142b",
@@ -67,11 +77,17 @@ type renderLine struct {
 	end   renderPoint
 }
 
+type renderRiverSegment struct {
+	line  renderLine
+	width float64
+}
+
 type renderScene struct {
 	width      int
 	height     int
 	polygons   []renderPolygon
 	coastlines []renderLine
+	rivers     []renderRiverSegment
 }
 
 func buildScene(world wgvc.World, width, height int, layer mapLayer) (renderScene, error) {
@@ -149,6 +165,25 @@ func buildScene(world wgvc.World, width, height int, layer mapLayer) (renderScen
 			end:   transform(world.Corners[secondCorner].Point),
 		})
 	}
+	for _, river := range world.Rivers {
+		for _, edgeID := range river.EdgeIDs {
+			if edgeID < 0 || int(edgeID) >= len(world.Edges) {
+				return renderScene{}, fmt.Errorf("river %d references unknown edge %d", river.ID, edgeID)
+			}
+			edge := world.Edges[edgeID]
+			width, ok := riverWidths[wgvc.ClassifyDischarge(edge.Discharge)]
+			if !ok {
+				return renderScene{}, fmt.Errorf("river %d edge %d has discharge %g below the stream threshold", river.ID, edgeID, edge.Discharge)
+			}
+			scene.rivers = append(scene.rivers, renderRiverSegment{
+				width: width,
+				line: renderLine{
+					start: transform(world.Corners[edge.CornerIDs[0]].Point),
+					end:   transform(world.Corners[edge.CornerIDs[1]].Point),
+				},
+			})
+		}
+	}
 	return scene, nil
 }
 
@@ -174,6 +209,9 @@ func renderSVG(scene renderScene) ([]byte, error) {
 	for _, coastline := range scene.coastlines {
 		fmt.Fprintf(&svg, "<line stroke=\"%s\" stroke-width=\"%.1f\" stroke-linecap=\"round\" x1=\"%.3f\" y1=\"%.3f\" x2=\"%.3f\" y2=\"%.3f\"/>\n", coastlineColor, coastlineWidth, coastline.start.x, coastline.start.y, coastline.end.x, coastline.end.y)
 	}
+	for _, river := range scene.rivers {
+		fmt.Fprintf(&svg, "<line class=\"river\" stroke=\"%s\" stroke-width=\"%.1f\" stroke-linecap=\"round\" x1=\"%.3f\" y1=\"%.3f\" x2=\"%.3f\" y2=\"%.3f\"/>\n", riverColor, river.width, river.line.start.x, river.line.start.y, river.line.end.x, river.line.end.y)
+	}
 	svg.WriteString("</svg>\n")
 	return []byte(svg.String()), nil
 }
@@ -196,6 +234,12 @@ func renderPNG(scene renderScene) ([]byte, error) {
 	canvas.SetLineCap(gg.LineCapRound)
 	for _, coastline := range scene.coastlines {
 		canvas.DrawLine(coastline.start.x, coastline.start.y, coastline.end.x, coastline.end.y)
+		canvas.Stroke()
+	}
+	canvas.SetHexColor(riverColor)
+	for _, river := range scene.rivers {
+		canvas.SetLineWidth(river.width)
+		canvas.DrawLine(river.line.start.x, river.line.start.y, river.line.end.x, river.line.end.y)
 		canvas.Stroke()
 	}
 

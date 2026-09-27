@@ -29,6 +29,33 @@ requested count. Water can contain interior components such as lakes.
   numbering is geometric and never expresses passability. The world does not
   wrap; boundary exits lead nowhere. See
   [About exits, bearings, and compass points](explanations/bearing-not-compass.md).
+- `Corner.Elevation` is the seeded elevation noise at the corner on the edge
+  scale: `[0.1, 1)` where every incident province is land, `(-1, -0.1]` where
+  every one is water, and exactly `0` on a coastline. An edge's elevation is
+  the mean of its corners'.
+- `World.Rivers` are chains of edges between land provinces, listed from
+  source to mouth: `CornerIDs` in flow order and `EdgeIDs[i]` joining
+  `CornerIDs[i]` to `CornerIDs[i+1]`. Rivers never run along or across water.
+  Each edge names its river in `Edge.RiverID` (`NoRiverID` otherwise) and
+  carries `Edge.Discharge`, the flow along it in moisture-weighted
+  province-area units; discharge is set on every edge drainage uses, river or
+  not. A river's `Discharge` is its last edge's, and its `Class` follows from
+  it: stream, river, or major river, of which the last two are navigable.
+  `Source.Kind` is `spring` or `basin` (the outflow of a lake or inland sea,
+  with `BasinID`); `Mouth.Kind` is `ocean`, `basin` (with `BasinID`), or
+  `river` (a confluence, with the `RiverID` joined). At a confluence the
+  larger branch continues and the smaller ends, so every river edge belongs
+  to exactly one river. Rivers are ordered by descending discharge.
+- Flow direction is the river's corner order. Consecutive river edges pivot
+  around a shared corner, so the bank provinces taken in flow order are
+  pairwise adjacent; how boats use that is a game rule outside this library.
+- Drainage is derived from elevation, moisture, and IDs alone and consumes no
+  randomness. Every corner on ocean is an outlet; a priority-flood from the
+  outlets gives every other corner one downstream neighbor along a monotone
+  path to the sea, filling depressions to their spill level internally. Lakes
+  and inland seas are ordinary nodes, so rivers flowing in end at the shore
+  and the basin's water leaves at its spill corner. Runoff is each land
+  province's `Area * Moisture` spread over its corners.
 - `Province.Area` is the polygon area and `Edge.Length` is the distance between
   the edge's corners, both in world units. The mesh is scaled so the land
   provinces have a mean area of exactly 1; coarse ocean cells near the world
@@ -44,9 +71,9 @@ requested count. Water can contain interior components such as lakes.
 ## JSON export
 
 `go run ./cmd/generate -format json -output world` writes `world.json`. The
-document has `schema_version: 5`, generator identity, generation configuration
+document has `schema_version: 6`, generator identity, generation configuration
 and effective result metadata, world-coordinate bounds, and the canonical `islands`,
-`basins`, `provinces`, `corners`, and `edges` collections. It uses the same IDs
+`basins`, `provinces`, `corners`, `edges`, and `rivers` collections. It uses the same IDs
 and references described above. Water provinces retain `island_id: -1`, and
 provinces outside any basin have `basin_id: -1`; terrain and elevation, heat, and
 moisture bands use descriptive strings. The seed is a hexadecimal string to
@@ -63,7 +90,10 @@ Schema version 3 added the `basins` collection (`id`, `province_ids`,
 added each province's `edge_ids` (ring order, parallel to `corner_ids`) and
 `area`, and each edge's `length`, all in world units. Schema version 5 added
 each province's `exits` (`number`, `edge_id`, `neighbor_id`, `bearing`,
-`compass`), ordered by `number`.
+`compass`), ordered by `number`. Schema version 6 added each corner's
+`elevation`, each edge's `river_id` and `discharge`, and the `rivers`
+collection (`id`, `class`, `discharge`, `corner_ids`, `edge_ids`, and `source`
+and `mouth` objects with `kind`, `basin_id`, and `river_id`).
 
 JSON uses Cartesian generation coordinates rather than the transformed pixel
 coordinates used by image renderers. Use a comma-separated format such as
