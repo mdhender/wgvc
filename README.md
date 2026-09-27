@@ -77,6 +77,10 @@ The returned geometry is indexed:
 - `Province.CornerIDs` is a counterclockwise polygon ring without a repeated
   closing corner. `Province.Center` is its original Voronoi generating point,
   not its polygon centroid.
+- `Province.EdgeIDs` lists the boundary edges in the same ring order:
+  `EdgeIDs[i]` joins `CornerIDs[i]` to `CornerIDs[(i+1) % n]`.
+- `Province.Area` and `Edge.Length` are in world units, where the mesh is
+  scaled so land provinces have a mean area of exactly 1.
 - Corners and edges are shared objects. An `Edge` references two corners and
   either one province at the outside of the world or two provinces inside it.
   A coastline edge joins one land province to one water province.
@@ -156,7 +160,7 @@ top-level shape is:
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "generation": {
     "generator": { "version": "0.7.3-alpha", "build": "9a64246" },
     "config": { "seed": "0x0123456789abcdef" },
@@ -172,9 +176,10 @@ top-level shape is:
 ```
 
 The abbreviated objects above omit fields and collection entries. IDs equal
-their array indexes, polygon rings refer to shared corners, edges refer to their
-incident provinces, water provinces use `island_id: -1`, and provinces outside
-any basin use `basin_id: -1`. Terrain and climate
+their array indexes, polygon rings refer to shared corners, each province also
+lists its boundary `edge_ids` in ring order and its `area`, edges refer to their
+incident provinces and carry their `length`, water provinces use
+`island_id: -1`, and provinces outside any basin use `basin_id: -1`. Terrain and climate
 bands are descriptive strings. The seed is a hexadecimal string so all 64 bits
 survive parsers whose numeric values use IEEE-754 doubles.
 `generation.generator` records the generator version (without build metadata)

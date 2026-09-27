@@ -9,7 +9,7 @@ import (
 	"github.com/mdhender/wgvc/internal/x24"
 )
 
-const jsonSchemaVersion = 3
+const jsonSchemaVersion = 4
 
 type jsonWorld struct {
 	SchemaVersion int            `json:"schema_version"`
@@ -93,6 +93,8 @@ type jsonProvince struct {
 	BasinID       wgvc.BasinID    `json:"basin_id"`
 	Center        jsonPoint       `json:"center"`
 	CornerIDs     []wgvc.CornerID `json:"corner_ids"`
+	EdgeIDs       []wgvc.EdgeID   `json:"edge_ids"`
+	Area          float64         `json:"area"`
 	Terrain       wgvc.Terrain    `json:"terrain"`
 	Elevation     float64         `json:"elevation"`
 	ElevationBand string          `json:"elevation_band"`
@@ -112,6 +114,7 @@ type jsonEdge struct {
 	ID          wgvc.EdgeID       `json:"id"`
 	CornerIDs   [2]wgvc.CornerID  `json:"corner_ids"`
 	ProvinceIDs []wgvc.ProvinceID `json:"province_ids"`
+	Length      float64           `json:"length"`
 	Elevation   float64           `json:"elevation"`
 }
 
@@ -198,6 +201,8 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 			BasinID:       province.BasinID,
 			Center:        toJSONPoint(province.Center),
 			CornerIDs:     province.CornerIDs,
+			EdgeIDs:       province.EdgeIDs,
+			Area:          province.Area,
 			Terrain:       province.Terrain,
 			Elevation:     province.Elevation,
 			ElevationBand: elevationBand,
@@ -216,6 +221,7 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 			ID:          edge.ID,
 			CornerIDs:   edge.CornerIDs,
 			ProvinceIDs: edge.ProvinceIDs,
+			Length:      edge.Length,
 			Elevation:   edge.Elevation,
 		}
 	}

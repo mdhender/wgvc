@@ -197,7 +197,9 @@ type Basin struct {
 // cannot reach the world boundary and is NoBasinID otherwise; it never changes
 // whether a province is land or water. Center is the generating point used for its Voronoi
 // cell, not the polygon centroid. CornerIDs is a counterclockwise polygon ring
-// without a repeated closing corner. Elevation is the mean elevation of the
+// without a repeated closing corner. EdgeIDs lists the boundary edges in the
+// same ring order: EdgeIDs[i] joins CornerIDs[i] to CornerIDs[(i+1) % n].
+// Area is the polygon area in world units. Elevation is the mean elevation of the
 // province's boundary edges, normalized to [-1, 1]. ElevationBand preserves
 // the growth-assigned land/water classification even at sea level. Relief is
 // the mean absolute elevation difference to neighbors across shared edges,
@@ -210,6 +212,8 @@ type Province struct {
 	BasinID       BasinID
 	Center        Point
 	CornerIDs     []CornerID
+	EdgeIDs       []EdgeID
+	Area          float64
 	Terrain       Terrain
 	Elevation     float64
 	ElevationBand ElevationBand
@@ -229,11 +233,13 @@ type Corner struct {
 // Edge is an undirected geometric boundary, never a route. CornerIDs contains
 // its two endpoints. ProvinceIDs contains one province at the outside of the
 // world or two provinces inside it. A coastline has one land and one water
-// province; incidence is authoritative geometric adjacency. Elevation is
+// province; incidence is authoritative geometric adjacency. Length is the
+// Euclidean distance between the two corners in world units. Elevation is
 // normalized to [-1, 1], with zero representing sea level.
 type Edge struct {
 	ID          EdgeID
 	CornerIDs   [2]CornerID
 	ProvinceIDs []ProvinceID
+	Length      float64
 	Elevation   float64
 }

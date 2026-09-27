@@ -89,6 +89,17 @@ func TestRunJSONContainsCanonicalWorldData(t *testing.T) {
 				t.Errorf("province %d references unknown corner %d", province.ID, cornerID)
 			}
 		}
+		if len(province.EdgeIDs) != len(province.CornerIDs) {
+			t.Errorf("province %d has %d edge IDs for %d corners", province.ID, len(province.EdgeIDs), len(province.CornerIDs))
+		}
+		for _, edgeID := range province.EdgeIDs {
+			if edgeID < 0 || int(edgeID) >= len(document.Edges) {
+				t.Errorf("province %d references unknown edge %d", province.ID, edgeID)
+			}
+		}
+		if !(province.Area > 0) {
+			t.Errorf("province %d area = %g, want positive", province.ID, province.Area)
+		}
 	}
 	if !foundWater {
 		t.Fatal("JSON contains no water province with island_id -1")
@@ -111,6 +122,9 @@ func TestRunJSONContainsCanonicalWorldData(t *testing.T) {
 			if provinceID < 0 || int(provinceID) >= len(document.Provinces) {
 				t.Errorf("edge %d references unknown province %d", edge.ID, provinceID)
 			}
+		}
+		if !(edge.Length > 0) {
+			t.Errorf("edge %d length = %g, want positive", edge.ID, edge.Length)
 		}
 	}
 }

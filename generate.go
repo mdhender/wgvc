@@ -102,6 +102,7 @@ func generateForRender(growthConfig x24.Config, climateConfig ClimateConfig) (Wo
 			Elevation:   0,
 		})
 	}
+	assignGeometry(&world)
 	assignElevations(&world, growthConfig.WorldSeed)
 	assignRelief(&world)
 	assignClimate(&world, growthConfig.WorldSeed, climateConfig)

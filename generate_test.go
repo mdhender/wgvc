@@ -316,6 +316,10 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		if edge.Elevation != wantElevation {
 			t.Errorf("edge %d elevation = %g, want %g", edge.ID, edge.Elevation, wantElevation)
 		}
+		wantLength := pointDistance(world.Corners[edge.CornerIDs[0]].Point, world.Corners[edge.CornerIDs[1]].Point)
+		if edge.Length != wantLength || !(edge.Length > 0) || math.IsInf(edge.Length, 0) {
+			t.Errorf("edge %d length = %g, want positive corner distance %g", edge.ID, edge.Length, wantLength)
+		}
 		if math.IsNaN(edge.Elevation) || math.IsInf(edge.Elevation, 0) || edge.Elevation < -1 || edge.Elevation > 1 {
 			t.Errorf("edge %d elevation = %g, want finite value in [-1, 1]", edge.ID, edge.Elevation)
 		}
@@ -386,6 +390,9 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 			t.Fatalf("province %d has only %d corners", province.ID, len(province.CornerIDs))
 		}
 
+		if len(province.EdgeIDs) != len(province.CornerIDs) {
+			t.Fatalf("province %d has %d edge IDs for %d corners", province.ID, len(province.EdgeIDs), len(province.CornerIDs))
+		}
 		ring := make([]Point, len(province.CornerIDs))
 		for ringIndex, cornerID := range province.CornerIDs {
 			if int(cornerID) < 0 || int(cornerID) >= len(world.Corners) {
@@ -400,6 +407,9 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 				t.Errorf("province %d segment %v has no edge", province.ID, key)
 				continue
 			}
+			if province.EdgeIDs[ringIndex] != edgeID {
+				t.Errorf("province %d edge IDs[%d] = %d, want segment edge %d", province.ID, ringIndex, province.EdgeIDs[ringIndex], edgeID)
+			}
 			if !containsProvinceID(world.Edges[edgeID].ProvinceIDs, province.ID) {
 				t.Errorf("province %d segment edge %d lacks incidence", province.ID, edgeID)
 			}
@@ -408,6 +418,9 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 		area := signedArea(ring)
 		if area <= 0 {
 			t.Errorf("province %d signed area = %g, want positive", province.ID, area)
+		}
+		if province.Area != area {
+			t.Errorf("province %d area = %g, want polygon area %g", province.ID, province.Area, area)
 		}
 		totalArea += area
 		if province.IslandID != NoIslandID {
@@ -427,6 +440,13 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 	for cornerID, used := range cornerInProvince {
 		if !used {
 			t.Errorf("corner %d is orphaned", cornerID)
+		}
+	}
+	for _, edge := range world.Edges {
+		for _, provinceID := range edge.ProvinceIDs {
+			if !slices.Contains(world.Provinces[provinceID].EdgeIDs, edge.ID) {
+				t.Errorf("edge %d is incident to province %d, which does not list it in %v", edge.ID, provinceID, world.Provinces[provinceID].EdgeIDs)
+			}
 		}
 	}
 	for edgeID, traversals := range edgeTraversals {
