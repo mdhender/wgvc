@@ -18,14 +18,18 @@ var ErrStarved = errors.New("all islands starved before claiming the requested p
 type Point = singlemesh.Point
 
 type Config struct {
-	WorldSeed          uint64
-	ProvinceCount      int
-	IslandCount        int
-	AspectRatio        string
-	OceanPercentage    float64
-	EdgeBarrierWidth   float64
-	EdgeRamp           []float64
-	AttractantCount    int
+	WorldSeed        uint64
+	ProvinceCount    int
+	IslandCount      int
+	AspectRatio      string
+	OceanPercentage  float64
+	EdgeBarrierWidth float64
+	EdgeRamp         []float64
+	AttractantCount  int
+	// Constellation names an attractant arrangement that replaces the
+	// regional placement selected by AttractantCount. It is placed without
+	// jitter and consumes no randomness.
+	Constellation      string
 	AttractantRamp     []float64
 	AttractantJitter   float64
 	SoftmaxTemperature float64
@@ -85,6 +89,11 @@ func (c Config) validate() error {
 	}
 	if !validAttractantCount(c.AttractantCount) {
 		return fmt.Errorf("attractant count must be one of 0, 1, 2, 3, 4, 5, 6, or 9: %d", c.AttractantCount)
+	}
+	if c.Constellation != "" {
+		if _, ok := ConstellationByName(c.Constellation); !ok {
+			return fmt.Errorf("unknown constellation %q: want one of %v", c.Constellation, ConstellationNames())
+		}
 	}
 	if len(c.AttractantRamp) == 0 {
 		return fmt.Errorf("attractant ramp must not be empty")

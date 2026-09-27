@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/mdhender/wgvc/internal/aspectratio"
@@ -517,5 +518,52 @@ func assertAttractantCoverage(t *testing.T, result Result, config Config) {
 	}
 	if len(regions) != config.AttractantCount {
 		t.Errorf("attractant diagnostics cover %d regions, want %d", len(regions), config.AttractantCount)
+	}
+}
+
+func TestConstellationPlacesSitesInOrderWithinFill(t *testing.T) {
+	config := DefaultConfig()
+	config.AspectRatio = "cinematic"
+	config.Constellation = "ursa-minor"
+	config.AttractantCount = 9 // ignored when a constellation is set
+	// Short ramps keep the edge clearance small enough for the default
+	// province count on a wide map, so sites land near their targets.
+	config.EdgeRamp = []float64{-1, 0}
+	config.AttractantRamp = []float64{1, 0}
+	result, err := Generate(config)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	constellation, _ := ConstellationByName("ursa-minor")
+	if len(result.Attractants) != len(constellation.Sites) || len(result.AttractantSkips) != 0 {
+		t.Fatalf("placed %d attractants with %d skips, want %d and none", len(result.Attractants), len(result.AttractantSkips), len(constellation.Sites))
+	}
+	width, height, _ := aspectratio.Dimensions(config.AspectRatio)
+	scale := min(constellationWidthFill*width/2, constellationHeightFill*height/2/0.30)
+	for i, attractant := range result.Attractants {
+		site := constellation.Sites[i]
+		wantX, wantY := width/2+site.X*scale, height/2+site.Y*scale
+		if math.Hypot(attractant.Point.X-wantX, attractant.Point.Y-wantY) > 0.05*height {
+			t.Errorf("attractant %d at (%.3f, %.3f), want near (%.3f, %.3f)", i, attractant.Point.X, attractant.Point.Y, wantX, wantY)
+		}
+	}
+	// Polaris is the westernmost site and Pherkad the easternmost.
+	if result.Attractants[0].Point.X >= result.Attractants[5].Point.X {
+		t.Errorf("Polaris (x=%.3f) is not west of Pherkad (x=%.3f)", result.Attractants[0].Point.X, result.Attractants[5].Point.X)
+	}
+	again, err := Generate(config)
+	if err != nil || !reflect.DeepEqual(result, again) {
+		t.Fatalf("constellation generation is not deterministic: %v", err)
+	}
+}
+
+func TestGenerateRejectsUnknownConstellation(t *testing.T) {
+	config := DefaultConfig()
+	config.Constellation = "orion"
+	if _, err := Generate(config); err == nil {
+		t.Fatal("Generate() accepted an unknown constellation")
+	}
+	if names := ConstellationNames(); !slices.Contains(names, "ursa-minor") {
+		t.Errorf("ConstellationNames() = %v, want ursa-minor", names)
 	}
 }

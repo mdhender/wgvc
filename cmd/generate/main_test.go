@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"image/color"
 	"image/png"
@@ -263,4 +264,49 @@ func channelNear(first, second, tolerance uint8) bool {
 		difference = -difference
 	}
 	return difference <= int(tolerance)
+}
+
+func TestRunAcceptsConstellationAttractors(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "map")
+	var stdout, stderr bytes.Buffer
+	err := run([]string{
+		"-provinces", "200",
+		"-islands", "3",
+		"-aspect", "cinematic",
+		"-attractors", "ursa-minor",
+		"-edge-ramp=-1,0",
+		"-attractant-ramp=1,0",
+		"-format", "json",
+		"-output", base,
+	}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("run() error = %v; stderr = %s", err, stderr.String())
+	}
+	data, err := os.ReadFile(base + ".json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Generation struct {
+			Config struct {
+				AttractantCount int    `json:"attractant_count"`
+				Constellation   string `json:"attractant_constellation"`
+			} `json:"config"`
+			Result struct {
+				AttractantProvinceIDs []int `json:"attractant_province_ids"`
+			} `json:"result"`
+		} `json:"generation"`
+	}
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	if document.Generation.Config.Constellation != "ursa-minor" || document.Generation.Config.AttractantCount != 0 {
+		t.Errorf("config = %+v, want constellation ursa-minor and count 0", document.Generation.Config)
+	}
+	if got := len(document.Generation.Result.AttractantProvinceIDs); got != 7 {
+		t.Errorf("attractant_province_ids has %d entries, want 7", got)
+	}
+	if err := run([]string{"-attractors", "orion", "-output", base}, &stdout, &stderr); err == nil {
+		t.Error("run() accepted an unknown constellation")
+	}
 }

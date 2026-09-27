@@ -75,6 +75,37 @@ func (f rampFlag) Set(input string) error {
 	return nil
 }
 
+// attractorsFlag sets either the regional attractant count or a named
+// constellation, which replaces the count.
+type attractorsFlag struct {
+	config *x24.Config
+}
+
+func (f attractorsFlag) String() string {
+	if f.config == nil {
+		return ""
+	}
+	if f.config.Constellation != "" {
+		return f.config.Constellation
+	}
+	return strconv.Itoa(f.config.AttractantCount)
+}
+
+func (f attractorsFlag) Set(input string) error {
+	input = strings.TrimSpace(input)
+	if count, err := strconv.Atoi(input); err == nil {
+		f.config.AttractantCount = count
+		f.config.Constellation = ""
+		return nil
+	}
+	if _, ok := x24.ConstellationByName(input); !ok {
+		return fmt.Errorf("unknown attractor count or constellation %q: want a count or one of %s", input, strings.Join(x24.ConstellationNames(), ", "))
+	}
+	f.config.Constellation = input
+	f.config.AttractantCount = 0
+	return nil
+}
+
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -104,7 +135,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Float64Var(&options.config.OceanPercentage, "ocean", options.config.OceanPercentage, "initial ocean fraction")
 	flags.Float64Var(&options.config.EdgeBarrierWidth, "edge-barrier", options.config.EdgeBarrierWidth, "permanent ocean strip width in unit-map coordinates")
 	flags.Var(rampFlag{values: &options.config.EdgeRamp}, "edge-ramp", "comma-separated desirability values by hop past the barrier")
-	flags.IntVar(&options.config.AttractantCount, "attractors", options.config.AttractantCount, "number of attractors: 0, 1, 2, 3, 4, 5, 6, or 9")
+	flags.Var(attractorsFlag{config: &options.config}, "attractors", "number of attractors (0, 1, 2, 3, 4, 5, 6, or 9) or a constellation name: "+strings.Join(x24.ConstellationNames(), ", "))
 	flags.Var(rampFlag{values: &options.config.AttractantRamp}, "attractant-ramp", "comma-separated attractant values by hop from its source")
 	flags.Float64Var(&options.config.AttractantJitter, "attractant-jitter", options.config.AttractantJitter, "maximum placement jitter as a fraction of half a region")
 	flags.Float64Var(&options.config.SoftmaxTemperature, "temperature", options.config.SoftmaxTemperature, "softmax temperature for frontier selection")

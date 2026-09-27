@@ -31,7 +31,13 @@ func Generate(config Config) (Result, error) {
 			return Result{}, fmt.Errorf("round %d mesh: %w", round+1, err)
 		}
 		edgeValues, landEligible, edgeDistances := edgeField(mesh, bounds, config.EdgeBarrierWidth, config.EdgeRamp)
-		attractants, skips := makeAttractants(mesh, bounds, edgeDistances, config.EdgeRamp, config.AttractantRamp, config.AttractantCount, config.AttractantJitter, random)
+		var attractants []Attractant
+		var skips []AttractantSkip
+		if constellation, ok := ConstellationByName(config.Constellation); ok {
+			attractants, skips = makeConstellationAttractants(mesh, bounds, edgeDistances, config.EdgeRamp, config.AttractantRamp, constellation)
+		} else {
+			attractants, skips = makeAttractants(mesh, bounds, edgeDistances, config.EdgeRamp, config.AttractantRamp, config.AttractantCount, config.AttractantJitter, random)
+		}
 		desirability := desirabilityField(mesh, edgeValues, landEligible, attractants, config.AttractantRamp)
 		state := newGrowthState(mesh, desirability, landEligible, config.RivalRamp)
 		if state.seedAndGrow(config.IslandCount, config.ProvinceCount, config.SoftmaxTemperature, random) {
@@ -63,6 +69,70 @@ func makeAttractants(cells []singlemesh.Cell, bounds singlemesh.Bounds, edgeDist
 			cellRegionX := min(int(cell.Site.X/bounds.Width*regions), regions-1)
 			cellRegionY := min(int(cell.Site.Y/bounds.Height*regions), regions-1)
 			if cellRegionX != regionX || cellRegionY != regionY || edgeDistances[cellID] <= clearance {
+				continue
+			}
+			dx, dy := cell.Site.X-target.X, cell.Site.Y-target.Y
+			distance := dx*dx + dy*dy
+			if distance < bestDistance {
+				bestCell, bestDistance = cellID, distance
+			}
+		}
+		if bestCell == -1 {
+			skips = append(skips, AttractantSkip{
+				RegionX: regionX,
+				RegionY: regionY,
+				Reason:  fmt.Sprintf("no cell is more than %d hops from the edge barrier", clearance),
+			})
+			continue
+		}
+		attractants = append(attractants, Attractant{
+			CellID:  bestCell,
+			Point:   cells[bestCell].Site,
+			RegionX: regionX,
+			RegionY: regionY,
+		})
+	}
+	return attractants, skips
+}
+
+// Constellation sites fill this much of the map's width and height, whichever
+// binds first, so the figure keeps its proportions and clears the edge ramp.
+const (
+	constellationWidthFill  = 0.76
+	constellationHeightFill = 0.70
+)
+
+// makeConstellationAttractants scales the constellation's centered frame to
+// fit the map and places each site on the nearest cell that clears the edge
+// barrier by the combined ramp reach. Sites keep the constellation's order.
+// A site is skipped only when no cell on the map has that clearance.
+func makeConstellationAttractants(cells []singlemesh.Cell, bounds singlemesh.Bounds, edgeDistances []int, edgeRamp, attractantRamp []float64, constellation Constellation) ([]Attractant, []AttractantSkip) {
+	const regions = 3
+	clearance := edgeRampReach(edgeRamp) + attractantRampReach(attractantRamp)
+	maxX, maxY := 0.0, 0.0
+	for _, site := range constellation.Sites {
+		maxX = max(maxX, math.Abs(site.X))
+		maxY = max(maxY, math.Abs(site.Y))
+	}
+	scale := math.Inf(1)
+	if maxX > 0 {
+		scale = min(scale, constellationWidthFill*bounds.Width/2/maxX)
+	}
+	if maxY > 0 {
+		scale = min(scale, constellationHeightFill*bounds.Height/2/maxY)
+	}
+	if math.IsInf(scale, 1) {
+		scale = 0
+	}
+	attractants := make([]Attractant, 0, len(constellation.Sites))
+	skips := make([]AttractantSkip, 0)
+	for _, site := range constellation.Sites {
+		target := Point{X: bounds.Width/2 + site.X*scale, Y: bounds.Height/2 + site.Y*scale}
+		regionX := min(int(target.X/bounds.Width*regions), regions-1)
+		regionY := min(int(target.Y/bounds.Height*regions), regions-1)
+		bestCell, bestDistance := -1, math.Inf(1)
+		for cellID, cell := range cells {
+			if edgeDistances[cellID] <= clearance {
 				continue
 			}
 			dx, dy := cell.Site.X-target.X, cell.Site.Y-target.Y

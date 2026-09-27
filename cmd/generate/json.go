@@ -80,6 +80,7 @@ type jsonGenerationConfig struct {
 	EdgeBarrierWidth   float64   `json:"edge_barrier_width"`
 	EdgeRamp           []float64 `json:"edge_ramp"`
 	AttractantCount    int       `json:"attractant_count"`
+	Constellation      string    `json:"attractant_constellation,omitempty"`
 	AttractantRamp     []float64 `json:"attractant_ramp"`
 	AttractantJitter   float64   `json:"attractant_jitter"`
 	SoftmaxTemperature float64   `json:"softmax_temperature"`
@@ -98,6 +99,9 @@ type jsonGenerationResult struct {
 	MergeCount         int     `json:"merge_count"`
 	RoundsAttempted    int     `json:"rounds_attempted"`
 	OceanFraction      float64 `json:"ocean_fraction"`
+	// AttractantProvinceIDs lists the provinces that hosted attractant
+	// sources, in placement order; a cell's ID is its province's ID.
+	AttractantProvinceIDs []int `json:"attractant_province_ids"`
 }
 
 type jsonBounds struct {
@@ -216,6 +220,7 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 				EdgeBarrierWidth:   config.EdgeBarrierWidth,
 				EdgeRamp:           config.EdgeRamp,
 				AttractantCount:    config.AttractantCount,
+				Constellation:      config.Constellation,
 				AttractantRamp:     config.AttractantRamp,
 				AttractantJitter:   config.AttractantJitter,
 				SoftmaxTemperature: config.SoftmaxTemperature,
@@ -226,13 +231,14 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 				PeakChillFraction:  climateConfig.PeakChill,
 			},
 			Result: jsonGenerationResult{
-				ProvinceCount:      len(world.Provinces),
-				LandProvinceCount:  landProvinceCount,
-				InitialIslandCount: result.InitialIslandCount,
-				IslandCount:        len(world.Islands),
-				MergeCount:         result.MergeCount,
-				RoundsAttempted:    result.RoundsAttempted,
-				OceanFraction:      result.FinalOcean,
+				ProvinceCount:         len(world.Provinces),
+				LandProvinceCount:     landProvinceCount,
+				InitialIslandCount:    result.InitialIslandCount,
+				IslandCount:           len(world.Islands),
+				MergeCount:            result.MergeCount,
+				RoundsAttempted:       result.RoundsAttempted,
+				OceanFraction:         result.FinalOcean,
+				AttractantProvinceIDs: attractantProvinceIDs(result),
 			},
 		},
 		Bounds:    bounds,
@@ -430,4 +436,12 @@ func moistureBandName(band wgvc.MoistureBand) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported moisture band %d", band)
 	}
+}
+
+func attractantProvinceIDs(result x24.Result) []int {
+	ids := make([]int, len(result.Attractants))
+	for i, attractant := range result.Attractants {
+		ids[i] = attractant.CellID
+	}
+	return ids
 }
