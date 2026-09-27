@@ -317,10 +317,13 @@ cannot perturb terrain, elevation, island growth, or geometry.
 Heat combines its corner mean with a north-cold/south-warm latitude gradient.
 Positive land elevation then cools the result; water receives no elevation
 adjustment. `Config.PolarIce` and `Config.PeakChill` tune those effects as
-fractions, with zero values selecting the defaults. Bands initially use
-population shares of 5%, 15%, 45%, 25%, and 10%. If a small population or an
-unattainable calibration cannot support those targets, continuous values remain
-available while the affected axis uses its middle band.
+fractions, with zero values selecting the defaults. Bands use population shares
+of 5%, 15%, 45%, 25%, and 10%. Calibration is best-effort: the search keeps the
+warmth and cooling that come closest to the targets even when neither can be
+met exactly, so a normal world always receives every band. Only a population
+too small for the shares, a world without ocean, or an empty peak slice falls
+back to the middle band for every province; continuous values remain available
+either way.
 
 ## Tests
 

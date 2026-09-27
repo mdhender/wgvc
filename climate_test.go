@@ -4,6 +4,8 @@ import (
 	"math"
 	"slices"
 	"testing"
+
+	"github.com/mdhender/wgvc/internal/x24"
 )
 
 func TestClimatePopulationCountsUseLargestRemainders(t *testing.T) {
@@ -144,6 +146,32 @@ func TestGenerateLargeWorldCalibratesAllHeatBands(t *testing.T) {
 	}
 	if got != want {
 		t.Errorf("heat band counts = %v, want calibrated population shares %v", got, want)
+	}
+}
+
+// TestGenerateDefaultWorldKeepsBestEffortHeatBands guards against the
+// calibration search discarding a near miss: the default seed cannot meet the
+// polar target exactly, and must still receive every heat band in its
+// population share.
+func TestGenerateDefaultWorldKeepsBestEffortHeatBands(t *testing.T) {
+	for _, seed := range []uint64{x24.DefaultConfig().WorldSeed, 2, 5} {
+		config := x24.DefaultConfig()
+		config.WorldSeed = seed
+		world, _, err := GenerateForRender(config)
+		if err != nil {
+			t.Fatalf("seed %#x: GenerateForRender() error = %v", seed, err)
+		}
+		want, ok := climatePopulationCounts(len(world.Provinces))
+		if !ok {
+			t.Fatalf("seed %#x: population %d cannot represent all bands", seed, len(world.Provinces))
+		}
+		got := [5]int{}
+		for _, province := range world.Provinces {
+			got[province.HeatBand]++
+		}
+		if got != want {
+			t.Errorf("seed %#x: heat band counts = %v, want population shares %v", seed, got, want)
+		}
 	}
 }
 

@@ -142,9 +142,10 @@ func calibrateHeat(provinces []Province, heatSource, latitudes []float64, config
 		coolingHigh = min(maximumCoolingStrength, roundBest.coolingStrength+coolingStep)
 	}
 
-	for provinceID := range best.bands {
-		best.bands[provinceID] = int(HeatBandTemperate)
-	}
+	// No candidate met both targets exactly. Calibration is best-effort, so
+	// keep the lowest-error candidate's bands rather than collapsing the
+	// world to one band; the all-temperate fallback is reserved for worlds
+	// that cannot be banded at all.
 	return best
 }
 
