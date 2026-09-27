@@ -115,6 +115,7 @@ func generateForRender(growthConfig x24.Config, climateConfig ClimateConfig) (Wo
 	assignNecks(&world)
 	assignHarbors(&world)
 	assignTerrain(&world)
+	assignFeatures(&world)
 	return world, result, nil
 }
 

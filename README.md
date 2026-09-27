@@ -105,6 +105,10 @@ The returned geometry is indexed:
   along them (`RiverIDs`), ending at them (`RiverMouthIDs`), and joining at
   them (`ConfluenceIDs`). They are measures for a consumer's own settlement
   placement, not placements.
+- `World.Features` are nameable units: connected same-family terrain regions
+  of at least 5 provinces (mountain ranges, hill country, plateaus, forests,
+  deserts, wetlands, ice fields) and archipelagos of islands within 6 water
+  provinces of each other.
 - Corners and edges are shared objects. An `Edge` references two corners and
   either one province at the outside of the world or two provinces inside it.
   A coastline edge joins one land province to one water province.
@@ -185,7 +189,7 @@ top-level shape is:
 
 ```json
 {
-  "schema_version": 8,
+  "schema_version": 9,
   "generation": {
     "generator": { "version": "0.7.3-alpha", "build": "9a64246" },
     "config": { "seed": "0x0123456789abcdef" },
@@ -200,7 +204,8 @@ top-level shape is:
   "rivers": [],
   "sea_zones": [],
   "straits": [],
-  "necks": []
+  "necks": [],
+  "features": []
 }
 ```
 
@@ -330,9 +335,10 @@ naturally in `[0, 1)`; a province with no same-medium neighbor has relief `0`.
 The pass consumes no randomness. Typical land relief is about 0.09 (median),
 with the roughest tenth above about 0.17.
 
-Terrain reads relief at four thresholds: highland with relief `>= 0.16` is
-mountain rather than hills, upland with relief `>= 0.14` is hills, dry land with
-relief `>= 0.20` is badlands, and humid lowland is a wetland only when its
+Terrain reads relief at five thresholds: highland with relief `>= 0.16` is
+mountain, highland with relief `< 0.07` is plateau (high and flat) and the rest
+of the highland band is hills, upland with relief `>= 0.14` is hills, dry land
+with relief `>= 0.20` is badlands, and humid lowland is a wetland only when its
 relief is `<= 0.12`.
 
 ## Rivers

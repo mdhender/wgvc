@@ -55,6 +55,7 @@ var terrainColors = map[wgvc.Terrain]string{
 	wgvc.TerrainTemperateForest:  "#3f7a3a",
 	wgvc.TerrainRainforest:       "#1f5a2c",
 	wgvc.TerrainHills:            "#8a8257",
+	wgvc.TerrainPlateau:          "#b3a98a",
 	wgvc.TerrainMountain:         "#8a8a8a",
 	wgvc.TerrainAlpine:           "#c7ccd1",
 	wgvc.TerrainVolcano:          "#7a2a24",

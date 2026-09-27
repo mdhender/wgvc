@@ -17,6 +17,7 @@ const (
 	terrainCoastMax          = 0.04
 	terrainWetlandReliefMax  = 0.12
 	terrainMountainReliefMin = 0.16
+	terrainPlateauReliefMax  = 0.07
 	terrainHillReliefMin     = 0.14
 	terrainBadlandsReliefMin = 0.20
 )
@@ -230,10 +231,14 @@ func classifyTerrain(province Province, adjacentLand, adjacentWater bool) Terrai
 		return TerrainMountain
 	}
 	if province.ElevationBand == ElevationBandHighland {
-		if province.Relief >= terrainMountainReliefMin {
+		switch {
+		case province.Relief >= terrainMountainReliefMin:
 			return TerrainMountain
+		case province.Relief < terrainPlateauReliefMax:
+			return TerrainPlateau
+		default:
+			return TerrainHills
 		}
-		return TerrainHills
 	}
 	if province.ElevationBand == ElevationBandLowland &&
 		province.Relief <= terrainWetlandReliefMax &&

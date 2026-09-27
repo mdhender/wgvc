@@ -50,7 +50,8 @@ Land rules are checked in this order. A province takes the first that matches.
 | 2 | `alpine` | `#c7ccd1` | Mountain band, polar or cold heat. |
 | 2 | `mountain` | `#8a8a8a` | Mountain band, temperate or warmer. |
 | 3 | `mountain` | `#8a8a8a` | Highland band, relief `≥ 0.16`. |
-| 3 | `hills` | `#8a8257` | Highland band, relief `< 0.16`. |
+| 3 | `plateau` | `#b3a98a` | Highland band, relief `< 0.07`: high and flat. |
+| 3 | `hills` | `#8a8257` | Highland band, relief from `0.07` to `0.16`. |
 | 4 | `bog` | `#6b6f4e` | Lowland wetland (relief `≤ 0.12`, humid or saturated), polar or cold. |
 | 4 | `marsh` | `#5d7a52` | Lowland wetland, temperate. |
 | 4 | `swamp` | `#3f5c3a` | Lowland wetland, warm or hot. |
@@ -93,10 +94,3 @@ Cover terrain colors:
 |---|---|---|
 | `volcano` | `#7a2a24` | Declared and colored but never assigned. See #40. |
 | `volcanic-highland` | `#5c4038` | Declared and colored but never assigned. See #40. |
-
-## Known issue
-
-Heat calibration currently falls back to making every province temperate on
-most default-sized worlds (#41). Until that is fixed, those worlds have no
-glacial ice, alpine, bog, tundra, desert, rainforest, or other terrain that
-depends on a non-temperate heat band.

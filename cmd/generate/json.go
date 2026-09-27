@@ -9,7 +9,7 @@ import (
 	"github.com/mdhender/wgvc/internal/x24"
 )
 
-const jsonSchemaVersion = 8
+const jsonSchemaVersion = 9
 
 type jsonWorld struct {
 	SchemaVersion int            `json:"schema_version"`
@@ -24,6 +24,14 @@ type jsonWorld struct {
 	SeaZones      []jsonSeaZone  `json:"sea_zones"`
 	Straits       []jsonStrait   `json:"straits"`
 	Necks         []jsonNeck     `json:"necks"`
+	Features      []jsonFeature  `json:"features"`
+}
+
+type jsonFeature struct {
+	ID          wgvc.FeatureID    `json:"id"`
+	Kind        wgvc.FeatureKind  `json:"kind"`
+	IslandIDs   []wgvc.IslandID   `json:"island_ids"`
+	ProvinceIDs []wgvc.ProvinceID `json:"province_ids"`
 }
 
 type jsonSeaZone struct {
@@ -237,6 +245,7 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 		SeaZones:  make([]jsonSeaZone, len(world.SeaZones)),
 		Straits:   make([]jsonStrait, len(world.Straits)),
 		Necks:     make([]jsonNeck, len(world.Necks)),
+		Features:  make([]jsonFeature, len(world.Features)),
 	}
 	for index, island := range world.Islands {
 		document.Islands[index] = jsonIsland{ID: island.ID, ProvinceIDs: island.ProvinceIDs}
@@ -332,6 +341,9 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 	}
 	for index, neck := range world.Necks {
 		document.Necks[index] = jsonNeck{ID: neck.ID, IslandID: neck.IslandID, Width: neck.Width, ProvinceIDs: neck.ProvinceIDs, Ends: neck.Ends, EndSizes: neck.EndSizes}
+	}
+	for index, feature := range world.Features {
+		document.Features[index] = jsonFeature{ID: feature.ID, Kind: feature.Kind, IslandIDs: feature.IslandIDs, ProvinceIDs: feature.ProvinceIDs}
 	}
 	data, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {

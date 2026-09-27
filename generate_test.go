@@ -495,6 +495,78 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 	assertValidRivers(t, world)
 	assertValidSeas(t, world)
 	assertValidHarbors(t, world)
+	assertValidFeatures(t, world)
+}
+
+// assertValidFeatures checks that terrain features are connected regions of
+// one family on one island covering every family region of the minimum
+// size, that archipelagos list two or more islands and all their land, and
+// that features are canonically ordered.
+func assertValidFeatures(t *testing.T, world World) {
+	t.Helper()
+	neighbors := provinceNeighbors(&world)
+	rank := map[FeatureKind]int{}
+	for index, kind := range FeatureKinds() {
+		rank[kind] = index
+	}
+	covered := make([]bool, len(world.Provinces))
+	for index, feature := range world.Features {
+		if feature.ID != FeatureID(index) || len(feature.ProvinceIDs) == 0 || !slices.IsSorted(feature.ProvinceIDs) || !slices.IsSorted(feature.IslandIDs) {
+			t.Errorf("feature at index %d is malformed: %+v", index, feature)
+			continue
+		}
+		if _, known := rank[feature.Kind]; !known {
+			t.Errorf("feature %d has unknown kind %q", feature.ID, feature.Kind)
+		}
+		if index > 0 {
+			previous := world.Features[index-1]
+			if rank[previous.Kind] > rank[feature.Kind] || rank[previous.Kind] == rank[feature.Kind] && previous.ProvinceIDs[0] >= feature.ProvinceIDs[0] {
+				t.Errorf("feature %d is out of order after feature %d", feature.ID, index-1)
+			}
+		}
+		if feature.Kind == FeatureArchipelago {
+			if len(feature.IslandIDs) < 2 {
+				t.Errorf("archipelago %d has %d islands", feature.ID, len(feature.IslandIDs))
+			}
+			var want []ProvinceID
+			for _, islandID := range feature.IslandIDs {
+				want = append(want, world.Islands[islandID].ProvinceIDs...)
+			}
+			slices.Sort(want)
+			if !slices.Equal(want, feature.ProvinceIDs) {
+				t.Errorf("archipelago %d provinces differ from its islands' land", feature.ID)
+			}
+			continue
+		}
+		if len(feature.IslandIDs) != 1 || len(feature.ProvinceIDs) < featureMinimumProvinces {
+			t.Errorf("feature %d has %d islands and %d provinces", feature.ID, len(feature.IslandIDs), len(feature.ProvinceIDs))
+			continue
+		}
+		for _, provinceID := range feature.ProvinceIDs {
+			province := world.Provinces[provinceID]
+			if province.IslandID != feature.IslandIDs[0] || terrainFamilies[province.Terrain] != feature.Kind || covered[provinceID] {
+				t.Errorf("feature %d (%s) province %d is %s on island %d or already covered", feature.ID, feature.Kind, provinceID, province.Terrain, province.IslandID)
+			}
+			covered[provinceID] = true
+		}
+		reached := boundedBFS(feature.ProvinceIDs[0], neighbors, len(world.Provinces), func(id ProvinceID) bool { return slices.Contains(feature.ProvinceIDs, id) })
+		if !slices.Equal(reached, feature.ProvinceIDs) {
+			t.Errorf("feature %d is not connected", feature.ID)
+		}
+	}
+	// Every family province not covered must sit in a region below the minimum.
+	for provinceID, province := range world.Provinces {
+		kind, ok := terrainFamilies[province.Terrain]
+		if !ok || province.IslandID == NoIslandID || covered[provinceID] {
+			continue
+		}
+		region := boundedBFS(ProvinceID(provinceID), neighbors, len(world.Provinces), func(id ProvinceID) bool {
+			return world.Provinces[id].IslandID != NoIslandID && terrainFamilies[world.Provinces[id].Terrain] == kind
+		})
+		if len(region) >= featureMinimumProvinces {
+			t.Errorf("province %d (%s) lies in an uncovered %s region of %d", provinceID, province.Terrain, kind, len(region))
+		}
+	}
 }
 
 // assertValidHarbors recomputes each land province's water edge counts,

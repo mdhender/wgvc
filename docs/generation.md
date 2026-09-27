@@ -84,6 +84,17 @@ requested count. Water can contain interior components such as lakes.
   province.
 - Coast distance, sea zones, straits, and necks are derived from topology and
   IDs alone and consume no randomness.
+- `World.Features` are geographic units a consumer can name: connected
+  regions of land whose terrains share one family, of at least 5 provinces,
+  each on one island (`mountain-range`: mountain, alpine, volcano,
+  volcanic-highland; `hill-country`: hills, badlands; `plateau`; `forest`:
+  boreal, temperate, rainforest; `desert`: desert, scrubland; `wetland`:
+  marsh, swamp, bog; `ice-field`: glacial ice), and `archipelago` groups of
+  two or more islands joined by water paths of at most 6 water provinces,
+  whose provinces are all their land. Features are ordered by kind, in
+  `FeatureKinds` order, then lowest province ID. Seas, straits, and rivers
+  are their own collections. Feature identification runs after terrain and
+  consumes no randomness.
 - Siting inputs on land provinces, zero on water: `OceanEdges` and
   `BasinEdges` count edges onto ocean and onto lakes or inland seas;
   `Shelter` in `[0, 1]` is the mean, over the water provinces it touches, of
@@ -108,10 +119,10 @@ requested count. Water can contain interior components such as lakes.
 ## JSON export
 
 `go run ./cmd/generate -format json -output world` writes `world.json`. The
-document has `schema_version: 8`, generator identity, generation configuration
+document has `schema_version: 9`, generator identity, generation configuration
 and effective result metadata, world-coordinate bounds, and the canonical `islands`,
 `basins`, `provinces`, `corners`, `edges`, `rivers`, `sea_zones`, `straits`,
-and `necks` collections. It uses the same IDs
+`necks`, and `features` collections. It uses the same IDs
 and references described above. Water provinces retain `island_id: -1`, and
 provinces outside any basin have `basin_id: -1`; terrain and elevation, heat, and
 moisture bands use descriptive strings. The seed is a hexadecimal string to
@@ -137,7 +148,9 @@ added each province's `coast_distance` and `sea_zone_id`, and the `sea_zones`
 `width`, `province_ids`, `shores`), and `necks` (`id`, `island_id`, `width`,
 `province_ids`, `ends`, `end_sizes`) collections. Schema version 8 added each
 province's `ocean_edges`, `basin_edges`, `shelter`, `river_ids`,
-`river_mouth_ids`, and `confluence_ids`.
+`river_mouth_ids`, and `confluence_ids`. Schema version 9 added the `plateau`
+terrain and the `features` collection (`id`, `kind`, `island_ids`,
+`province_ids`).
 
 JSON uses Cartesian generation coordinates rather than the transformed pixel
 coordinates used by image renderers. Use a comma-separated format such as

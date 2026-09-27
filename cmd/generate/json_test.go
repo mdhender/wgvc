@@ -179,8 +179,23 @@ func TestRunJSONExportsSeaZonesStraitsAndNecks(t *testing.T) {
 	if err := json.Unmarshal(data, &document); err != nil {
 		t.Fatalf("decode JSON: %v", err)
 	}
-	if len(document.SeaZones) == 0 || len(document.Necks) == 0 {
-		t.Fatalf("JSON contains %d sea zones and %d necks, want both", len(document.SeaZones), len(document.Necks))
+	if len(document.SeaZones) == 0 || len(document.Necks) == 0 || len(document.Features) == 0 {
+		t.Fatalf("JSON contains %d sea zones, %d necks, and %d features, want all three", len(document.SeaZones), len(document.Necks), len(document.Features))
+	}
+	kinds := map[wgvc.FeatureKind]bool{}
+	for _, kind := range wgvc.FeatureKinds() {
+		kinds[kind] = true
+	}
+	for index, feature := range document.Features {
+		if feature.ID != wgvc.FeatureID(index) || !kinds[feature.Kind] || len(feature.IslandIDs) == 0 || len(feature.ProvinceIDs) == 0 {
+			t.Errorf("feature %d at index %d is malformed: kind %q, %d islands, %d provinces", feature.ID, index, feature.Kind, len(feature.IslandIDs), len(feature.ProvinceIDs))
+			continue
+		}
+		for _, provinceID := range feature.ProvinceIDs {
+			if provinceID < 0 || int(provinceID) >= len(document.Provinces) || document.Provinces[provinceID].IslandID == wgvc.NoIslandID {
+				t.Errorf("feature %d province %d is not land", feature.ID, provinceID)
+			}
+		}
 	}
 	for index, zone := range document.SeaZones {
 		if zone.ID != wgvc.SeaZoneID(index) || len(zone.ProvinceIDs) == 0 {

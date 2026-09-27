@@ -39,6 +39,47 @@ type StraitID int
 // NeckID identifies a land neck by its index in World.Necks.
 type NeckID int
 
+// FeatureID identifies a named geographic feature by its index in
+// World.Features.
+type FeatureID int
+
+// FeatureKind is the family of a geographic feature.
+type FeatureKind string
+
+const (
+	FeatureMountainRange FeatureKind = "mountain-range"
+	FeatureHillCountry   FeatureKind = "hill-country"
+	FeaturePlateau       FeatureKind = "plateau"
+	FeatureForest        FeatureKind = "forest"
+	FeatureDesert        FeatureKind = "desert"
+	FeatureWetland       FeatureKind = "wetland"
+	FeatureIceField      FeatureKind = "ice-field"
+	FeatureArchipelago   FeatureKind = "archipelago"
+)
+
+// FeatureKinds returns every feature kind in canonical order.
+func FeatureKinds() []FeatureKind {
+	return []FeatureKind{
+		FeatureMountainRange, FeatureHillCountry, FeaturePlateau, FeatureForest,
+		FeatureDesert, FeatureWetland, FeatureIceField, FeatureArchipelago,
+	}
+}
+
+// Feature is a geographic unit a consumer can name. Terrain features are
+// connected regions of land provinces whose terrains share one family
+// (mountain ranges, hill country, plateaus, forests, deserts, wetlands, ice
+// fields) of at least featureMinimumProvinces provinces, each on one island.
+// An archipelago is a group of two or more islands joined by water paths of
+// at most archipelagoMaxGap water provinces; its provinces are all their
+// land. IslandIDs and ProvinceIDs are ascending. Features are ordered by
+// kind, in FeatureKinds order, and then by lowest province ID.
+type Feature struct {
+	ID          FeatureID
+	Kind        FeatureKind
+	IslandIDs   []IslandID
+	ProvinceIDs []ProvinceID
+}
+
 // NoRiverID is the RiverID of every edge that carries no river.
 const NoRiverID RiverID = -1
 
@@ -74,6 +115,7 @@ const (
 	TerrainTemperateForest  Terrain = "temperate-forest"
 	TerrainRainforest       Terrain = "rainforest"
 	TerrainHills            Terrain = "hills"
+	TerrainPlateau          Terrain = "plateau"
 	TerrainMountain         Terrain = "mountain"
 	TerrainAlpine           Terrain = "alpine"
 	TerrainVolcano          Terrain = "volcano"
@@ -89,7 +131,7 @@ var terrains = [...]Terrain{
 	TerrainDesert, TerrainBadlands, TerrainScrubland,
 	TerrainPlains, TerrainGrassland, TerrainSteppe, TerrainSavanna,
 	TerrainBorealForest, TerrainTemperateForest, TerrainRainforest,
-	TerrainHills, TerrainMountain, TerrainAlpine,
+	TerrainHills, TerrainPlateau, TerrainMountain, TerrainAlpine,
 	TerrainVolcano, TerrainVolcanicHighland,
 	TerrainCoast,
 }
@@ -192,6 +234,7 @@ type World struct {
 	SeaZones  []SeaZone
 	Straits   []Strait
 	Necks     []Neck
+	Features  []Feature
 }
 
 // SeaZone is a contiguous region of ocean provinces, water outside any basin,

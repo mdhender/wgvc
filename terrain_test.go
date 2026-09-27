@@ -43,7 +43,7 @@ func TestTerrainVocabularyIsStableAndComplete(t *testing.T) {
 		"deep-ocean", "ocean", "shallow-sea", "coastal-water", "inland-sea", "lake",
 		"glacial-ice", "tundra", "marsh", "swamp", "bog",
 		"desert", "badlands", "scrubland", "plains", "grassland", "steppe", "savanna",
-		"boreal-forest", "temperate-forest", "rainforest", "hills", "mountain", "alpine",
+		"boreal-forest", "temperate-forest", "rainforest", "hills", "plateau", "mountain", "alpine",
 		"volcano", "volcanic-highland", "coast",
 	}
 	got := Terrains()
@@ -89,7 +89,9 @@ func TestClassifyTerrainPrecedence(t *testing.T) {
 		{name: "cold mountain is alpine", province: Province{IslandID: 0, ElevationBand: ElevationBandMountain, HeatBand: HeatBandCold}, want: TerrainAlpine},
 		{name: "warm mountain", province: Province{IslandID: 0, ElevationBand: ElevationBandMountain, HeatBand: HeatBandWarm}, want: TerrainMountain},
 		{name: "rough highland is mountain", province: Province{IslandID: 0, ElevationBand: ElevationBandHighland, Relief: terrainMountainReliefMin}, want: TerrainMountain},
-		{name: "smooth highland is hills", province: Province{IslandID: 0, ElevationBand: ElevationBandHighland, Relief: terrainMountainReliefMin - 0.01}, want: TerrainHills},
+		{name: "moderate highland is hills", province: Province{IslandID: 0, ElevationBand: ElevationBandHighland, Relief: terrainMountainReliefMin - 0.01}, want: TerrainHills},
+		{name: "lowest hills relief is still hills", province: Province{IslandID: 0, ElevationBand: ElevationBandHighland, Relief: terrainPlateauReliefMax}, want: TerrainHills},
+		{name: "smooth highland is plateau", province: Province{IslandID: 0, ElevationBand: ElevationBandHighland, Relief: terrainPlateauReliefMax - 0.01}, want: TerrainPlateau},
 		{name: "cold wetland is bog", province: Province{IslandID: 0, ElevationBand: ElevationBandLowland, HeatBand: HeatBandCold, MoistureBand: MoistureBandHumid}, want: TerrainBog},
 		{name: "temperate wetland is marsh", province: Province{IslandID: 0, ElevationBand: ElevationBandLowland, HeatBand: HeatBandTemperate, MoistureBand: MoistureBandHumid}, want: TerrainMarsh},
 		{name: "warm wetland is swamp", province: Province{IslandID: 0, ElevationBand: ElevationBandLowland, HeatBand: HeatBandWarm, MoistureBand: MoistureBandSaturated}, want: TerrainSwamp},
