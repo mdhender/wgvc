@@ -22,12 +22,19 @@ requested count. Water can contain interior components such as lakes.
 ## JSON export
 
 `go run ./cmd/generate -format json -output world` writes `world.json`. The
-document has `schema_version: 1`, generation configuration and effective result
-metadata, world-coordinate bounds, and the canonical `islands`, `provinces`,
+document has `schema_version: 2`, generator identity, generation configuration
+and effective result metadata, world-coordinate bounds, and the canonical `islands`, `provinces`,
 `corners`, and `edges` collections. It uses the same IDs and references described
 above. Water provinces retain `island_id: -1`; terrain and elevation, heat, and
 moisture bands use descriptive strings. The seed is a hexadecimal string to
 preserve the complete unsigned 64-bit value.
+
+`generation.generator.version` is the semantic version of the generator without
+build metadata (for example `0.7.3-alpha`), so exports from different builds of
+one release compare equal. `generation.generator.build` is the VCS commit the
+binary was built from, suffixed `-dirty` for an uncommitted working tree, and is
+omitted when the build recorded no VCS information (as under `go run`). Schema
+version 2 added the `generator` object; schema version 1 documents lack it.
 
 JSON uses Cartesian generation coordinates rather than the transformed pixel
 coordinates used by image renderers. Use a comma-separated format such as

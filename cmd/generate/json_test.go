@@ -35,6 +35,12 @@ func TestRunJSONContainsCanonicalWorldData(t *testing.T) {
 	if document.SchemaVersion != jsonSchemaVersion {
 		t.Errorf("schema version = %d, want %d", document.SchemaVersion, jsonSchemaVersion)
 	}
+	if got, want := document.Generation.Generator.Version, wgvc.Version().Short(); got != want {
+		t.Errorf("generator version = %q, want %q", got, want)
+	}
+	if got, want := document.Generation.Generator.Build, wgvc.Version().Build; got != want {
+		t.Errorf("generator build = %q, want %q", got, want)
+	}
 	if document.Generation.Config.Seed != "0xffffffffffffffff" {
 		t.Errorf("seed = %q, want full-width hexadecimal seed", document.Generation.Config.Seed)
 	}

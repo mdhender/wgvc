@@ -127,8 +127,9 @@ top-level shape is:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "generation": {
+    "generator": { "version": "0.7.3-alpha", "build": "9a64246" },
     "config": { "seed": "0x0123456789abcdef" },
     "result": { "province_count": 4688, "land_province_count": 1500 }
   },
@@ -145,6 +146,9 @@ their array indexes, polygon rings refer to shared corners, edges refer to their
 incident provinces, and water provinces use `island_id: -1`. Terrain and climate
 bands are descriptive strings. The seed is a hexadecimal string so all 64 bits
 survive parsers whose numeric values use IEEE-754 doubles.
+`generation.generator` records the generator version (without build metadata)
+and, when available, the commit the binary was built from; see
+[Generation contracts](docs/generation.md#json-export).
 
 Attractants are disabled by default. Use `-attractors` with 1 through 6 to
 select regions in the familiar die-face pattern, or 9 to select every region

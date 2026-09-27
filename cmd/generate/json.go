@@ -9,7 +9,7 @@ import (
 	"github.com/mdhender/wgvc/internal/x24"
 )
 
-const jsonSchemaVersion = 1
+const jsonSchemaVersion = 2
 
 type jsonWorld struct {
 	SchemaVersion int            `json:"schema_version"`
@@ -22,8 +22,17 @@ type jsonWorld struct {
 }
 
 type jsonGeneration struct {
-	Config jsonGenerationConfig `json:"config"`
-	Result jsonGenerationResult `json:"result"`
+	Generator jsonGenerator        `json:"generator"`
+	Config    jsonGenerationConfig `json:"config"`
+	Result    jsonGenerationResult `json:"result"`
+}
+
+// jsonGenerator identifies the code that produced a world. Version omits
+// semver build metadata so exports from different builds of one release
+// compare equal; Build carries the VCS commit when the binary recorded one.
+type jsonGenerator struct {
+	Version string `json:"version"`
+	Build   string `json:"build,omitempty"`
 }
 
 type jsonGenerationConfig struct {
@@ -111,6 +120,10 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 	document := jsonWorld{
 		SchemaVersion: jsonSchemaVersion,
 		Generation: jsonGeneration{
+			Generator: jsonGenerator{
+				Version: wgvc.Version().Short(),
+				Build:   wgvc.Version().Build,
+			},
 			Config: jsonGenerationConfig{
 				Seed:               fmt.Sprintf("0x%016x", config.WorldSeed),
 				ProvinceCount:      config.ProvinceCount,
