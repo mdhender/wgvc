@@ -142,18 +142,18 @@ var constellations = map[string]Constellation{
 			{X: 0.41, Y: 0.08},
 			{X: 0.49, Y: 0.16},
 			{X: 0.56, Y: 0.24}, // mainland, northeast end
-			{X: 0.72, Y: 0.33}, // northern island
-			{X: 0.86, Y: 0.26},
-			{X: 0.84, Y: 0.38},
-			{X: 1.00, Y: 0.33},
-			{X: -0.77, Y: -0.25}, // southwestern island
-			{X: -0.72, Y: -0.38},
+			{X: 0.72, Y: 0.15}, // northern island
+			{X: 0.86, Y: 0.08},
+			{X: 0.84, Y: 0.20},
+			{X: 1.00, Y: 0.15},
+			{X: -0.77, Y: -0.07}, // southwestern island
+			{X: -0.72, Y: -0.20},
 			{X: -0.33, Y: -0.38}, // island south of the mainland
-			{X: -0.92, Y: -0.05}, // small western islands
-			{X: -1.00, Y: -0.34},
+			{X: -0.92, Y: 0.13},  // small western islands
+			{X: -1.00, Y: -0.16},
 			{X: -0.35, Y: -0.30}, // repulsor: inland sea
 			{X: 0.14, Y: -0.24},  // repulsor: bay on the south coast
-			{X: 0.64, Y: 0.29},   // repulsor: strait to the northern island
+			{X: 0.64, Y: 0.20},   // repulsor: strait to the northern island
 		},
 		Weights: []float64{
 			1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
