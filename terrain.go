@@ -15,10 +15,10 @@ const (
 
 	terrainOceanMax          = -0.1
 	terrainCoastMax          = 0.04
-	terrainWetlandReliefMax  = 0.34
-	terrainMountainReliefMin = 0.42
-	terrainHillReliefMin     = 0.38
-	terrainBadlandsReliefMin = 0.55
+	terrainWetlandReliefMax  = 0.12
+	terrainMountainReliefMin = 0.16
+	terrainHillReliefMin     = 0.14
+	terrainBadlandsReliefMin = 0.20
 )
 
 var terrainCover = [5][5]Terrain{

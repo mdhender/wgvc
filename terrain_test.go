@@ -93,9 +93,13 @@ func TestClassifyTerrainPrecedence(t *testing.T) {
 		{name: "cold wetland is bog", province: Province{IslandID: 0, ElevationBand: ElevationBandLowland, HeatBand: HeatBandCold, MoistureBand: MoistureBandHumid}, want: TerrainBog},
 		{name: "temperate wetland is marsh", province: Province{IslandID: 0, ElevationBand: ElevationBandLowland, HeatBand: HeatBandTemperate, MoistureBand: MoistureBandHumid}, want: TerrainMarsh},
 		{name: "warm wetland is swamp", province: Province{IslandID: 0, ElevationBand: ElevationBandLowland, HeatBand: HeatBandWarm, MoistureBand: MoistureBandSaturated}, want: TerrainSwamp},
+		{name: "wetland at relief limit", province: Province{IslandID: 0, ElevationBand: ElevationBandLowland, Relief: terrainWetlandReliefMax, HeatBand: HeatBandTemperate, MoistureBand: MoistureBandHumid}, want: TerrainMarsh},
+		{name: "rough humid lowland is not wetland", province: Province{IslandID: 0, ElevationBand: ElevationBandLowland, Relief: terrainWetlandReliefMax + 0.01, HeatBand: HeatBandTemperate, MoistureBand: MoistureBandHumid}, want: TerrainTemperateForest},
 		{name: "coast", province: Province{IslandID: 0, Elevation: terrainCoastMax, ElevationBand: ElevationBandLowland, HeatBand: HeatBandTemperate, MoistureBand: MoistureBandModerate}, adjacentWater: true, want: TerrainCoast},
 		{name: "rough dry land is badlands", province: Province{IslandID: 0, Elevation: 0.1, ElevationBand: ElevationBandLowland, Relief: terrainBadlandsReliefMin, HeatBand: HeatBandWarm, MoistureBand: MoistureBandDry}, want: TerrainBadlands},
+		{name: "smoother dry land is not badlands", province: Province{IslandID: 0, Elevation: 0.1, ElevationBand: ElevationBandLowland, Relief: terrainBadlandsReliefMin - 0.01, HeatBand: HeatBandWarm, MoistureBand: MoistureBandDry}, want: TerrainScrubland},
 		{name: "rough upland is hills", province: Province{IslandID: 0, ElevationBand: ElevationBandUpland, Relief: terrainHillReliefMin, HeatBand: HeatBandTemperate, MoistureBand: MoistureBandModerate}, want: TerrainHills},
+		{name: "smooth upland uses climate cover", province: Province{IslandID: 0, ElevationBand: ElevationBandUpland, Relief: terrainHillReliefMin - 0.01, HeatBand: HeatBandTemperate, MoistureBand: MoistureBandModerate}, want: TerrainPlains},
 		{name: "ordinary land uses climate cover", province: land, want: TerrainPlains},
 	} {
 		t.Run(test.name, func(t *testing.T) {

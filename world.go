@@ -150,9 +150,11 @@ type Island struct {
 // cell, not the polygon centroid. CornerIDs is a counterclockwise polygon ring
 // without a repeated closing corner. Elevation is the mean elevation of the
 // province's boundary edges, normalized to [-1, 1]. ElevationBand preserves
-// the growth-assigned land/water classification even at sea level. Relief,
-// Heat, and Moisture are normalized to [0, 1]; Heat and Moisture retain their
-// ordered classifications.
+// the growth-assigned land/water classification even at sea level. Relief is
+// the mean absolute elevation difference to neighbors across shared edges,
+// counting only land-land or water-water edges, and is 0 for a province with
+// no such neighbor. Relief, Heat, and Moisture are normalized to [0, 1]; Heat
+// and Moisture retain their ordered classifications.
 type Province struct {
 	ID            ProvinceID
 	IslandID      IslandID

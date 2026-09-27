@@ -199,9 +199,22 @@ authority for land and water, including provinces whose mean elevation is zero.
 | land | `>= 0.6` | mountain |
 
 Terrain assignment never removes provinces or changes geometry, island
-membership, adjacency, or the growth-assigned land/water decision. Relief is
-currently zero until issue #30 implements its graph-derived pass, so
-relief-gated terrain distinctions remain dormant.
+membership, adjacency, or the growth-assigned land/water decision.
+
+Relief measures local roughness rather than height. A province's relief is the
+mean absolute elevation difference across its shared edges with same-medium
+neighbors (land with land, water with water):
+`relief(p) = mean(|p.Elevation - neighbor.Elevation|)`. World-boundary and
+coastline edges are ignored, so the sea-level step at the coast never counts.
+Because land and water elevations each span a unit-wide range, relief is
+naturally in `[0, 1)`; a province with no same-medium neighbor has relief `0`.
+The pass consumes no randomness. Typical land relief is about 0.09 (median),
+with the roughest tenth above about 0.17.
+
+Terrain reads relief at four thresholds: highland with relief `>= 0.16` is
+mountain rather than hills, upland with relief `>= 0.14` is hills, dry land with
+relief `>= 0.20` is badlands, and humid lowland is a wetland only when its
+relief is `<= 0.12`.
 
 ## Climate
 
