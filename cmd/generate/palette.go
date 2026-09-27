@@ -57,7 +57,10 @@ func provinceFill(layer mapLayer, province wgvc.Province) (string, error) {
 		}
 		return hexColor(ElevationRamp.At(t)), nil
 	case layerRelief:
-		return rampFill(UnitRamp, "relief", province.Relief)
+		// Relief is nominally in [0, 1) but a mean of neighbor differences
+		// rarely passes 0.3, so the layer spans a fixed display range and
+		// saturates above it rather than stretching per world.
+		return rampFill(UnitRamp, "relief", province.Relief/reliefDisplayMax)
 	case layerHeat:
 		return rampFill(TemperatureRamp, "heat", province.Heat)
 	case layerMoisture:
@@ -155,8 +158,16 @@ var ElevationRamp = Ramp{
 	{At: 1.00, Color: color.RGBA{R: 0xf4, G: 0xf4, B: 0xf0, A: 0xff}},
 }
 
+// reliefDisplayMax is the relief value that reaches the pale end of the relief
+// layer. Measured across seeds, sizes, and aspect ratios, the 99th percentile
+// of land relief sits between 0.23 and 0.31 and the maximum near 0.55, so 0.4
+// keeps nearly every province on the ramp while the terrain thresholds (0.12
+// wetland cap, 0.14 hills, 0.16 mountains, 0.20 badlands) fall at 30% to 50%
+// of it, around the ramp's first color break, where flat and rugged separate.
+const reliefDisplayMax = 0.4
+
 // UnitRamp is a sequential ramp for a field in [0, 1] with no zero crossing,
-// such as relief.
+// such as relief over its display range.
 var UnitRamp = Ramp{
 	{At: 0.00, Color: color.RGBA{R: 0x10, G: 0x14, B: 0x20, A: 0xff}},
 	{At: 0.35, Color: color.RGBA{R: 0x39, G: 0x5c, B: 0x7a, A: 0xff}},

@@ -224,14 +224,20 @@ for every layer:
 |---|---|
 | `terrain` | its terrain (the default) |
 | `elevation` | elevation, deep ocean through shelf, then a hard step at sea level to coastal green, upland brown, and snow; the side of the step follows land/water membership |
-| `relief` | relief, dark (flat) to pale (rugged) |
+| `relief` | relief, dark (flat) to pale (rugged), over a fixed display range of `[0, 0.4]`; higher values saturate |
 | `heat` | heat, blue (cold) through neutral to red (hot) |
 | `moisture` | moisture, ochre (dry) through neutral to deep green (wet) |
 | `climate` | its heat band × moisture band, one color per cell of the 5×5 table |
 
-Ramps cover each field's full range (`[-1, 1]` for elevation, `[0, 1]` for the
-others) rather than stretching to the values a world happens to contain. Unknown
-layer names are rejected:
+Ramps cover a fixed range (`[-1, 1]` for elevation, `[0, 1]` for heat and
+moisture) rather than stretching to the values a world happens to contain, so
+two maps are comparable. Relief is the exception: it is nominally in `[0, 1)`,
+but as a mean of neighbor differences it rarely passes 0.3 (the 99th percentile
+of land relief is 0.23 to 0.31 across seeds and sizes), so its layer spans
+`[0, 0.4]`. On that scale the terrain thresholds land at 30% (wetland cap
+0.12), 35% (hills 0.14), 40% (mountains 0.16), and 50% (badlands 0.20), around
+the ramp's first color break, so flat, hilly, and mountainous regions separate
+visibly. Unknown layer names are rejected:
 
 ```sh
 go run ./cmd/generate -layer heat -format png -output heat
