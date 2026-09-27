@@ -158,7 +158,9 @@ The command exposes all growth controls, including `-ocean`, `-edge-barrier`,
 `-edge-ramp`, `-attractant-ramp`, `-attractant-jitter`, `-temperature`,
 `-control-penalty`, `-rounds`, and `-relaxations`. Climate calibration is
 controlled by `-polar-ice` and `-peak-chill`, both expressed as percentages. Run
-`go run ./cmd/generate -h` for their defaults and descriptions.
+`go run ./cmd/generate -h` for their defaults and descriptions. `-version`
+prints the generator version and exits; a built binary appends the commit it
+was built from as semver build metadata.
 
 See [Desirability-field growth](docs/x24.md) for the rules and defaults. The
 public `Generate` API uses those defaults, including zero attractants; these

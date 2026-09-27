@@ -32,6 +32,7 @@ type options struct {
 	peakChillPercent float64
 	format           string
 	outputBase       string
+	showVersion      bool
 }
 
 type outputFormats struct {
@@ -108,8 +109,13 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Float64Var(&options.peakChillPercent, "peak-chill", options.peakChillPercent, "target percentage of warm-region high peaks classified cold or colder")
 	flags.StringVar(&options.format, "format", options.format, "output format: svg, png, json, both, all, or a comma-separated combination")
 	flags.StringVar(&options.outputBase, "output", options.outputBase, "output path without an extension")
+	flags.BoolVar(&options.showVersion, "version", false, "print the generator version and exit")
 	if err := flags.Parse(args); err != nil {
 		return err
+	}
+	if options.showVersion {
+		fmt.Fprintln(stdout, wgvc.Version())
+		return nil
 	}
 	if flags.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments: %v", flags.Args())

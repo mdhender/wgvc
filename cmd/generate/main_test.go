@@ -202,6 +202,20 @@ func TestRunLogsSkippedAttractantRegions(t *testing.T) {
 	}
 }
 
+func TestRunVersionPrintsVersionWithoutGenerating(t *testing.T) {
+	outputBase := filepath.Join(t.TempDir(), "world")
+	var stdout bytes.Buffer
+	if err := run([]string{"-version", "-format", "all", "-output", outputBase}, &stdout, io.Discard); err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	if got, want := stdout.String(), wgvc.Version().String()+"\n"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+	if matches, _ := filepath.Glob(outputBase + ".*"); len(matches) != 0 {
+		t.Fatalf("-version wrote files: %v", matches)
+	}
+}
+
 func TestRunRejectsUnknownFormat(t *testing.T) {
 	err := run([]string{"-format", "jpeg"}, io.Discard, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "unsupported format") {
