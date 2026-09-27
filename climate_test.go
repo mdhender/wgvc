@@ -61,7 +61,10 @@ func TestAdjustedHeatUsesLatitudeAndCoolsOnlyPositiveLandElevation(t *testing.T)
 		{IslandID: 0, Elevation: -0.2},
 	}
 	got := adjustedHeatValues(provinces, []float64{0.4, 0.4, 0.4, 0.4}, []float64{0, 0.5, 0.5, 1}, 0.4, 0.5)
-	want := []float64{0.4, 0.5, 0.2, 0.8}
+	// Blend 0.6 * 0.4 with 0.4 * (1 - latitude): 0.64, 0.44, 0.44, 0.24.
+	// Land then keeps (1 - 0.5 * elevation): 0.9 and 0.6; negative land
+	// elevation and water are not cooled.
+	want := []float64{0.64, 0.396, 0.264, 0.24}
 	for i := range want {
 		if math.Abs(got[i]-want[i]) > 1e-15 {
 			t.Errorf("province %d heat = %g, want %g", i, got[i], want[i])

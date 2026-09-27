@@ -7,8 +7,20 @@ import (
 
 const (
 	climateCalibrationRounds = 12
-	maximumWarmthScale       = 4.0
-	maximumCoolingStrength   = 1.0
+	// minimumWarmthScale and maximumWarmthScale bound the blend weight of the
+	// latitude gradient against the heat noise; at 1 heat is pure latitude,
+	// at 0 pure noise. The floor keeps a visible gradient on worlds whose
+	// peak-chill target is unreachable, where a smaller weight would only
+	// reduce the error by flattening the world.
+	minimumWarmthScale = 0.25
+	maximumWarmthScale = 1.0
+	// maximumCoolingStrength is the fraction of heat a land province at the
+	// maximum elevation loses.
+	maximumCoolingStrength = 1.0
+	// climateTargetTolerance is how far a band fraction may sit from its
+	// target, as an absolute fraction, and still count as reached; a half
+	// province is used instead when that is larger.
+	climateTargetTolerance = 0.005
 )
 
 var climateBandShares = [5]int{5, 15, 45, 25, 10}
@@ -98,12 +110,12 @@ func calibrateHeat(provinces []Province, heatSource, latitudes []float64, config
 
 	counts, classifiable := climatePopulationCounts(len(provinces))
 	if !classifiable || oceanCount == 0 || len(peakSlice) == 0 {
-		return middleHeatCalibration(provinces, heatSource, latitudes, maximumWarmthScale/2, maximumCoolingStrength/2)
+		return middleHeatCalibration(provinces, heatSource, latitudes, (minimumWarmthScale+maximumWarmthScale)/2, maximumCoolingStrength/2)
 	}
 
-	polarTolerance := 0.5 / float64(oceanCount)
-	peakTolerance := 0.5 / float64(len(peakSlice))
-	warmthLow, warmthHigh := 0.0, maximumWarmthScale
+	polarTolerance := max(climateTargetTolerance, 0.5/float64(oceanCount))
+	peakTolerance := max(climateTargetTolerance, 0.5/float64(len(peakSlice)))
+	warmthLow, warmthHigh := minimumWarmthScale, maximumWarmthScale
 	coolingLow, coolingHigh := 0.0, maximumCoolingStrength
 	var best heatCalibration
 	haveBest := false
@@ -130,22 +142,19 @@ func calibrateHeat(provinces []Province, heatSource, latitudes []float64, config
 					roundBest = candidate
 					haveRoundBest = true
 				}
-				if candidate.polarReached && candidate.peakReached {
-					return candidate
-				}
 			}
 		}
 
-		warmthLow = max(0, roundBest.warmthScale-warmthStep)
+		warmthLow = max(minimumWarmthScale, roundBest.warmthScale-warmthStep)
 		warmthHigh = min(maximumWarmthScale, roundBest.warmthScale+warmthStep)
 		coolingLow = max(0, roundBest.coolingStrength-coolingStep)
 		coolingHigh = min(maximumCoolingStrength, roundBest.coolingStrength+coolingStep)
 	}
 
-	// No candidate met both targets exactly. Calibration is best-effort, so
-	// keep the lowest-error candidate's bands rather than collapsing the
-	// world to one band; the all-temperate fallback is reserved for worlds
-	// that cannot be banded at all.
+	// Calibration is best-effort: when no candidate met both targets, the
+	// lowest-error candidate keeps its bands rather than collapsing the world
+	// to one band. The all-temperate fallback is reserved for worlds that
+	// cannot be banded at all.
 	return best
 }
 
@@ -178,22 +187,48 @@ func middleHeatCalibration(provinces []Province, heatSource, latitudes []float64
 	}
 }
 
+// betterHeatCalibration orders candidates. Any candidate within tolerance of
+// both targets beats any that is not; among reached candidates the strongest
+// latitude gradient wins, because a weak gradient meets the targets by
+// accident (noise alone puts about 5% of the ocean in the coldest 5%), and
+// the targets are meant to bound how far the gradient can go. Among the rest
+// the lowest error wins. Remaining ties fall to the lower cooling.
 func betterHeatCalibration(candidate, current heatCalibration) bool {
+	candidateReached := candidate.polarReached && candidate.peakReached
+	currentReached := current.polarReached && current.peakReached
+	if candidateReached != currentReached {
+		return candidateReached
+	}
+	if candidateReached {
+		if candidate.warmthScale != current.warmthScale {
+			return candidate.warmthScale > current.warmthScale
+		}
+	} else if candidate.error != current.error {
+		return candidate.error < current.error
+	}
 	if candidate.error != current.error {
 		return candidate.error < current.error
 	}
 	if candidate.warmthScale != current.warmthScale {
-		return candidate.warmthScale < current.warmthScale
+		return candidate.warmthScale > current.warmthScale
 	}
 	return candidate.coolingStrength < current.coolingStrength
 }
 
+// adjustedHeatValues blends the heat noise with a north-cold latitude
+// gradient, then cools land in proportion to its positive elevation:
+//
+//	heat = ((1 - warmth) * noise + warmth * (1 - latitude)) * (1 - cooling * max(0, elevation))
+//
+// Both factors lie in [0, 1], so the result does too without clamping and no
+// value can pile up at either end. Latitude 1 is the top of the map (+Y,
+// north), which is the cold pole; water receives no elevation cooling.
 func adjustedHeatValues(provinces []Province, heatSource, latitudes []float64, warmth, cooling float64) []float64 {
 	values := make([]float64, len(provinces))
 	for provinceID, province := range provinces {
-		heat := clamp01(heatSource[provinceID] + latitudes[provinceID]*warmth)
+		heat := (1-warmth)*heatSource[provinceID] + warmth*(1-latitudes[provinceID])
 		if province.IslandID != NoIslandID {
-			heat = clamp01(heat - max(0, province.Elevation)*cooling)
+			heat *= 1 - cooling*max(0, province.Elevation)
 		}
 		values[provinceID] = heat
 	}

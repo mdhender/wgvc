@@ -320,16 +320,29 @@ in order. Both fields use their own
 domain-separated noise stream sampled at shared corners, so climate generation
 cannot perturb terrain, elevation, island growth, or geometry.
 
-Heat combines its corner mean with a north-cold/south-warm latitude gradient.
-Positive land elevation then cools the result; water receives no elevation
-adjustment. `Config.PolarIce` and `Config.PeakChill` tune those effects as
-fractions, with zero values selecting the defaults. Bands use population shares
-of 5%, 15%, 45%, 25%, and 10%. Calibration is best-effort: the search keeps the
-warmth and cooling that come closest to the targets even when neither can be
-met exactly, so a normal world always receives every band. Only a population
-too small for the shares, a world without ocean, or an empty peak slice falls
-back to the middle band for every province; continuous values remain available
-either way.
+Heat blends its corner mean with a north-cold/south-warm latitude gradient
+(north is +Y, the top of a rendered map), then cools land in proportion to its
+positive elevation:
+
+```
+heat = ((1 - warmth) * noise + warmth * (1 - latitude)) * (1 - cooling * max(0, elevation))
+```
+
+Both factors lie in `[0, 1]`, so heat does too without clamping, and no mass of
+provinces piles up at either end. Water receives no elevation cooling.
+`Config.PolarIce` and `Config.PeakChill` are the calibration targets, as
+fractions, with zero values selecting the defaults: the share of ocean
+provinces in the polar band, and the share of high-latitude high-elevation land
+that is cold or polar. The generator searches `warmth` in `[0.25, 1]` and
+`cooling` in `[0, 1]` for the pair whose fractions come within half a
+percentage point (or half a province) of both targets; among such pairs the
+strongest gradient wins, so the targets bound the gradient rather than being
+met by noise alone. If no pair reaches both targets, the lowest total error
+wins. The floor on `warmth` keeps a visible gradient even when a target is
+unreachable. Bands use population shares of 5%, 15%, 45%, 25%, and 10%, so a
+normal world always receives every band. Only a population too small for the
+shares, a world without ocean, or an empty peak slice falls back to the middle
+band for every province; continuous values remain available either way.
 
 ## Tests
 
