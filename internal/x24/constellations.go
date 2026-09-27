@@ -228,6 +228,49 @@ var constellations = map[string]Constellation{
 		Weights: []float64{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, -1},
 		Kin:     [][]int{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37}},
 	},
+	// Aster is Draco with a chain of islands for a body: the same figure,
+	// but only the twelve half-weight head sites are kin, ringing a repulsor
+	// that leaves a bay or an inland sea, while every body site grows its
+	// own island held apart from its neighbors by the rival ramp. Body sites
+	// are spaced every 0.25 of the frame so the beads nearly touch.
+	"aster": {
+		Name:        "aster",
+		AspectRatio: "16:9",
+		Ocean:       0.78,
+		Sites: []Point{
+			{X: -1.00, Y: 0.09},  // Eltanin
+			{X: -0.92, Y: 0.19},  // between Eltanin and Rastaban
+			{X: -0.83, Y: 0.29},  // between Eltanin and Rastaban
+			{X: -0.75, Y: 0.39},  // Rastaban
+			{X: -0.65, Y: 0.32},  // between Rastaban and Kuma
+			{X: -0.55, Y: 0.24},  // Kuma
+			{X: -0.55, Y: 0.13},  // between Kuma and Grumium
+			{X: -0.55, Y: 0.03},  // between Kuma and Grumium
+			{X: -0.55, Y: -0.08}, // Grumium
+			{X: -0.67, Y: -0.04}, // between Grumium and south of the head
+			{X: -0.78, Y: 0.00},  // south of the head
+			{X: -0.89, Y: 0.04},  // between south of the head and Eltanin
+			{X: -0.51, Y: -0.26}, // Grumium's neck
+			{X: -0.46, Y: -0.44}, // Altais
+			{X: -0.38, Y: -0.58}, // Tyl
+			{X: -0.18, Y: -0.44}, // between Tyl and chi Draconis
+			{X: 0.02, Y: -0.31},  // chi Draconis
+			{X: -0.03, Y: -0.13}, // between chi Draconis and Aldhibah
+			{X: -0.08, Y: 0.05},  // Aldhibah
+			{X: -0.07, Y: 0.18},  // between Aldhibah and Athebyne
+			{X: -0.06, Y: 0.32},  // Athebyne
+			{X: -0.04, Y: 0.49},  // theta Draconis
+			{X: 0.10, Y: 0.58},   // Edasich
+			{X: 0.28, Y: 0.53},   // between Edasich and Thuban
+			{X: 0.45, Y: 0.48},   // Thuban
+			{X: 0.62, Y: 0.36},   // between Thuban and kappa Draconis
+			{X: 0.79, Y: 0.24},   // kappa Draconis
+			{X: 1.00, Y: 0.16},   // Giausar
+			{X: -0.73, Y: 0.14},  // repulsor: bay or inland sea in the head
+		},
+		Weights: []float64{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.7, 0.7, 0.7, 0.7, -1},
+		Kin:     [][]int{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}},
+	},
 }
 
 // ConstellationByName returns the named constellation.
