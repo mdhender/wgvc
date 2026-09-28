@@ -28,22 +28,22 @@ func TestGenerateMatchesRecordedHash(t *testing.T) {
 		{
 			name:   "issue-57",
 			config: Config{WorldSeed: 0x0123456789abcdef, ProvinceCount: 1500, IslandCount: 12},
-			want:   "a28dec1180e269434e8b6692eedc29380aa4ae63287d315105ee1106caade7b2",
+			want:   "b6a6952e0d989f6bb5206625f008133d8b576c79b48219a541267834f7c37b31",
 		},
 		{
 			name:   "widescreen",
 			config: Config{WorldSeed: 1, ProvinceCount: 500, IslandCount: 5, AspectRatio: AspectRatioWidescreen},
-			want:   "1ad6a498e182622d94a5633fd285f81ac4c8eb36942cdd8c1766e940e7f54306",
+			want:   "bd12cafadcce6509142938f148784775fb5b61c6634fd69988562b23c536c177",
 		},
 		{
 			name:   "portrait",
 			config: Config{WorldSeed: 0xdeadbeef, ProvinceCount: 800, IslandCount: 8, AspectRatio: AspectRatioPortrait},
-			want:   "f57e12b70c1d60c1320724cfa50c9dc2a4ccc29250c4a2103e13c5da8e029ea6",
+			want:   "e729448d02cf65c4b2374ce01f4b5804c1c26c343462cf5e2cfaf644ff901fc1",
 		},
 		{
 			name:   "climate",
 			config: Config{WorldSeed: 42, ProvinceCount: 600, IslandCount: 6, PolarIce: 0.2, PeakChill: 0.9},
-			want:   "0ca00d937b1058c3f698dfb1878af9b0394ead61dfe5b1991f7b25d7c41e4d7a",
+			want:   "f82f11e7022169d6f323f5eab9bc9e3401f83f8bd9dcdb6804ab5e9f85909fc3",
 		},
 	}
 	for _, c := range cases {

@@ -55,9 +55,10 @@ requested count. Water can contain interior components such as lakes.
   path to the sea, filling depressions to their spill level internally. The
   downstream neighbor is the lowest filled neighbor; ties go to the sea over
   any other corner, then to the steeper descent, then the shorter edge, then
-  the lower corner ID. Lakes
-  and inland seas are ordinary nodes, so rivers flowing in end at the shore
-  and the basin's water leaves at its spill corner. Runoff is each land
+  the lower corner ID. The first corner of a lake or inland sea the flood
+  reaches is the basin's spill corner, and every other corner of the basin
+  drains to it through the water, so rivers flowing in end at the shore and
+  the basin's water leaves at its spill corner alone. Runoff is each land
   province's `Area * Moisture` spread over its corners.
 - `Province.CoastDistance` is the number of hops through the province's own
   medium (land through land, water through water) to the nearest edge shared

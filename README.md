@@ -442,10 +442,11 @@ A corner's downstream neighbor is the visited neighbor with the lowest filled
 elevation; on a tie the sea wins over any other corner, then the steeper
 descent, then the shorter edge, then the lower corner ID, so a coastal corner
 beside both a lake and the sea drains to the sea. The filled surface is not
-exported. Lakes
-and inland seas are ordinary nodes: rivers flowing in end at the shore with a
-`basin` mouth, and the basin's water leaves at its spill corner as a river with
-a `basin` source. Each land province spreads `Area * Moisture` over its corners
+exported. The first corner of a lake or inland sea the flood reaches is the
+basin's spill corner, and every other corner of the basin drains to it through
+the water: rivers flowing in end at the shore with a `basin` mouth, and the
+basin's water leaves at its spill corner alone, as a river with a `basin`
+source. Each land province spreads `Area * Moisture` over its corners
 as runoff, so wet regions grow larger rivers, and runoff accumulates downstream
 into `Edge.Discharge`.
 

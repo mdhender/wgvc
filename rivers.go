@@ -48,8 +48,12 @@ func ClassifyDischarge(discharge float64) RiverClass {
 // then the shorter edge, then the lower corner ID. Every corner touching
 // water sits at elevation 0, so without the outlet preference a lake shore
 // could claim a coastal corner from the sea beside it. The filled surface is
-// not exported. Lake and inland-sea corners are ordinary nodes, so inflowing
-// rivers end at the shore and the lake's water leaves at its spill corner.
+// not exported. The first corner of a lake or inland sea the flood reaches is
+// the basin's spill corner; every other corner of the basin drains to it
+// through the water, so inflowing rivers end at the shore and the basin's
+// water leaves at the spill corner alone. Without that, every shore corner
+// sits at the spill level with the land around it and picks its own way
+// out, and the lake sources several rivers (issue #69).
 //
 // Each land province spreads Area * Moisture evenly over its corners as
 // runoff, which accumulates downstream. An edge between two land provinces
@@ -121,12 +125,39 @@ func assignRivers(world *World) {
 			heap.Push(queue, cornerHeapItem{corner: CornerID(cornerID), filled: filled[cornerID]})
 		}
 	}
+	basinCorners := make(map[BasinID][]CornerID)
+	for cornerID, basinID := range basinOf {
+		if basinID != NoBasinID {
+			basinCorners[basinID] = append(basinCorners[basinID], CornerID(cornerID))
+		}
+	}
+	spill := make(map[BasinID]CornerID, len(basinCorners))
 	resolved := make([]bool, cornerCount)
 	for queue.Len() > 0 {
 		item := heap.Pop(queue).(cornerHeapItem)
 		order = append(order, item.corner)
 		resolved[item.corner] = true
-		if !outlet[item.corner] {
+		if basinID := basinOf[item.corner]; basinID != NoBasinID && !outlet[item.corner] {
+			if spillCorner, spilled := spill[basinID]; spilled {
+				// The basin's water leaves at its spill corner, so every
+				// other corner of the basin drains there through the water
+				// rather than choosing its own way onto the land.
+				downstream[item.corner] = spillCorner
+			} else {
+				// The first corner of a basin reached is its spill corner.
+				// The rest of the basin sits at the same filled level and
+				// is queued now so inflowing land drains to the shore.
+				spill[basinID] = item.corner
+				for _, cornerID := range basinCorners[basinID] {
+					if !visited[cornerID] {
+						visited[cornerID] = true
+						filled[cornerID] = max(world.Corners[cornerID].Elevation, item.filled)
+						heap.Push(queue, cornerHeapItem{corner: cornerID, filled: filled[cornerID]})
+					}
+				}
+			}
+		}
+		if !outlet[item.corner] && downstream[item.corner] < 0 {
 			// The neighbor that first reached this corner has the lowest
 			// filled elevation of any neighbor, so the choice below is only
 			// among neighbors tied with it.
@@ -157,7 +188,9 @@ func assignRivers(world *World) {
 		cornerID := order[index]
 		if downstream[cornerID] >= 0 {
 			discharge[downstream[cornerID]] += discharge[cornerID]
-			world.Edges[downstreamEdge[cornerID]].Discharge = discharge[cornerID]
+			if downstreamEdge[cornerID] >= 0 {
+				world.Edges[downstreamEdge[cornerID]].Discharge = discharge[cornerID]
+			}
 		}
 	}
 

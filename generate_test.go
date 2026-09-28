@@ -875,6 +875,18 @@ func assertValidRivers(t *testing.T, world World) {
 			t.Errorf("river %d has source kind %q", river.ID, river.Source.Kind)
 		}
 	}
+	// A basin drains through one spill corner, so it sources at most one river.
+	basinOutflows := make(map[BasinID][]RiverID)
+	for _, river := range world.Rivers {
+		if river.Source.Kind == RiverEndBasin {
+			basinOutflows[river.Source.BasinID] = append(basinOutflows[river.Source.BasinID], river.ID)
+		}
+	}
+	for basinID, riverIDs := range basinOutflows {
+		if len(riverIDs) > 1 {
+			t.Errorf("basin %d sources rivers %v, want at most one outflow", basinID, riverIDs)
+		}
+	}
 	for edgeID, edge := range world.Edges {
 		if (edge.RiverID != NoRiverID) != (edgeRivers[edgeID] == 1) || edgeRivers[edgeID] > 1 {
 			t.Errorf("edge %d has RiverID %d but appears in %d rivers", edgeID, edge.RiverID, edgeRivers[edgeID])

@@ -150,3 +150,25 @@ func assertRiversTakeAdjacentSea(t *testing.T, world World) {
 		t.Errorf("%d river corners in all skipped an adjacent sea corner", failures)
 	}
 }
+
+// TestBasinsDrainThroughOneSpillCorner checks that a lake sources at most one
+// river (issue #69). Every shore corner of a lake fills to the same spill
+// level as the land around it, so without collapsing the basin to its spill
+// corner each shore corner picks its own way out and the lake's inflow leaves
+// through several rivers. Seed 4 at 500 provinces has such a lake.
+func TestBasinsDrainThroughOneSpillCorner(t *testing.T) {
+	world, err := Generate(Config{WorldSeed: 4, ProvinceCount: 500, IslandCount: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertValidRivers(t, world)
+	outflows := 0
+	for _, river := range world.Rivers {
+		if river.Source.Kind == RiverEndBasin {
+			outflows++
+		}
+	}
+	if outflows == 0 {
+		t.Fatal("no river leaves a basin; the seed no longer exercises the case")
+	}
+}
