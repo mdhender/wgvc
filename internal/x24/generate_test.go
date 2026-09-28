@@ -6,6 +6,8 @@ import (
 	"math/rand/v2"
 	"reflect"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/mdhender/wgvc/internal/aspectratio"
@@ -328,6 +330,7 @@ func TestGenerateRejectsInvalidConfig(t *testing.T) {
 		withConfig(valid, func(c *Config) { c.EdgeRamp = []float64{-1, -0.5} }),
 		withConfig(valid, func(c *Config) { c.EdgeRamp = []float64{-1, -0.4, -0.6, 0} }),
 		withConfig(valid, func(c *Config) { c.AttractantCount = 7 }),
+		withConfig(valid, func(c *Config) { c.AttractantCount = 9; c.Constellation = "ursa-minor" }),
 		withConfig(valid, func(c *Config) { c.AttractantRamp = nil }),
 		withConfig(valid, func(c *Config) { c.AttractantRamp = []float64{0} }),
 		withConfig(valid, func(c *Config) { c.AttractantRamp = []float64{1, 0.5} }),
@@ -526,7 +529,6 @@ func TestConstellationPlacesSitesInOrderWithinFill(t *testing.T) {
 	config := DefaultConfig()
 	config.AspectRatio = "cinematic"
 	config.Constellation = "ursa-minor"
-	config.AttractantCount = 9 // ignored when a constellation is set
 	// Short ramps keep the edge clearance small enough for the default
 	// province count on a wide map, so sites land near their targets.
 	config.EdgeRamp = []float64{-1, 0}
@@ -784,5 +786,149 @@ func TestEveryConstellationIsWellFormed(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// hopDistance is the shortest hop count between two cells, or -1 when they
+// are disconnected.
+func hopDistance(cells []singlemesh.Cell, from, to int) int {
+	hops := map[int]int{from: 0}
+	queue := []int{from}
+	for head := 0; head < len(queue); head++ {
+		cellID := queue[head]
+		if cellID == to {
+			return hops[cellID]
+		}
+		for _, neighbor := range cells[cellID].Neighbors {
+			if _, seen := hops[neighbor]; !seen {
+				hops[neighbor] = hops[cellID] + 1
+				queue = append(queue, neighbor)
+			}
+		}
+	}
+	return -1
+}
+
+func TestConstellationSitesNeverShareACell(t *testing.T) {
+	bounds := singlemesh.Bounds{Width: 2, Height: 1}
+	cells, err := singlemesh.Build(400, 2, bounds, roundRandom(7, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	edgeRamp := []float64{-1, 0}
+	attractantRamp := []float64{1, 0}
+	_, _, edgeDistances := edgeField(cells, bounds, 0.02, edgeRamp)
+	// Two stars and a repulsor at the very same point collide on one cell;
+	// the later two must move to distinct free cells within the hop budget.
+	constellation := Constellation{
+		Sites:   []Point{{X: -0.8, Y: 0}, {X: 0, Y: 0}, {X: 0, Y: 0}, {X: 0, Y: 0}, {X: 0.8, Y: 0}},
+		Weights: []float64{1, 1, 1, -1, 1},
+	}
+	attractants, repulsors, skips := makeConstellationSites(cells, bounds, edgeDistances, edgeRamp, attractantRamp, constellation)
+	if len(attractants) != 4 || len(repulsors) != 1 || len(skips) != 0 {
+		t.Fatalf("attractants=%d repulsors=%d skips=%+v, want 4, 1, and none", len(attractants), len(repulsors), skips)
+	}
+	home := attractants[1].CellID
+	placed := map[int]bool{}
+	for _, attractant := range attractants {
+		if placed[attractant.CellID] {
+			t.Errorf("cell %d hosts two sites", attractant.CellID)
+		}
+		placed[attractant.CellID] = true
+	}
+	if placed[repulsors[0].CellID] {
+		t.Errorf("cell %d hosts a star and a repulsor", repulsors[0].CellID)
+	}
+	for _, cellID := range []int{attractants[2].CellID, repulsors[0].CellID} {
+		if hops := hopDistance(cells, home, cellID); hops < 1 || hops > collisionHopBudget {
+			t.Errorf("displaced site on cell %d is %d hops from cell %d, want 1 to %d", cellID, hops, home, collisionHopBudget)
+		}
+	}
+	again, _, _ := makeConstellationSites(cells, bounds, edgeDistances, edgeRamp, attractantRamp, constellation)
+	if !reflect.DeepEqual(attractants, again) {
+		t.Errorf("collision handling is not deterministic")
+	}
+}
+
+func TestConstellationSkipsSitesWhenNoFreeCellIsNear(t *testing.T) {
+	bounds := singlemesh.Bounds{Width: 2, Height: 1}
+	cells, err := singlemesh.Build(400, 2, bounds, roundRandom(7, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	edgeRamp := []float64{-1, 0}
+	attractantRamp := []float64{1, 0}
+	_, _, edgeDistances := edgeField(cells, bounds, 0.02, edgeRamp)
+	// Far more stars on one point than there are cells within the hop
+	// budget: the overflow is skipped with the colliding cell named.
+	const stars = 60
+	constellation := Constellation{Sites: make([]Point, stars)}
+	attractants, _, skips := makeConstellationSites(cells, bounds, edgeDistances, edgeRamp, attractantRamp, constellation)
+	if len(attractants)+len(skips) != stars || len(skips) == 0 || len(attractants) < 2 {
+		t.Fatalf("attractants=%d skips=%d, want %d sites in total with some of each", len(attractants), len(skips), stars)
+	}
+	home := attractants[0].CellID
+	placed := map[int]bool{}
+	for _, attractant := range attractants {
+		if placed[attractant.CellID] {
+			t.Errorf("cell %d hosts two stars", attractant.CellID)
+		}
+		placed[attractant.CellID] = true
+		if hops := hopDistance(cells, home, attractant.CellID); hops > collisionHopBudget {
+			t.Errorf("star on cell %d is %d hops from cell %d, want at most %d", attractant.CellID, hops, home, collisionHopBudget)
+		}
+	}
+	for _, skip := range skips {
+		if !strings.Contains(skip.Reason, "already hosts site") || !strings.Contains(skip.Reason, "cell "+strconv.Itoa(home)) {
+			t.Errorf("skip reason %q does not name the shared cell %d", skip.Reason, home)
+		}
+	}
+}
+
+func TestSeedAndGrowRecordsPinnedSeedFallbacks(t *testing.T) {
+	cells := lineCells(6)
+	landEligible := allEligible(6)
+	landEligible[5] = false
+	desirability := make([]float64, 6)
+	state := newGrowthState(cells, desirability, landEligible, []float64{0})
+	// Islands 0 and 1 both pin cell 2; island 2 pins the ineligible cell 5.
+	if !state.seedAndGrow(3, 3, 0.2, []int{2, 2, 5}, nil, nil, roundRandom(1, 0)) {
+		t.Fatal("seedAndGrow() failed")
+	}
+	result := state.result(nil, nil, 3)
+	if len(result.SeedFallbacks) != 2 {
+		t.Fatalf("fallbacks = %+v, want one for the shared cell and one for the ineligible cell", result.SeedFallbacks)
+	}
+	if !slices.IsSortedFunc(result.SeedFallbacks, func(a, b SeedFallback) int { return a.IslandID - b.IslandID }) {
+		t.Errorf("fallbacks are not in island order: %+v", result.SeedFallbacks)
+	}
+	for _, fallback := range result.SeedFallbacks {
+		switch {
+		case fallback.CellID == 2 && strings.HasPrefix(fallback.Reason, "cell 2 already belongs to island"):
+		case fallback.CellID == 5 && fallback.IslandID == 2 && fallback.Reason == "cell 5 is not eligible for land":
+		default:
+			t.Errorf("unexpected fallback %+v", fallback)
+		}
+		if fallback.SeedID == fallback.CellID || !landEligible[fallback.SeedID] {
+			t.Errorf("fallback %+v seeded on its pinned or an ineligible cell", fallback)
+		}
+	}
+	if state.owners[2] == Water {
+		t.Errorf("the shared pinned cell 2 was not seeded")
+	}
+}
+
+func TestPinnedSeedsRecordNoFallbackWhenFree(t *testing.T) {
+	config := DefaultConfig()
+	config.AspectRatio = "cinematic"
+	config.Constellation = "ursa-minor"
+	config.EdgeRamp = []float64{-1, 0}
+	config.AttractantRamp = []float64{1, 0}
+	result, err := Generate(config)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if len(result.SeedFallbacks) != 0 {
+		t.Errorf("fallbacks = %+v, want none when every star has its own cell", result.SeedFallbacks)
 	}
 }

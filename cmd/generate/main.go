@@ -219,6 +219,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	for _, skip := range result.AttractantSkips {
 		fmt.Fprintf(stderr, "generate: skipped attractant region (%d,%d): %s\n", skip.RegionX, skip.RegionY, skip.Reason)
 	}
+	for _, fallback := range result.SeedFallbacks {
+		fmt.Fprintf(stderr, "generate: island %d seeded on cell %d instead of star cell %d: %s\n", fallback.IslandID, fallback.SeedID, fallback.CellID, fallback.Reason)
+	}
 	var width, height int
 	var scene renderScene
 	if formats.svg || formats.png {

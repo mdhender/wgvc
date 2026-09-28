@@ -27,8 +27,8 @@ type Config struct {
 	EdgeRamp         []float64
 	AttractantCount  int
 	// Constellation names an attractant arrangement that replaces the
-	// regional placement selected by AttractantCount. It is placed without
-	// jitter and consumes no randomness.
+	// regional placement selected by AttractantCount, which must then be 0.
+	// It is placed without jitter and consumes no randomness.
 	Constellation      string
 	AttractantRamp     []float64
 	AttractantJitter   float64
@@ -97,6 +97,9 @@ func (c Config) validate() error {
 	if c.Constellation != "" {
 		if _, ok := ConstellationByName(c.Constellation); !ok {
 			return fmt.Errorf("unknown constellation %q: want one of %v", c.Constellation, ConstellationNames())
+		}
+		if c.AttractantCount != 0 {
+			return fmt.Errorf("attractant count must be 0 when a constellation is set: %d with %q", c.AttractantCount, c.Constellation)
 		}
 	}
 	if len(c.AttractantRamp) == 0 {
@@ -192,10 +195,26 @@ type Repulsor struct {
 	Strength float64
 }
 
+// AttractantSkip records a regional attractant or constellation site that was
+// not placed: no cell had the edge clearance, or every eligible cell near a
+// constellation site already hosted an earlier site. The region is the 3×3
+// grid cell holding the site's target.
 type AttractantSkip struct {
 	RegionX int
 	RegionY int
 	Reason  string
+}
+
+// SeedFallback records an island whose pinned seed cell (a constellation
+// star) could not be used because the cell was already claimed or is not
+// eligible for land, so the island drew a uniform seed instead. IslandID is
+// the island's initial index, which is also its star's index among the
+// placed attractants.
+type SeedFallback struct {
+	IslandID int
+	CellID   int // the pinned cell
+	SeedID   int // the cell seeded instead
+	Reason   string
 }
 
 type Result struct {
@@ -204,6 +223,7 @@ type Result struct {
 	Attractants        []Attractant
 	Repulsors          []Repulsor
 	AttractantSkips    []AttractantSkip
+	SeedFallbacks      []SeedFallback
 	InitialIslandCount int
 	MergeCount         int
 	RoundsAttempted    int

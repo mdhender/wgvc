@@ -3,8 +3,8 @@
 ![Subaru map: an archipelago of 10,000 land provinces at 78% ocean](docs/tnyc.png)
 
 `wgvc` generates deterministic, province-first game worlds on one relaxed
-Voronoi mesh, with concurrently grown and merging islands, shared polygon
-topology, and spatially correlated terrain. The map above is the `subaru`
+Voronoi mesh, with islands grown in interleaved rounds that merge when they
+touch, shared polygon topology, and spatially correlated terrain. The map above is the `subaru`
 archipelago, grown from 21 weighted sites and three repulsors with
 `-attractors subaru` (see [TNYC maps](#tnyc-maps)), downscaled from 5442×2206.
 
@@ -123,8 +123,8 @@ Future routes may be directed, so `A -> B` and `B -> A` will be separate
 decisions rather than consequences of geometric adjacency.
 
 The generator creates and Lloyd-relaxes one point set for the entire world,
-then plants one seed per island and grows all islands concurrently across that
-mesh using a static desirability field. A permanent ocean barrier keeps land
+then plants one seed per island and grows all islands across that mesh in
+interleaved rounds, one cell at a time, using a static desirability field. A permanent ocean barrier keeps land
 off the map boundary, while optional regional attractants can bias growth
 toward selected parts of the interior. A rival ramp makes cells near another
 island's land undesirable, so islands keep a channel of one to three water

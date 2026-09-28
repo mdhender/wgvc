@@ -81,25 +81,14 @@ func makeAttractants(cells []singlemesh.Cell, bounds singlemesh.Bounds, edgeDist
 			X: center.X + (float64(2*random.Float64())-1)*jitter*regionWidth/2,
 			Y: center.Y + (float64(2*random.Float64())-1)*jitter*regionHeight/2,
 		}
-		bestCell, bestDistance := -1, math.Inf(1)
-		for cellID, cell := range cells {
+		bestCell := nearestCell(cells, target, func(cellID int) bool {
+			cell := cells[cellID]
 			cellRegionX := min(int(cell.Site.X/bounds.Width*regions), regions-1)
 			cellRegionY := min(int(cell.Site.Y/bounds.Height*regions), regions-1)
-			if cellRegionX != regionX || cellRegionY != regionY || edgeDistances[cellID] <= clearance {
-				continue
-			}
-			dx, dy := cell.Site.X-target.X, cell.Site.Y-target.Y
-			distance := float64(dx*dx) + float64(dy*dy)
-			if distance < bestDistance {
-				bestCell, bestDistance = cellID, distance
-			}
-		}
+			return cellRegionX == regionX && cellRegionY == regionY && edgeDistances[cellID] > clearance
+		})
 		if bestCell == -1 {
-			skips = append(skips, AttractantSkip{
-				RegionX: regionX,
-				RegionY: regionY,
-				Reason:  fmt.Sprintf("no cell is more than %d hops from the edge barrier", clearance),
-			})
+			skips = append(skips, clearanceSkip(regionX, regionY, clearance))
 			continue
 		}
 		attractants = append(attractants, Attractant{
@@ -110,6 +99,52 @@ func makeAttractants(cells []singlemesh.Cell, bounds singlemesh.Bounds, edgeDist
 		})
 	}
 	return attractants, skips
+}
+
+// nearestCell returns the eligible cell whose site is nearest target, or -1
+// when no cell is eligible. Ties keep the lowest cell ID.
+func nearestCell(cells []singlemesh.Cell, target Point, eligible func(cellID int) bool) int {
+	bestCell, bestDistance := -1, math.Inf(1)
+	for cellID, cell := range cells {
+		if !eligible(cellID) {
+			continue
+		}
+		dx, dy := cell.Site.X-target.X, cell.Site.Y-target.Y
+		distance := float64(dx*dx) + float64(dy*dy)
+		if distance < bestDistance {
+			bestCell, bestDistance = cellID, distance
+		}
+	}
+	return bestCell
+}
+
+// clearanceSkip reports a site with no cell far enough from the edge barrier.
+func clearanceSkip(regionX, regionY, clearance int) AttractantSkip {
+	return AttractantSkip{
+		RegionX: regionX,
+		RegionY: regionY,
+		Reason:  fmt.Sprintf("no cell is more than %d hops from the edge barrier", clearance),
+	}
+}
+
+// hopsWithin marks every cell within budget hops of start, including start.
+func hopsWithin(cells []singlemesh.Cell, start, budget int) []bool {
+	within := make([]bool, len(cells))
+	within[start] = true
+	frontier := []int{start}
+	for hop := 0; hop < budget && len(frontier) > 0; hop++ {
+		next := make([]int, 0)
+		for _, cellID := range frontier {
+			for _, neighbor := range cells[cellID].Neighbors {
+				if !within[neighbor] {
+					within[neighbor] = true
+					next = append(next, neighbor)
+				}
+			}
+		}
+		frontier = next
+	}
+	return within
 }
 
 // islandBySite maps each site index to the island seeded on it, or -1 for a
@@ -213,11 +248,19 @@ const (
 	constellationHeightFill = 0.70
 )
 
+// collisionHopBudget is how far a constellation site may move from the cell
+// it would share with an earlier site before it is skipped instead.
+const collisionHopBudget = 2
+
 // makeConstellationSites scales the constellation's centered frame to fit
 // the map and places each star on the nearest cell that clears the edge
 // barrier by the combined ramp reach, and each repulsor on the nearest cell
-// of any kind. Stars keep the constellation's order. A star is skipped only
-// when no cell on the map has that clearance.
+// of any kind. Stars keep the constellation's order. No two sites share a
+// cell: a site whose nearest cell already hosts an earlier site takes the
+// nearest free cell within collisionHopBudget hops of it, so the figure
+// keeps one island per star when two stars fall closer than a cell. A site
+// is skipped when no cell on the map has the clearance, or when every
+// eligible cell within the hop budget is taken.
 func makeConstellationSites(cells []singlemesh.Cell, bounds singlemesh.Bounds, edgeDistances []int, edgeRamp, attractantRamp []float64, constellation Constellation) ([]Attractant, []Repulsor, []AttractantSkip) {
 	const regions = 3
 	clearance := edgeRampReach(edgeRamp) + attractantRampReach(attractantRamp)
@@ -239,30 +282,37 @@ func makeConstellationSites(cells []singlemesh.Cell, bounds singlemesh.Bounds, e
 	attractants := make([]Attractant, 0, len(constellation.Sites))
 	repulsors := make([]Repulsor, 0)
 	skips := make([]AttractantSkip, 0)
+	holders := make(map[int]int) // cell ID to the site index placed on it
 	for index, site := range constellation.Sites {
 		target := Point{X: bounds.Width/2 + float64(site.X*scale), Y: bounds.Height/2 + float64(site.Y*scale)}
 		regionX := min(int(target.X/bounds.Width*regions), regions-1)
 		regionY := min(int(target.Y/bounds.Height*regions), regions-1)
 		repulsor := constellation.weight(index) < 0
-		bestCell, bestDistance := -1, math.Inf(1)
-		for cellID, cell := range cells {
-			if !repulsor && edgeDistances[cellID] <= clearance {
-				continue
-			}
-			dx, dy := cell.Site.X-target.X, cell.Site.Y-target.Y
-			distance := float64(dx*dx) + float64(dy*dy)
-			if distance < bestDistance {
-				bestCell, bestDistance = cellID, distance
-			}
+		eligible := func(cellID int) bool {
+			return repulsor || edgeDistances[cellID] > clearance
 		}
+		bestCell := nearestCell(cells, target, eligible)
 		if bestCell == -1 {
-			skips = append(skips, AttractantSkip{
-				RegionX: regionX,
-				RegionY: regionY,
-				Reason:  fmt.Sprintf("no cell is more than %d hops from the edge barrier", clearance),
-			})
+			skips = append(skips, clearanceSkip(regionX, regionY, clearance))
 			continue
 		}
+		if holder, taken := holders[bestCell]; taken {
+			within := hopsWithin(cells, bestCell, collisionHopBudget)
+			home := bestCell
+			bestCell = nearestCell(cells, target, func(cellID int) bool {
+				_, taken := holders[cellID]
+				return within[cellID] && !taken && eligible(cellID)
+			})
+			if bestCell == -1 {
+				skips = append(skips, AttractantSkip{
+					RegionX: regionX,
+					RegionY: regionY,
+					Reason:  fmt.Sprintf("site %d: cell %d already hosts site %d and no free cell lies within %d hops", index, home, holder, collisionHopBudget),
+				})
+				continue
+			}
+		}
+		holders[bestCell] = index
 		if repulsor {
 			repulsors = append(repulsors, Repulsor{
 				CellID:   bestCell,
@@ -282,12 +332,7 @@ func makeConstellationSites(cells []singlemesh.Cell, bounds singlemesh.Bounds, e
 }
 
 func validAttractantCount(count int) bool {
-	switch count {
-	case 0, 1, 2, 3, 4, 5, 6, 9:
-		return true
-	default:
-		return false
-	}
+	return count == 0 || attractantRegionIDs(count) != nil
 }
 
 func attractantRegionIDs(count int) []int {
@@ -427,6 +472,9 @@ type growthState struct {
 	islands      []islandState
 	frontiers    []randomSet
 	mergeCount   int
+	// seedFallbacks records islands whose pinned seed cell could not be
+	// used, in seeding order.
+	seedFallbacks []SeedFallback
 }
 
 func newGrowthState(cells []singlemesh.Cell, desirability []float64, landEligible []bool, rivalRamp []float64) *growthState {
@@ -623,9 +671,11 @@ func (d *deck) len() int {
 
 // seedAndGrow plants one seed per island and grows them to provinceCount.
 // The first len(pinnedSeeds) islands are seeded on those cells when they are
-// still unclaimed and eligible; every other island draws a uniform seed.
-// groups assigns each island a kin group, or nil for no kinship. weights
-// gives each island's share of growth draws, or nil for equal shares.
+// still unclaimed and eligible; every other island draws a uniform seed. An
+// island whose pinned cell cannot be used keeps its uniform seed and the
+// fallback is recorded in the result. groups assigns each island a kin
+// group, or nil for no kinship. weights gives each island's share of growth
+// draws, or nil for equal shares.
 func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature float64, pinnedSeeds, groups []int, weights []float64, random *rand.Rand) bool {
 	s.groups = groups
 	seedOrder := random.Perm(islandCount)
@@ -642,36 +692,54 @@ func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature fl
 			return false
 		}
 		seedID := unclaimed[random.IntN(len(unclaimed))]
-		if islandID < len(pinnedSeeds) && s.owners[pinnedSeeds[islandID]] == Water && s.landEligible[pinnedSeeds[islandID]] {
-			seedID = pinnedSeeds[islandID]
+		if islandID < len(pinnedSeeds) {
+			pinned := pinnedSeeds[islandID]
+			switch {
+			case s.owners[pinned] != Water:
+				s.seedFallbacks = append(s.seedFallbacks, SeedFallback{
+					IslandID: islandID,
+					CellID:   pinned,
+					SeedID:   seedID,
+					Reason:   fmt.Sprintf("cell %d already belongs to island %d", pinned, s.owners[pinned]),
+				})
+			case !s.landEligible[pinned]:
+				s.seedFallbacks = append(s.seedFallbacks, SeedFallback{
+					IslandID: islandID,
+					CellID:   pinned,
+					SeedID:   seedID,
+					Reason:   fmt.Sprintf("cell %d is not eligible for land", pinned),
+				})
+			default:
+				seedID = pinned
+			}
 		}
 		s.islands[islandID] = islandState{seedID: seedID, active: true}
 		s.claim(seedID, islandID)
 	}
 
-	deck := deck{}
+	draws := deck{}
 	for islandID := range s.islands {
 		if s.islands[islandID].active {
 			weight := 1.0
 			if islandID < len(weights) {
 				weight = weights[islandID]
 			}
-			deck.add(islandID, weight)
+			draws.add(islandID, weight)
 		}
 	}
 	remaining := provinceCount - islandCount
-	for remaining > 0 && deck.len() > 0 {
-		islandID := deck.random(random)
+	for remaining > 0 && draws.len() > 0 {
+		islandID := draws.random(random)
 		cellID, ok := s.weightedFrontier(islandID, temperature, random)
 		if !ok {
-			deck.remove(islandID)
+			draws.remove(islandID)
 			continue
 		}
 		for _, loser := range s.claim(cellID, islandID) {
 			if s.group(loser) == s.group(islandID) {
-				deck.transfer(loser, islandID)
+				draws.transfer(loser, islandID)
 			} else {
-				deck.remove(loser)
+				draws.remove(loser)
 			}
 		}
 		remaining--
@@ -800,11 +868,14 @@ func (s *growthState) result(attractants []Attractant, skips []AttractantSkip, i
 			IslandID:     owner,
 		}
 	}
+	seedFallbacks := append([]SeedFallback(nil), s.seedFallbacks...)
+	sort.Slice(seedFallbacks, func(i, j int) bool { return seedFallbacks[i].IslandID < seedFallbacks[j].IslandID })
 	return Result{
 		Cells:              cells,
 		Islands:            islands,
 		Attractants:        append([]Attractant(nil), attractants...),
 		AttractantSkips:    append([]AttractantSkip(nil), skips...),
+		SeedFallbacks:      seedFallbacks,
 		InitialIslandCount: initialIslandCount,
 		MergeCount:         s.mergeCount,
 	}
