@@ -41,8 +41,7 @@ var terrainFamilies = map[Terrain]FeatureKind{
 // land provinces, and archipelagos of islands within archipelagoMaxGap water
 // provinces of one another. It runs after terrain, reads terrain, membership,
 // and adjacency, and consumes no randomness.
-func assignFeatures(world *World) {
-	neighbors := provinceNeighbors(world)
+func assignFeatures(world *World, neighbors [][]ProvinceID) {
 	world.Features = nil
 	kindOf := func(provinceID ProvinceID) (FeatureKind, bool) {
 		province := world.Provinces[provinceID]

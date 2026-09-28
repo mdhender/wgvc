@@ -817,10 +817,11 @@ func hopDistance(cells []singlemesh.Cell, from, to int) int {
 
 func TestConstellationSitesNeverShareACell(t *testing.T) {
 	bounds := singlemesh.Bounds{Width: 2, Height: 1}
-	cells, err := singlemesh.Build(400, 2, bounds, roundRandom(7, 0))
+	mesh, err := singlemesh.Build(400, 2, bounds, roundRandom(7, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
+	cells := mesh.Cells
 	edgeRamp := []float64{-1, 0}
 	attractantRamp := []float64{1, 0}
 	_, _, edgeDistances := edgeField(cells, bounds, 0.02, edgeRamp)
@@ -858,10 +859,11 @@ func TestConstellationSitesNeverShareACell(t *testing.T) {
 
 func TestConstellationSkipsSitesWhenNoFreeCellIsNear(t *testing.T) {
 	bounds := singlemesh.Bounds{Width: 2, Height: 1}
-	cells, err := singlemesh.Build(400, 2, bounds, roundRandom(7, 0))
+	mesh, err := singlemesh.Build(400, 2, bounds, roundRandom(7, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
+	cells := mesh.Cells
 	edgeRamp := []float64{-1, 0}
 	attractantRamp := []float64{1, 0}
 	_, _, edgeDistances := edgeField(cells, bounds, 0.02, edgeRamp)
@@ -937,4 +939,78 @@ func TestPinnedSeedsRecordNoFallbackWhenFree(t *testing.T) {
 	if len(result.SeedFallbacks) != 0 {
 		t.Errorf("fallbacks = %+v, want none when every star has its own cell", result.SeedFallbacks)
 	}
+}
+
+// TestRivalFieldUnchangedByKinMerge checks the property claim relies on when
+// it skips the rebuild after a kin merge: because the field is keyed by kin
+// group, the penalties it reports after absorbing a same-group island equal
+// those of a field rebuilt from the merged owners, for every cell and every
+// viewer, including cells where two groups tie at the nearest hop.
+func TestRivalFieldUnchangedByKinMerge(t *testing.T) {
+	cells := gridCells(5, 4)
+	ramp := []float64{-1, -0.5, -0.25, 0}
+	state := newGrowthState(cells, make([]float64, len(cells)), allEligible(len(cells)), ramp)
+	// Islands 0 and 1 are kin; islands 2 and 3 are rivals of everyone.
+	state.groups = []int{0, 0, 2, 3}
+	state.islands = []islandState{{seedID: 0, active: true}, {seedID: 2, active: true}, {seedID: 4, active: true}, {seedID: 15, active: true}}
+	state.frontiers = make([]randomSet, 4)
+	state.claim(0, 0)
+	state.claim(2, 1)
+	state.claim(4, 2)
+	state.claim(15, 3)
+	state.claim(5, 0)
+	state.claim(7, 1)
+	state.claim(9, 2)
+	state.claim(16, 3)
+	state.claim(17, 3)
+	merges := state.mergeCount
+	if losers := state.claim(1, 0); !reflect.DeepEqual(losers, []int{1}) || state.mergeCount != merges+1 {
+		t.Fatalf("claim absorbed %v with %d merges, want a kin merge of island 1", losers, state.mergeCount-merges)
+	}
+	assertRivalFieldMatchesRebuild(t, state, "after the kin merge")
+	// Let the merged landmass meet a rival so a cross-group merge follows;
+	// the rebuild path must agree with itself too.
+	if losers := state.claim(3, 0); !reflect.DeepEqual(losers, []int{2}) {
+		t.Fatalf("claim absorbed %v, want the rival island 2", losers)
+	}
+	assertRivalFieldMatchesRebuild(t, state, "after the rival merge")
+}
+
+func assertRivalFieldMatchesRebuild(t *testing.T, state *growthState, when string) {
+	t.Helper()
+	rebuilt := newRivalField(state.cells, state.rivals.ramp)
+	rebuilt.rebuild(state.owners, state.group)
+	for cellID := range state.cells {
+		for viewer := range 5 {
+			got, gotOK := state.rivals.penalty(cellID, viewer)
+			want, wantOK := rebuilt.penalty(cellID, viewer)
+			if got != want || gotOK != wantOK {
+				t.Errorf("%s: group %d sees cell %d at (%g, %t), rebuilt field says (%g, %t)", when, viewer, cellID, got, gotOK, want, wantOK)
+			}
+		}
+	}
+}
+
+// gridCells builds a width×height grid of 4-connected cells, row-major.
+func gridCells(width, height int) []singlemesh.Cell {
+	cells := make([]singlemesh.Cell, width*height)
+	for y := range height {
+		for x := range width {
+			id := y*width + x
+			cells[id].ID = id
+			if x > 0 {
+				cells[id].Neighbors = append(cells[id].Neighbors, id-1)
+			}
+			if x+1 < width {
+				cells[id].Neighbors = append(cells[id].Neighbors, id+1)
+			}
+			if y > 0 {
+				cells[id].Neighbors = append(cells[id].Neighbors, id-width)
+			}
+			if y+1 < height {
+				cells[id].Neighbors = append(cells[id].Neighbors, id+width)
+			}
+		}
+	}
+	return cells
 }

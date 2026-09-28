@@ -10,22 +10,18 @@ const basinInlandSeaMinProvinces = 10
 // assignBasins partitions water provinces into components connected by
 // water-water edges. A component with a world-boundary edge is ocean; every
 // other component is a basin enclosed by land. Basins are ordered by their
-// lowest province ID. The pass reads island membership, adjacency, and
-// elevation, consumes no randomness, and changes only basin fields.
-func assignBasins(world *World) {
+// lowest province ID. The pass reads island membership, the shared province
+// adjacency, and elevation, consumes no randomness, and changes only basin
+// fields.
+func assignBasins(world *World, neighbors [][]ProvinceID) {
 	isWater := func(provinceID ProvinceID) bool {
 		return world.Provinces[provinceID].IslandID == NoIslandID
 	}
-	neighbors := make([][]ProvinceID, len(world.Provinces))
 	onBoundary := make([]bool, len(world.Provinces))
 	for _, edge := range world.Edges {
 		if len(edge.ProvinceIDs) == 1 {
 			onBoundary[edge.ProvinceIDs[0]] = true
-			continue
 		}
-		first, second := edge.ProvinceIDs[0], edge.ProvinceIDs[1]
-		neighbors[first] = append(neighbors[first], second)
-		neighbors[second] = append(neighbors[second], first)
 	}
 
 	world.Basins = nil

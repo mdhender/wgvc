@@ -5,6 +5,7 @@ import (
 	"github.com/mdhender/wgvc/internal/fmath"
 	"math"
 	"math/rand/v2"
+	"slices"
 	"sort"
 
 	"github.com/mdhender/wgvc/internal/aspectratio"
@@ -30,10 +31,11 @@ func Generate(config Config) (Result, error) {
 		ocean := math.Min(config.OceanPercentage+float64(float64(round)*oceanEscalation), maximumOcean)
 		cellCount := int(math.Ceil(float64(config.ProvinceCount) / (1 - ocean)))
 		random := roundRandom(config.WorldSeed, round)
-		mesh, err := singlemesh.Build(cellCount, config.Relaxations, bounds, random)
+		built, err := singlemesh.Build(cellCount, config.Relaxations, bounds, random)
 		if err != nil {
 			return Result{}, fmt.Errorf("round %d mesh: %w", round+1, err)
 		}
+		mesh := built.Cells
 		edgeValues, landEligible, edgeDistances := edgeField(mesh, bounds, config.EdgeBarrierWidth, config.EdgeRamp)
 		var attractants []Attractant
 		var repulsors []Repulsor
@@ -58,6 +60,7 @@ func Generate(config Config) (Result, error) {
 		}
 		if state.seedAndGrow(config.IslandCount, config.ProvinceCount, config.SoftmaxTemperature, pinnedSeeds, groups, weights, random) {
 			result := state.result(attractants, skips, config.IslandCount)
+			result.Edges = built.Edges
 			result.Repulsors = repulsors
 			result.RoundsAttempted = round + 1
 			result.FinalOcean = ocean
@@ -379,13 +382,16 @@ func lastNonzeroIndex(ramp []float64) int {
 func desirabilityField(cells []singlemesh.Cell, edgeValues []float64, landEligible []bool, attractants []Attractant, attractantRamp []float64) []float64 {
 	values := append([]float64(nil), edgeValues...)
 	reach := attractantRampReach(attractantRamp)
-	for _, attractant := range attractants {
-		distances := make([]int, len(cells))
-		for i := range distances {
-			distances[i] = -1
-		}
+	// One distance buffer serves every attractant: a cell's distance is
+	// valid only when its stamp matches the current attractant's.
+	distances := make([]int, len(cells))
+	visited := make([]int, len(cells))
+	var queue []int
+	for index, attractant := range attractants {
+		stamp := index + 1
 		distances[attractant.CellID] = 0
-		queue := []int{attractant.CellID}
+		visited[attractant.CellID] = stamp
+		queue = append(queue[:0], attractant.CellID)
 		for head := 0; head < len(queue); head++ {
 			cellID := queue[head]
 			distance := distances[cellID]
@@ -396,7 +402,8 @@ func desirabilityField(cells []singlemesh.Cell, edgeValues []float64, landEligib
 				continue
 			}
 			for _, neighbor := range cells[cellID].Neighbors {
-				if distances[neighbor] == -1 {
+				if visited[neighbor] != stamp {
+					visited[neighbor] = stamp
 					distances[neighbor] = distance + 1
 					queue = append(queue, neighbor)
 				}
@@ -475,6 +482,8 @@ type growthState struct {
 	// seedFallbacks records islands whose pinned seed cell could not be
 	// used, in seeding order.
 	seedFallbacks []SeedFallback
+	// weights is scratch space for weightedFrontier, reused across steps.
+	weights []float64
 }
 
 func newGrowthState(cells []singlemesh.Cell, desirability []float64, landEligible []bool, rivalRamp []float64) *growthState {
@@ -681,13 +690,16 @@ func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature fl
 	seedOrder := random.Perm(islandCount)
 	s.islands = make([]islandState, islandCount)
 	s.frontiers = make([]randomSet, islandCount)
-	for _, islandID := range seedOrder {
-		unclaimed := make([]int, 0, len(s.cells))
-		for cellID, owner := range s.owners {
-			if owner == Water && s.landEligible[cellID] {
-				unclaimed = append(unclaimed, cellID)
-			}
+	// unclaimed lists the eligible water cells in ascending order. Seeding
+	// removes only the seeded cell, so the list is maintained in place; the
+	// ordered delete keeps every later draw identical to a rebuilt list.
+	unclaimed := make([]int, 0, len(s.cells))
+	for cellID, owner := range s.owners {
+		if owner == Water && s.landEligible[cellID] {
+			unclaimed = append(unclaimed, cellID)
 		}
+	}
+	for _, islandID := range seedOrder {
 		if len(unclaimed) == 0 {
 			return false
 		}
@@ -715,6 +727,9 @@ func (s *growthState) seedAndGrow(islandCount, provinceCount int, temperature fl
 		}
 		s.islands[islandID] = islandState{seedID: seedID, active: true}
 		s.claim(seedID, islandID)
+		if index, found := slices.BinarySearch(unclaimed, seedID); found {
+			unclaimed = slices.Delete(unclaimed, index, index+1)
+		}
 	}
 
 	draws := deck{}
@@ -752,7 +767,10 @@ func (s *growthState) weightedFrontier(islandID int, temperature float64, random
 	if len(frontier) == 0 {
 		return 0, false
 	}
-	weights := make([]float64, len(frontier))
+	// Every entry is written before it is read, so the scratch slice needs
+	// no clearing; it only needs the capacity.
+	s.weights = slices.Grow(s.weights[:0], len(frontier))[:len(frontier)]
+	weights := s.weights
 	maximum := math.Inf(-1)
 	for i, cellID := range frontier {
 		value := s.visibleValue(cellID, islandID)
@@ -791,11 +809,9 @@ func (s *growthState) visibleValue(cellID, islandID int) float64 {
 // connectivity.
 func (s *growthState) claim(cellID, islandID int) []int {
 	losers := make([]int, 0)
-	seen := make(map[int]bool)
 	for _, neighbor := range s.cells[cellID].Neighbors {
 		owner := s.owners[neighbor]
-		if owner != Water && owner != islandID && !seen[owner] {
-			seen[owner] = true
+		if owner != Water && owner != islandID && !slices.Contains(losers, owner) {
 			losers = append(losers, owner)
 		}
 	}
@@ -812,20 +828,26 @@ func (s *growthState) claim(cellID, islandID int) []int {
 		}
 		s.frontiers[islandID].add(neighbor)
 	}
+	// The rival field is keyed by kin group, so absorbing a kin island
+	// relabels no distance and the field is already what a rebuild would
+	// produce (TestRivalFieldUnchangedByKinMerge). Only a merge across
+	// groups changes labels the two-entry compression cannot fix in place.
+	rebuild := false
 	for _, loser := range losers {
 		s.absorb(islandID, loser)
+		if s.group(loser) != s.group(islandID) {
+			rebuild = true
+		}
 	}
-	if len(losers) > 0 {
+	if rebuild {
 		s.rivals.rebuild(s.owners, s.group)
 	}
 	return losers
 }
 
 func (s *growthState) absorb(winner, loser int) {
-	for cellID := range s.cells {
-		if s.owners[cellID] == loser {
-			s.owners[cellID] = winner
-		}
+	for _, cellID := range s.islands[loser].cellIDs {
+		s.owners[cellID] = winner
 	}
 	s.islands[winner].cellIDs = append(s.islands[winner].cellIDs, s.islands[loser].cellIDs...)
 	s.islands[loser].cellIDs = nil

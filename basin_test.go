@@ -44,7 +44,7 @@ func basinTestWorld() World {
 func TestAssignBasinsFindsEnclosedWaterComponents(t *testing.T) {
 	world := basinTestWorld()
 
-	assignBasins(&world)
+	assignBasins(&world, provinceNeighbors(&world))
 
 	want := []Basin{
 		{ID: 0, ProvinceIDs: []ProvinceID{4, 5}, SurfaceElevation: 0.2, Depth: 0.6}, // rim 2, 3, 6
@@ -74,7 +74,7 @@ func TestAssignBasinsWithoutEnclosedWater(t *testing.T) {
 		},
 	}
 
-	assignBasins(&world)
+	assignBasins(&world, provinceNeighbors(&world))
 
 	if len(world.Basins) != 0 {
 		t.Fatalf("basins = %+v, want none", world.Basins)
@@ -104,7 +104,7 @@ func TestBasinTerrainSizeThreshold(t *testing.T) {
 
 func TestAssignTerrainGivesBasinMembersBasinTerrain(t *testing.T) {
 	world := basinTestWorld()
-	assignBasins(&world)
+	assignBasins(&world, provinceNeighbors(&world))
 
 	assignTerrain(&world)
 
@@ -210,7 +210,7 @@ func TestGenerateAssignsBasinsWithoutChangingOtherFields(t *testing.T) {
 	for provinceID := range rerun.Provinces {
 		rerun.Provinces[provinceID].BasinID = 0
 	}
-	assignBasins(&rerun)
+	assignBasins(&rerun, provinceNeighbors(&rerun))
 	if !reflect.DeepEqual(world, rerun) {
 		t.Fatal("assignBasins changed fields other than basins, or is not deterministic")
 	}

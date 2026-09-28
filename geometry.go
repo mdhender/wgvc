@@ -86,15 +86,23 @@ func transformMesh(mesh islandMesh, transform uniformTransform) islandMesh {
 }
 
 // tessellateRectangle tessellates sites inside the width×height rectangle
-// with the origin at one corner. The backend runs on the unit square, so the
-// sites are normalized on the way in and the mesh is scaled back on the way
-// out; canonical corner and edge order is decided in normalized coordinates.
+// with the origin at one corner. Generate does not call it: it builds the
+// canonical mesh from the growth mesh's own diagram through
+// canonicalizeInBounds instead. Tests and the doc galleries use it.
 func tessellateRectangle(islandID IslandID, sites []Point, width, height float64) (islandMesh, error) {
 	geometry, err := computeBackendGeometryInBounds(sites, width, height)
 	if err != nil {
 		return islandMesh{}, fmt.Errorf("island %d: %w", islandID, err)
 	}
+	return canonicalizeInBounds(islandID, sites, geometry, width, height)
+}
 
+// canonicalizeInBounds canonicalizes backend geometry computed inside the
+// width×height rectangle with the origin at one corner. Canonical order is
+// decided on the unit square, so the sites and geometry are normalized on
+// the way in and the mesh is scaled back on the way out. The geometry is
+// consumed: its rings and endpoints are rewritten in place.
+func canonicalizeInBounds(islandID IslandID, sites []Point, geometry backendGeometry, width, height float64) (islandMesh, error) {
 	normalizedSites := make([]Point, len(sites))
 	for i, site := range sites {
 		normalizedSites[i] = Point{X: site.X / width, Y: site.Y / height}
@@ -583,7 +591,14 @@ func rotateIntsToMinimum(values []int) {
 // so without snapping, border corners would be numbered differently on
 // different architectures.
 func backendPointInBounds(vertex voronoi.Vertex, width, height float64) Point {
-	return Point{X: snapToBounds(vertex.X, width), Y: snapToBounds(vertex.Y, height)}
+	return snapPointToBounds(Point{X: vertex.X, Y: vertex.Y}, width, height)
+}
+
+// snapPointToBounds moves a coordinate within tolerance of the rectangle's
+// boundary onto it, so border corners compare equal wherever the backend's
+// clipping arithmetic put them.
+func snapPointToBounds(point Point, width, height float64) Point {
+	return Point{X: snapToBounds(point.X, width), Y: snapToBounds(point.Y, height)}
 }
 
 func snapToBounds(value, limit float64) float64 {

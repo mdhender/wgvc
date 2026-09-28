@@ -37,7 +37,7 @@ func TestStraitsJoinIslandsThroughAtMostThreeWaterProvinces(t *testing.T) {
 		{"same island is no strait", []IslandID{0, w, 0}, nil},
 	} {
 		world := chainWorld(test.row)
-		assignStraits(&world)
+		assignStraits(&world, provinceNeighbors(&world))
 		if !reflect.DeepEqual(world.Straits, test.want) {
 			t.Errorf("%s: straits = %+v, want %+v", test.name, world.Straits, test.want)
 		}
@@ -77,8 +77,8 @@ func TestNecksAreSmallCutsBetweenLargeRegions(t *testing.T) {
 	water := ProvinceID(len(world.Provinces))
 	world.Provinces = append(world.Provinces, Province{ID: water, IslandID: NoIslandID, BasinID: NoBasinID})
 	join(bridge, water)
-	assignCoastDistances(&world)
-	assignNecks(&world)
+	assignCoastDistances(&world, provinceNeighbors(&world))
+	assignNecks(&world, provinceNeighbors(&world))
 	want := []Neck{{ID: 0, IslandID: 0, Width: 1, ProvinceIDs: []ProvinceID{bridge}, Ends: [2][]ProvinceID{{first[0]}, {second[0]}}, EndSizes: [2]int{10, 10}}}
 	if !reflect.DeepEqual(world.Necks, want) {
 		t.Errorf("necks = %+v, want %+v", world.Necks, want)
@@ -86,8 +86,8 @@ func TestNecksAreSmallCutsBetweenLargeRegions(t *testing.T) {
 
 	// Shrink one ring below the minimum region and the neck disappears.
 	small := chainWorld([]IslandID{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NoIslandID})
-	assignCoastDistances(&small)
-	assignNecks(&small)
+	assignCoastDistances(&small, provinceNeighbors(&small))
+	assignNecks(&small, provinceNeighbors(&small))
 	if len(small.Necks) != 0 {
 		t.Errorf("chain of 12 has necks %+v, want none (no two regions of %d)", small.Necks, neckMinimumRegion)
 	}

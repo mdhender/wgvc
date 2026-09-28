@@ -6,6 +6,9 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+
+	"github.com/mdhender/wgvc/internal/aspectratio"
+	"github.com/mdhender/wgvc/internal/x24"
 )
 
 func TestGenerateRejectsInvalidConfigWithoutPartialWorld(t *testing.T) {
@@ -1023,4 +1026,41 @@ func boundedBFS(start ProvinceID, neighbors [][]ProvinceID, depth int, allowed f
 	}
 	slices.Sort(queue)
 	return queue
+}
+
+// TestGrowthMeshMatchesTessellateRectangle pins the shortcut Generate takes:
+// canonicalizing the growth mesh's own diagram must give exactly the mesh a
+// fresh tessellation of the same sites gives, corner for corner and edge for
+// edge, in every aspect ratio.
+func TestGrowthMeshMatchesTessellateRectangle(t *testing.T) {
+	for _, aspect := range []string{"16:9", "3:4", "5:2"} {
+		config := x24.DefaultConfig()
+		config.WorldSeed = 0x0123456789abcdef
+		config.ProvinceCount = 400
+		config.IslandCount = 6
+		config.AspectRatio = aspect
+		result, err := x24.Generate(config)
+		if err != nil {
+			t.Fatalf("%s: Generate() error = %v", aspect, err)
+		}
+		if len(result.Edges) == 0 {
+			t.Fatalf("%s: growth result carries no edges", aspect)
+		}
+		width, height, _ := aspectratio.Dimensions(aspect)
+		fromGrowth, err := tessellateGrowthMesh(result, width, height)
+		if err != nil {
+			t.Fatalf("%s: tessellateGrowthMesh() error = %v", aspect, err)
+		}
+		sites := make([]Point, len(result.Cells))
+		for cellID, cell := range result.Cells {
+			sites[cellID] = Point{X: cell.Site.X, Y: cell.Site.Y}
+		}
+		fromSites, err := tessellateRectangle(NoIslandID, sites, width, height)
+		if err != nil {
+			t.Fatalf("%s: tessellateRectangle() error = %v", aspect, err)
+		}
+		if !reflect.DeepEqual(fromGrowth, fromSites) {
+			t.Errorf("%s: mesh from the growth diagram differs from a fresh tessellation (%d/%d corners, %d/%d edges)", aspect, len(fromGrowth.corners), len(fromSites.corners), len(fromGrowth.edges), len(fromSites.edges))
+		}
+	}
 }

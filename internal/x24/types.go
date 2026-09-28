@@ -17,6 +17,10 @@ var ErrStarved = errors.New("all islands starved before claiming the requested p
 
 type Point = singlemesh.Point
 
+// Edge is one segment of the growth mesh's final Voronoi diagram; see
+// singlemesh.Edge.
+type Edge = singlemesh.Edge
+
 type Config struct {
 	WorldSeed        uint64
 	ProvinceCount    int
@@ -165,9 +169,9 @@ func validatePenaltyRamp(name string, ramp []float64) error {
 }
 
 // Cell is one Voronoi cell of the growth mesh. Generate reads Site and
-// IslandID; Corners and Neighbors alias the mesh slices and are exposed for
-// inspection and tests only, since the caller re-tessellates the sites to
-// build the canonical world mesh.
+// IslandID; Corners and Neighbors alias the mesh slices. Together with
+// Result.Edges they describe the final diagram, so the caller can build the
+// canonical world mesh from them instead of computing the diagram again.
 type Cell struct {
 	ID           int
 	Site         Point
@@ -222,7 +226,10 @@ type SeedFallback struct {
 }
 
 type Result struct {
-	Cells              []Cell
+	Cells []Cell
+	// Edges lists every segment of the growth mesh's final diagram with the
+	// cells it separates.
+	Edges              []Edge
 	Islands            []Island
 	Attractants        []Attractant
 	Repulsors          []Repulsor

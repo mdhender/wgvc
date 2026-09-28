@@ -34,7 +34,7 @@ func TestFeaturesGroupTerrainFamiliesAboveMinimumSize(t *testing.T) {
 	for id, terrain := range terrains {
 		world.Provinces[id].Terrain = terrain
 	}
-	assignFeatures(&world)
+	assignFeatures(&world, provinceNeighbors(&world))
 	want := []Feature{{ID: 0, Kind: FeatureMountainRange, IslandIDs: []IslandID{0}, ProvinceIDs: []ProvinceID{0, 1, 2, 3, 4}}}
 	if !reflect.DeepEqual(world.Features, want) {
 		t.Errorf("features = %+v, want %+v", world.Features, want)

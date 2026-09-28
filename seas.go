@@ -19,9 +19,27 @@ const (
 )
 
 // provinceNeighbors is the undirected province adjacency from interior edges,
-// each list in ascending order.
+// each list in ascending order. Adjacency is fixed once the world is
+// tessellated, so generateForRender builds it once and hands it to every
+// stage that walks the province graph. Every list is a window onto one
+// backing slice, filled in two passes.
 func provinceNeighbors(world *World) [][]ProvinceID {
+	counts := make([]int, len(world.Provinces)+1)
+	for _, edge := range world.Edges {
+		if len(edge.ProvinceIDs) != 2 {
+			continue
+		}
+		counts[edge.ProvinceIDs[0]+1]++
+		counts[edge.ProvinceIDs[1]+1]++
+	}
+	for provinceID := range world.Provinces {
+		counts[provinceID+1] += counts[provinceID]
+	}
+	backing := make([]ProvinceID, counts[len(world.Provinces)])
 	neighbors := make([][]ProvinceID, len(world.Provinces))
+	for provinceID := range world.Provinces {
+		neighbors[provinceID] = backing[counts[provinceID]:counts[provinceID]:counts[provinceID+1]]
+	}
 	for _, edge := range world.Edges {
 		if len(edge.ProvinceIDs) != 2 {
 			continue
@@ -39,9 +57,9 @@ func provinceNeighbors(world *World) [][]ProvinceID {
 // assignCoastDistances runs one multi-source BFS per medium from the
 // provinces that share an edge with the other medium. A province that cannot
 // reach a coast through its own medium keeps -1, which no generated world
-// produces. The pass consumes no randomness.
-func assignCoastDistances(world *World) {
-	neighbors := provinceNeighbors(world)
+// produces. neighbors is the shared province adjacency. The pass consumes no
+// randomness.
+func assignCoastDistances(world *World, neighbors [][]ProvinceID) {
 	isLand := func(provinceID ProvinceID) bool { return world.Provinces[provinceID].IslandID != NoIslandID }
 	var queue []ProvinceID
 	for provinceID := range world.Provinces {
@@ -76,8 +94,7 @@ func assignCoastDistances(world *World) {
 // keeps every zone connected. A zone that still holds more than twice the
 // target is partitioned again within itself. Zones are ordered by lowest
 // member ID. The pass consumes no randomness.
-func assignSeaZones(world *World) {
-	neighbors := provinceNeighbors(world)
+func assignSeaZones(world *World, neighbors [][]ProvinceID) {
 	world.SeaZones = nil
 	var ocean []ProvinceID
 	for provinceID := range world.Provinces {
@@ -203,8 +220,7 @@ func partitionWater(members []ProvinceID, neighbors [][]ProvinceID, provinceCoun
 // counts sum to maxStraitWidth + 1. Narrow provinces of one island pair that
 // touch by water form a strait, ordered by island pair and then lowest
 // province ID. The pass consumes no randomness.
-func assignStraits(world *World) {
-	neighbors := provinceNeighbors(world)
+func assignStraits(world *World, neighbors [][]ProvinceID) {
 	world.Straits = nil
 	isWater := func(provinceID ProvinceID) bool { return world.Provinces[provinceID].IslandID == NoIslandID }
 	type reach struct {
@@ -317,8 +333,7 @@ func assignStraits(world *World) {
 // EndSizes describe the regions left when all of it is removed. Necks are
 // ordered by island and then lowest province ID. The pass consumes no
 // randomness.
-func assignNecks(world *World) {
-	neighbors := provinceNeighbors(world)
+func assignNecks(world *World, neighbors [][]ProvinceID) {
 	world.Necks = nil
 	scratch := newNeckScratch(len(world.Provinces))
 	for _, island := range world.Islands {

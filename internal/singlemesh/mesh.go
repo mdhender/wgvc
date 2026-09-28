@@ -27,10 +27,26 @@ type Cell struct {
 	Neighbors []int
 }
 
-func Build(count, relaxations int, bounds Bounds, random interface{ Float64() float64 }) ([]Cell, error) {
+// Edge is one segment of the final diagram: its endpoints, clipped to the
+// bounds, and the one or two cells it separates in ascending order. A
+// boundary edge has one cell.
+type Edge struct {
+	Ends    [2]Point
+	CellIDs []int
+}
+
+// Mesh is the relaxed Voronoi diagram of one point set. Edges carries the
+// diagram's segments so a caller can build its own mesh from them without
+// computing the diagram again.
+type Mesh struct {
+	Cells []Cell
+	Edges []Edge
+}
+
+func Build(count, relaxations int, bounds Bounds, random interface{ Float64() float64 }) (Mesh, error) {
 	const siteInset = 1e-12
 	if !validBounds(bounds) {
-		return nil, fmt.Errorf("bounds must be finite and positive: %+v", bounds)
+		return Mesh{}, fmt.Errorf("bounds must be finite and positive: %+v", bounds)
 	}
 	points := make([]Point, count)
 	for i := range points {
@@ -42,14 +58,14 @@ func Build(count, relaxations int, bounds Bounds, random interface{ Float64() fl
 	for range relaxations {
 		diagram, indexes, err := computeDiagram(points, bounds)
 		if err != nil {
-			return nil, err
+			return Mesh{}, err
 		}
 		relaxed := make([]Point, len(points))
 		for _, cell := range diagram.Cells {
 			index := indexes[Point{X: cell.Site.X, Y: cell.Site.Y}]
 			ring, err := cellRing(cell)
 			if err != nil {
-				return nil, fmt.Errorf("relax site %d: %w", index, err)
+				return Mesh{}, fmt.Errorf("relax site %d: %w", index, err)
 			}
 			relaxed[index] = polygonCentroid(ring)
 		}
@@ -58,7 +74,7 @@ func Build(count, relaxations int, bounds Bounds, random interface{ Float64() fl
 
 	diagram, indexes, err := computeDiagram(points, bounds)
 	if err != nil {
-		return nil, err
+		return Mesh{}, err
 	}
 	cells := make([]Cell, len(points))
 	cellIndexes := make(map[*voronoi.Cell]int, len(points))
@@ -66,30 +82,40 @@ func Build(count, relaxations int, bounds Bounds, random interface{ Float64() fl
 		index := indexes[Point{X: cell.Site.X, Y: cell.Site.Y}]
 		ring, err := cellRing(cell)
 		if err != nil {
-			return nil, fmt.Errorf("site %d: %w", index, err)
+			return Mesh{}, fmt.Errorf("site %d: %w", index, err)
 		}
 		cells[index] = Cell{ID: index, Site: points[index], Corners: ring}
 		cellIndexes[cell] = index
 	}
+	edges := make([]Edge, 0, len(diagram.Edges))
 	for edgeIndex, edge := range diagram.Edges {
 		if edge.LeftCell == nil {
-			return nil, fmt.Errorf("edge %d has no incident cell", edgeIndex)
-		}
-		if edge.RightCell == nil {
-			continue
+			return Mesh{}, fmt.Errorf("edge %d has no incident cell", edgeIndex)
 		}
 		left, leftOK := cellIndexes[edge.LeftCell]
-		right, rightOK := cellIndexes[edge.RightCell]
-		if !leftOK || !rightOK {
-			return nil, fmt.Errorf("edge %d refers to an unknown cell", edgeIndex)
+		if !leftOK {
+			return Mesh{}, fmt.Errorf("edge %d refers to an unknown cell", edgeIndex)
 		}
-		cells[left].Neighbors = append(cells[left].Neighbors, right)
-		cells[right].Neighbors = append(cells[right].Neighbors, left)
+		cellIDs := []int{left}
+		if edge.RightCell != nil {
+			right, rightOK := cellIndexes[edge.RightCell]
+			if !rightOK {
+				return Mesh{}, fmt.Errorf("edge %d refers to an unknown cell", edgeIndex)
+			}
+			cellIDs = append(cellIDs, right)
+			sort.Ints(cellIDs)
+			cells[left].Neighbors = append(cells[left].Neighbors, right)
+			cells[right].Neighbors = append(cells[right].Neighbors, left)
+		}
+		edges = append(edges, Edge{
+			Ends:    [2]Point{{X: edge.Va.X, Y: edge.Va.Y}, {X: edge.Vb.X, Y: edge.Vb.Y}},
+			CellIDs: cellIDs,
+		})
 	}
 	for i := range cells {
 		sort.Ints(cells[i].Neighbors)
 	}
-	return cells, nil
+	return Mesh{Cells: cells, Edges: edges}, nil
 }
 
 // ComputeDiagram sorts its input, so it always receives a disposable copy.

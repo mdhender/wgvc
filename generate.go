@@ -48,12 +48,8 @@ func generateForRender(growthConfig x24.Config, climateConfig ClimateConfig) (Wo
 		return World{}, x24.Result{}, fmt.Errorf("grow islands: %w", err)
 	}
 
-	sites := make([]Point, len(result.Cells))
-	for cellID, cell := range result.Cells {
-		sites[cellID] = Point{X: cell.Site.X, Y: cell.Site.Y}
-	}
 	width, height, _ := aspectratio.Dimensions(growthConfig.AspectRatio)
-	mesh, err := tessellateRectangle(NoIslandID, sites, width, height)
+	mesh, err := tessellateGrowthMesh(result, width, height)
 	if err != nil {
 		return World{}, x24.Result{}, fmt.Errorf("tessellate world: %w", err)
 	}
@@ -103,20 +99,60 @@ func generateForRender(growthConfig x24.Config, climateConfig ClimateConfig) (Wo
 		})
 	}
 	assignGeometry(&world)
+	neighbors := provinceNeighbors(&world)
 	assignExits(&world)
 	assignElevations(&world, growthConfig.WorldSeed)
 	assignRelief(&world)
 	assignClimate(&world, growthConfig.WorldSeed, climateConfig)
-	assignBasins(&world)
+	assignBasins(&world, neighbors)
 	assignRivers(&world)
-	assignCoastDistances(&world)
-	assignSeaZones(&world)
-	assignStraits(&world)
-	assignNecks(&world)
-	assignHarbors(&world)
+	assignCoastDistances(&world, neighbors)
+	assignSeaZones(&world, neighbors)
+	assignStraits(&world, neighbors)
+	assignNecks(&world, neighbors)
+	assignHarbors(&world, neighbors)
 	assignTerrain(&world)
-	assignFeatures(&world)
+	assignFeatures(&world, neighbors)
 	return world, result, nil
+}
+
+// tessellateGrowthMesh builds the canonical world mesh from the growth
+// result's own Voronoi diagram: the cell rings and the edge list that
+// singlemesh kept from its final diagram. Computing the diagram again from
+// the same sites would give the same rings and edges, so the canonical
+// corner and edge IDs are those tessellateRectangle would assign
+// (TestGrowthMeshMatchesTessellateRectangle). Endpoints are snapped to the
+// bounds exactly as the backend path snaps them.
+func tessellateGrowthMesh(result x24.Result, width, height float64) (islandMesh, error) {
+	if len(result.Cells) == 0 {
+		return islandMesh{}, fmt.Errorf("growth result has no cells")
+	}
+	sites := make([]Point, len(result.Cells))
+	geometry := backendGeometry{
+		cells: make([]backendCell, len(result.Cells)),
+		edges: make([]backendEdge, len(result.Edges)),
+	}
+	for cellID, cell := range result.Cells {
+		sites[cellID] = Point{X: cell.Site.X, Y: cell.Site.Y}
+		ring := make([]Point, len(cell.Corners))
+		for ringIndex, corner := range cell.Corners {
+			ring[ringIndex] = snapPointToBounds(Point{X: corner.X, Y: corner.Y}, width, height)
+		}
+		if signedArea(ring) < 0 {
+			reversePoints(ring)
+		}
+		geometry.cells[cellID] = backendCell{siteIndex: cellID, ring: ring}
+	}
+	for edgeIndex, edge := range result.Edges {
+		geometry.edges[edgeIndex] = backendEdge{
+			ends: [2]Point{
+				snapPointToBounds(Point{X: edge.Ends[0].X, Y: edge.Ends[0].Y}, width, height),
+				snapPointToBounds(Point{X: edge.Ends[1].X, Y: edge.Ends[1].Y}, width, height),
+			},
+			siteIndexes: append([]int(nil), edge.CellIDs...),
+		}
+	}
+	return canonicalizeInBounds(NoIslandID, sites, geometry, width, height)
 }
 
 func grownLandArea(mesh islandMesh, result x24.Result) (float64, error) {

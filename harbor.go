@@ -9,8 +9,7 @@ import "slices"
 // a neighbor is any province across an interior edge. Water provinces and
 // inland land keep zero values and nil lists. The pass reads membership,
 // basins, edges, corners, and rivers, and consumes no randomness.
-func assignHarbors(world *World) {
-	neighbors := provinceNeighbors(world)
+func assignHarbors(world *World, neighbors [][]ProvinceID) {
 	isLand := func(provinceID ProvinceID) bool { return world.Provinces[provinceID].IslandID != NoIslandID }
 	landFraction := make([]float64, len(world.Provinces))
 	for provinceID := range world.Provinces {
