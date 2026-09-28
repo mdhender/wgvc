@@ -25,6 +25,9 @@ const (
 
 var climateBandShares = [5]int{5, 15, 45, 25, 10}
 
+// heatCalibration is one point of the calibration grid. values and bands are
+// filled only for the calibration that is returned; candidates carry just the
+// parameters and their scores.
 type heatCalibration struct {
 	values          []float64
 	bands           []int
@@ -33,6 +36,26 @@ type heatCalibration struct {
 	error           float64
 	polarReached    bool
 	peakReached     bool
+}
+
+// heatScratch holds the per-province work arrays one calibration reuses
+// across every grid candidate, so evaluating a candidate allocates nothing.
+type heatScratch struct {
+	values      []float64
+	order       []int
+	inPeakSlice []bool
+}
+
+func newHeatScratch(provinceCount int, peakSlice []int) *heatScratch {
+	scratch := &heatScratch{
+		values:      make([]float64, provinceCount),
+		order:       make([]int, provinceCount),
+		inPeakSlice: make([]bool, provinceCount),
+	}
+	for _, provinceID := range peakSlice {
+		scratch.inPeakSlice[provinceID] = true
+	}
+	return scratch
 }
 
 func assignClimate(world *World, worldSeed uint64, config ClimateConfig) {
@@ -123,6 +146,7 @@ func calibrateHeat(provinces []Province, heatSource, latitudes []float64, config
 	}
 	warmthLow, warmthHigh := minimumWarmthScale, maximumWarmthScale
 	coolingLow, coolingHigh := 0.0, maximumCoolingStrength
+	scratch := newHeatScratch(len(provinces), peakSlice)
 	var best heatCalibration
 	haveBest := false
 
@@ -139,7 +163,7 @@ func calibrateHeat(provinces []Province, heatSource, latitudes []float64, config
 			warmth := warmthLow + float64(warmthIndex)*warmthStep
 			for coolingIndex := range gridSize {
 				cooling := coolingLow + float64(coolingIndex)*coolingStep
-				candidate := evaluateHeatCandidate(provinces, heatSource, latitudes, peakSlice, counts, config, warmth, cooling, polarTolerance, peakTolerance)
+				candidate := evaluateHeatCandidate(provinces, heatSource, latitudes, oceanCount, len(peakSlice), counts, config, warmth, cooling, polarTolerance, peakTolerance, scratch)
 				if !haveBest || betterHeatCalibration(candidate, best) {
 					best = candidate
 					haveBest = true
@@ -160,27 +184,110 @@ func calibrateHeat(provinces []Province, heatSource, latitudes []float64, config
 	// Calibration is best-effort: when no candidate met both targets, the
 	// lowest-error candidate keeps its bands rather than collapsing the world
 	// to one band. The all-temperate fallback is reserved for worlds that
-	// cannot be banded at all.
+	// cannot be banded at all. Only the winner's values and bands are built.
+	best.values = adjustedHeatValues(provinces, heatSource, latitudes, best.warmthScale, best.coolingStrength)
+	best.bands = classifyClimatePopulationWithCounts(provinces, best.values, counts)
 	return best
 }
 
-func evaluateHeatCandidate(provinces []Province, heatSource, latitudes []float64, peakSlice []int, counts [5]int, config ClimateConfig, warmth, cooling, polarTolerance, peakTolerance float64) heatCalibration {
-	values := adjustedHeatValues(provinces, heatSource, latitudes, warmth, cooling)
-	bands := classifyClimatePopulationWithCounts(provinces, values, counts)
-	polarFraction := heatBandFraction(provinces, bands, nil, int(HeatBandPolar))
+// evaluateHeatCandidate scores one grid point. The score needs only two
+// facts about the band classification: how many ocean provinces the sort
+// would place in the polar band, and how many peak-slice provinces it would
+// place in the polar or cold bands. Both are prefix counts of the sorted
+// order, so a selection finds them in linear time without sorting, using the
+// same total order the final classification sorts by.
+func evaluateHeatCandidate(provinces []Province, heatSource, latitudes []float64, oceanCount, peakCount int, counts [5]int, config ClimateConfig, warmth, cooling, polarTolerance, peakTolerance float64, scratch *heatScratch) heatCalibration {
+	values := scratch.values
+	adjustHeatValues(values, provinces, heatSource, latitudes, warmth, cooling)
+	oceanPolar, peakCold := heatBandPrefixCounts(provinces, values, scratch, counts[0], counts[0]+counts[1])
+	polarFraction := float64(oceanPolar) / float64(oceanCount)
 	peakError := 0.0
-	if len(peakSlice) > 0 {
-		peakFraction := heatBandFraction(provinces, bands, peakSlice, int(HeatBandCold))
+	if peakCount > 0 {
+		peakFraction := float64(peakCold) / float64(peakCount)
 		peakError = math.Abs(peakFraction - config.PeakChill)
 	}
 	return heatCalibration{
-		values:          values,
-		bands:           bands,
 		warmthScale:     warmth,
 		coolingStrength: cooling,
 		error:           math.Abs(polarFraction-config.PolarIce) + peakError,
 		polarReached:    math.Abs(polarFraction-config.PolarIce) <= polarTolerance,
 		peakReached:     peakError <= peakTolerance,
+	}
+}
+
+// heatBandPrefixCounts partitions scratch.order so that its first polarCount
+// entries are the provinces classifyClimatePopulationWithCounts would place
+// in band 0 and its first coldCount entries those it would place in bands 0
+// and 1, then counts the ocean provinces in the first prefix and the
+// peak-slice provinces in the second. Both counts must be at least 1 and
+// coldCount at most len(provinces), which climatePopulationCounts guarantees
+// whenever it reports the population classifiable.
+func heatBandPrefixCounts(provinces []Province, values []float64, scratch *heatScratch, polarCount, coldCount int) (oceanPolar, peakCold int) {
+	order := scratch.order
+	for provinceID := range order {
+		order[provinceID] = provinceID
+	}
+	selectHeatOrder(provinces, values, order, polarCount-1)
+	selectHeatOrder(provinces, values, order[polarCount:], coldCount-polarCount-1)
+	for _, provinceID := range order[:polarCount] {
+		if provinces[provinceID].IslandID == NoIslandID {
+			oceanPolar++
+		}
+	}
+	for _, provinceID := range order[:coldCount] {
+		if scratch.inPeakSlice[provinceID] {
+			peakCold++
+		}
+	}
+	return oceanPolar, peakCold
+}
+
+// heatOrderLess is the total order the heat classification sorts by:
+// ascending value, ties by island and then province ID. No two provinces
+// compare equal, so every selection prefix is uniquely determined.
+func heatOrderLess(provinces []Province, values []float64, first, second int) bool {
+	if values[first] != values[second] {
+		return values[first] < values[second]
+	}
+	return climateTieLess(&provinces[first], &provinces[second])
+}
+
+// selectHeatOrder rearranges order so that order[k] is the element that
+// would sit at position k if order were sorted by heatOrderLess, every
+// element before it orders lower, and every element after it orders higher.
+// It is a quickselect with median-of-three pivots; the choice of pivot only
+// affects speed, never the result, because the order is strict.
+func selectHeatOrder(provinces []Province, values []float64, order []int, k int) {
+	low, high := 0, len(order)-1
+	for low < high {
+		middle := low + (high-low)/2
+		// Median of three, moved to the end as the pivot.
+		if heatOrderLess(provinces, values, order[middle], order[low]) {
+			order[middle], order[low] = order[low], order[middle]
+		}
+		if heatOrderLess(provinces, values, order[high], order[low]) {
+			order[high], order[low] = order[low], order[high]
+		}
+		if heatOrderLess(provinces, values, order[middle], order[high]) {
+			order[middle], order[high] = order[high], order[middle]
+		}
+		pivot := order[high]
+		store := low
+		for index := low; index < high; index++ {
+			if heatOrderLess(provinces, values, order[index], pivot) {
+				order[store], order[index] = order[index], order[store]
+				store++
+			}
+		}
+		order[store], order[high] = order[high], order[store]
+		switch {
+		case k < store:
+			high = store - 1
+		case k > store:
+			low = store + 1
+		default:
+			return
+		}
 	}
 }
 
@@ -235,14 +342,20 @@ func betterHeatCalibration(candidate, current heatCalibration) bool {
 // north), which is the cold pole; water receives no elevation cooling.
 func adjustedHeatValues(provinces []Province, heatSource, latitudes []float64, warmth, cooling float64) []float64 {
 	values := make([]float64, len(provinces))
-	for provinceID, province := range provinces {
+	adjustHeatValues(values, provinces, heatSource, latitudes, warmth, cooling)
+	return values
+}
+
+// adjustHeatValues is adjustedHeatValues writing into a caller-owned slice.
+func adjustHeatValues(values []float64, provinces []Province, heatSource, latitudes []float64, warmth, cooling float64) {
+	for provinceID := range provinces {
+		province := &provinces[provinceID]
 		heat := (1-warmth)*heatSource[provinceID] + warmth*(1-latitudes[provinceID])
 		if province.IslandID != NoIslandID {
 			heat *= 1 - cooling*max(0, province.Elevation)
 		}
 		values[provinceID] = heat
 	}
-	return values
 }
 
 func peakCalibrationSlice(provinces []Province, latitudes []float64) []int {
@@ -262,7 +375,7 @@ func peakCalibrationSlice(provinces []Province, latitudes []float64) []int {
 		if provinces[first].Elevation != provinces[second].Elevation {
 			return provinces[first].Elevation < provinces[second].Elevation
 		}
-		return climateTieLess(provinces[first], provinces[second])
+		return climateTieLess(&provinces[first], &provinces[second])
 	})
 	byLatitude := append([]int(nil), land...)
 	sort.Slice(byLatitude, func(i, j int) bool {
@@ -270,7 +383,7 @@ func peakCalibrationSlice(provinces []Province, latitudes []float64) []int {
 		if latitudes[first] != latitudes[second] {
 			return latitudes[first] < latitudes[second]
 		}
-		return climateTieLess(provinces[first], provinces[second])
+		return climateTieLess(&provinces[first], &provinces[second])
 	})
 
 	highElevation := make(map[int]bool, decileCount)
@@ -301,10 +414,7 @@ func classifyClimatePopulationWithCounts(provinces []Province, values []float64,
 	}
 	sort.Slice(order, func(i, j int) bool {
 		first, second := order[i], order[j]
-		if values[first] != values[second] {
-			return values[first] < values[second]
-		}
-		return climateTieLess(provinces[first], provinces[second])
+		return heatOrderLess(provinces, values, first, second)
 	})
 	bands := make([]int, len(provinces))
 	offset := 0
@@ -344,34 +454,11 @@ func climatePopulationCounts(population int) ([5]int, bool) {
 	return counts, true
 }
 
-func climateTieLess(first, second Province) bool {
+func climateTieLess(first, second *Province) bool {
 	if first.IslandID != second.IslandID {
 		return first.IslandID < second.IslandID
 	}
 	return first.ID < second.ID
-}
-
-func heatBandFraction(provinces []Province, bands []int, subset []int, maximumBand int) float64 {
-	matched, total := 0, 0
-	if subset != nil {
-		for _, provinceID := range subset {
-			total++
-			if bands[provinceID] <= maximumBand {
-				matched++
-			}
-		}
-		return float64(matched) / float64(total)
-	}
-	for provinceID, province := range provinces {
-		if province.IslandID != NoIslandID {
-			continue
-		}
-		total++
-		if bands[provinceID] <= maximumBand {
-			matched++
-		}
-	}
-	return float64(matched) / float64(total)
 }
 
 func clamp01(value float64) float64 {

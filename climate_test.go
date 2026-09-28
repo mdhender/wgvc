@@ -199,3 +199,91 @@ func TestClimateConfigValidationAndDefaults(t *testing.T) {
 		}
 	}
 }
+
+// TestSelectHeatOrderMatchesSortedPrefix checks the quickselect against a
+// full sort on a population with many value ties, which the tie order must
+// break identically in both.
+func TestSelectHeatOrderMatchesSortedPrefix(t *testing.T) {
+	provinces := make([]Province, 40)
+	values := make([]float64, len(provinces))
+	for provinceID := range provinces {
+		provinces[provinceID] = Province{ID: ProvinceID(provinceID), IslandID: IslandID(provinceID%3 - 1)}
+		values[provinceID] = float64(provinceID%7) / 7
+	}
+	sorted := make([]int, len(provinces))
+	for provinceID := range sorted {
+		sorted[provinceID] = provinceID
+	}
+	slices.SortFunc(sorted, func(first, second int) int {
+		if heatOrderLess(provinces, values, first, second) {
+			return -1
+		}
+		return 1
+	})
+	for k := range provinces {
+		order := make([]int, len(provinces))
+		for provinceID := range order {
+			order[provinceID] = len(order) - 1 - provinceID
+		}
+		selectHeatOrder(provinces, values, order, k)
+		if order[k] != sorted[k] {
+			t.Fatalf("selectHeatOrder(k=%d) placed %d at k, want %d", k, order[k], sorted[k])
+		}
+		prefix := slices.Clone(order[:k])
+		slices.Sort(prefix)
+		wantPrefix := slices.Clone(sorted[:k])
+		slices.Sort(wantPrefix)
+		if !slices.Equal(prefix, wantPrefix) {
+			t.Fatalf("selectHeatOrder(k=%d) prefix = %v, want %v", k, prefix, wantPrefix)
+		}
+	}
+}
+
+// TestHeatBandPrefixCountsMatchSortedBands checks, on a generated world, that
+// the selection-based candidate score agrees with a full classification for
+// several calibration grid points.
+func TestHeatBandPrefixCountsMatchSortedBands(t *testing.T) {
+	world, err := Generate(Config{WorldSeed: 42, ProvinceCount: 800, IslandCount: 6})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	provinces := world.Provinces
+	heatSource := make([]float64, len(provinces))
+	for provinceID, province := range provinces {
+		heatSource[provinceID] = province.Moisture // any bounded per-province field serves as noise here
+	}
+	latitudes := provinceLatitudes(world)
+	peakSlice := peakCalibrationSlice(provinces, latitudes)
+	if len(peakSlice) == 0 {
+		t.Fatal("peak slice is empty; choose a seed with high northern land")
+	}
+	counts, ok := climatePopulationCounts(len(provinces))
+	if !ok {
+		t.Fatalf("population %d cannot be banded", len(provinces))
+	}
+	scratch := newHeatScratch(len(provinces), peakSlice)
+	for _, point := range [][2]float64{{0.25, 0}, {0.25, 1}, {0.625, 0.5}, {1, 0}, {1, 1}, {0.4375, 0.25}} {
+		warmth, cooling := point[0], point[1]
+		values := adjustedHeatValues(provinces, heatSource, latitudes, warmth, cooling)
+		bands := classifyClimatePopulationWithCounts(provinces, values, counts)
+		wantOceanPolar, wantPeakCold := 0, 0
+		for provinceID, province := range provinces {
+			if province.IslandID == NoIslandID && bands[provinceID] == int(HeatBandPolar) {
+				wantOceanPolar++
+			}
+		}
+		for _, provinceID := range peakSlice {
+			if bands[provinceID] <= int(HeatBandCold) {
+				wantPeakCold++
+			}
+		}
+		adjustHeatValues(scratch.values, provinces, heatSource, latitudes, warmth, cooling)
+		if !slices.Equal(scratch.values, values) {
+			t.Fatalf("adjustHeatValues(%g, %g) differs from adjustedHeatValues", warmth, cooling)
+		}
+		oceanPolar, peakCold := heatBandPrefixCounts(provinces, scratch.values, scratch, counts[0], counts[0]+counts[1])
+		if oceanPolar != wantOceanPolar || peakCold != wantPeakCold {
+			t.Errorf("heatBandPrefixCounts(%g, %g) = (%d, %d), want (%d, %d)", warmth, cooling, oceanPolar, peakCold, wantOceanPolar, wantPeakCold)
+		}
+	}
+}
