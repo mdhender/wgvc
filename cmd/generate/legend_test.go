@@ -55,11 +55,11 @@ func renderTerrainLegend(t *testing.T) []byte {
 		t.Fatalf("parse font: %v", err)
 	}
 	canvas := gg.NewContext(width, height)
-	canvas.SetHexColor(backgroundColor)
+	canvas.SetColor(backgroundColor)
 	canvas.Clear()
 
 	canvas.SetFontFace(truetype.NewFace(font, &truetype.Options{Size: legendTitleSize}))
-	canvas.SetHexColor(coastlineColor)
+	canvas.SetColor(coastlineColor)
 	canvas.DrawStringAnchored("wgvc terrain colors", legendMargin, legendMargin+legendTitleHeight/2, 0, 0.35)
 
 	canvas.SetFontFace(truetype.NewFace(font, &truetype.Options{Size: legendFontSize}))
@@ -71,16 +71,16 @@ func renderTerrainLegend(t *testing.T) []byte {
 		x := float64(legendMargin + (i/rows)*legendColumnWidth)
 		y := float64(legendMargin + legendTitleHeight + (i%rows)*legendRowHeight)
 		canvas.DrawRectangle(x, y+legendSwatchInset, legendSwatchWidth, legendRowHeight-2*legendSwatchInset)
-		canvas.SetHexColor(fill)
+		canvas.SetColor(fill)
 		canvas.FillPreserve()
-		canvas.SetHexColor(cellBorderColor)
+		canvas.SetColor(cellBorderColor)
 		canvas.SetLineWidth(cellBorderWidth)
 		canvas.Stroke()
 
-		canvas.SetHexColor(coastlineColor)
+		canvas.SetColor(coastlineColor)
 		canvas.DrawStringAnchored(string(terrain), x+legendSwatchWidth+12, y+legendRowHeight/2, 0, 0.35)
-		canvas.SetHexColor(cellBorderColor)
-		canvas.DrawStringAnchored(fill, x+legendColumnWidth-legendMargin, y+legendRowHeight/2, 1, 0.35)
+		canvas.SetColor(cellBorderColor)
+		canvas.DrawStringAnchored(hexColor(fill), x+legendColumnWidth-legendMargin, y+legendRowHeight/2, 1, 0.35)
 	}
 
 	var png bytes.Buffer

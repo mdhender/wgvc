@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"image/color"
 	"io"
 	"math"
 	"path/filepath"
@@ -88,22 +89,22 @@ func TestRampLayersUseEndColorsAtFieldExtremes(t *testing.T) {
 		set(&p)
 		return p
 	}
-	first := func(r Ramp) string { return hexColor(r[0].Color) }
-	last := func(r Ramp) string { return hexColor(r[len(r)-1].Color) }
+	first := func(r Ramp) color.RGBA { return r[0].Color }
+	last := func(r Ramp) color.RGBA { return r[len(r)-1].Color }
 	tests := []struct {
 		name     string
 		layer    mapLayer
 		province wgvc.Province
-		want     string
+		want     color.RGBA
 	}{
 		{"elevation min", layerElevation, with(water, func(p *wgvc.Province) { p.Elevation = -1 }), first(ElevationRamp)},
 		{"elevation max", layerElevation, with(land, func(p *wgvc.Province) { p.Elevation = 1 }), last(ElevationRamp)},
-		{"water at sea level", layerElevation, water, hexColor(ElevationRamp[2].Color)},
-		{"land at sea level", layerElevation, land, hexColor(ElevationRamp[3].Color)},
+		{"water at sea level", layerElevation, water, ElevationRamp[2].Color},
+		{"land at sea level", layerElevation, land, ElevationRamp[3].Color},
 		{"relief min", layerRelief, with(land, func(p *wgvc.Province) { p.Relief = 0 }), first(UnitRamp)},
 		{"relief display max", layerRelief, with(land, func(p *wgvc.Province) { p.Relief = reliefDisplayMax }), last(UnitRamp)},
 		{"relief above display max saturates", layerRelief, with(land, func(p *wgvc.Province) { p.Relief = 1 }), last(UnitRamp)},
-		{"relief at half the display range", layerRelief, with(land, func(p *wgvc.Province) { p.Relief = reliefDisplayMax / 2 }), hexColor(UnitRamp.At(0.5))},
+		{"relief at half the display range", layerRelief, with(land, func(p *wgvc.Province) { p.Relief = reliefDisplayMax / 2 }), UnitRamp.At(0.5)},
 		{"heat min", layerHeat, with(land, func(p *wgvc.Province) { p.Heat = 0 }), first(TemperatureRamp)},
 		{"heat max", layerHeat, with(land, func(p *wgvc.Province) { p.Heat = 1 }), last(TemperatureRamp)},
 		{"moisture min", layerMoisture, with(land, func(p *wgvc.Province) { p.Moisture = 0 }), first(MoistureRamp)},
@@ -116,7 +117,7 @@ func TestRampLayersUseEndColorsAtFieldExtremes(t *testing.T) {
 			continue
 		}
 		if got != test.want {
-			t.Errorf("%s: fill = %s, want %s", test.name, got, test.want)
+			t.Errorf("%s: fill = %s, want %s", test.name, hexColor(got), hexColor(test.want))
 		}
 	}
 	if ElevationRamp[2].At != elevationRampBreak || ElevationRamp[3].At != elevationRampLand {
@@ -134,7 +135,7 @@ func TestRampLayersRejectNonFiniteValues(t *testing.T) {
 }
 
 func TestClimateColorsCoverEveryBandPair(t *testing.T) {
-	seen := map[string]bool{}
+	seen := map[color.RGBA]bool{}
 	for _, heat := range wgvc.HeatBands() {
 		for _, moisture := range wgvc.MoistureBands() {
 			fill, err := climateColor(heat, moisture)
@@ -143,7 +144,7 @@ func TestClimateColorsCoverEveryBandPair(t *testing.T) {
 				continue
 			}
 			if seen[fill] {
-				t.Errorf("climateColor(%v, %v) = %s reuses another cell's color", heat, moisture, fill)
+				t.Errorf("climateColor(%v, %v) = %s reuses another cell's color", heat, moisture, hexColor(fill))
 			}
 			seen[fill] = true
 		}

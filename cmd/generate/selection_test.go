@@ -142,7 +142,7 @@ func TestPartialMapKeepsFullMapScaleAndFogsTheRest(t *testing.T) {
 			break
 		}
 		if !matched {
-			t.Errorf("partial polygon with fill %s has no full-map counterpart at the same scale", polygon.fill)
+			t.Errorf("partial polygon with fill %s has no full-map counterpart at the same scale", hexColor(polygon.fill))
 		}
 	}
 	selectedCount := 0
@@ -180,8 +180,9 @@ func TestRunRendersPartialMap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if width >= fullWidth || height >= fullHeight || !strings.Contains(string(data), `fill="`+fogColor+`"`) {
-		t.Errorf("partial SVG is %d×%d (full %d×%d) and fog present = %t", width, height, fullWidth, fullHeight, strings.Contains(string(data), fogColor))
+	fogHex := hexColor(fogColor)
+	if width >= fullWidth || height >= fullHeight || !strings.Contains(string(data), `fill="`+fogHex+`"`) {
+		t.Errorf("partial SVG is %d×%d (full %d×%d) and fog present = %t", width, height, fullWidth, fullHeight, strings.Contains(string(data), fogHex))
 	}
 	if !strings.Contains(stdout.String(), fmt.Sprintf("(%d×%d)", width, height)) {
 		t.Errorf("status line %q does not report the partial dimensions", stdout.String())

@@ -114,9 +114,9 @@ func TestRunSVGUsesDerivedDimensionsAndTerrainColors(t *testing.T) {
 		t.Errorf("SVG dimensions = %d×%d, want %d×%d", width, height, wantWidth, wantHeight)
 	}
 	terrainFills := 0
-	for terrain, color := range terrainColors {
+	for terrain, fill := range terrainColors {
 		if !terrain.IsWater() {
-			terrainFills += strings.Count(string(data), `fill="`+color+`"`)
+			terrainFills += strings.Count(string(data), `fill="`+hexColor(fill)+`"`)
 		}
 	}
 	if terrainFills != 30 {
@@ -126,12 +126,12 @@ func TestRunSVGUsesDerivedDimensionsAndTerrainColors(t *testing.T) {
 
 func TestEveryTerrainHasColor(t *testing.T) {
 	for _, terrain := range wgvc.Terrains() {
-		color, err := terrainColor(terrain)
+		fill, err := terrainColor(terrain)
 		if err != nil {
 			t.Errorf("terrainColor(%q) error = %v", terrain, err)
 		}
-		if color == "" {
-			t.Errorf("terrainColor(%q) returned an empty color", terrain)
+		if fill.A != 0xff {
+			t.Errorf("terrainColor(%q) returned a transparent color %v", terrain, fill)
 		}
 	}
 	if _, err := terrainColor("unknown"); err == nil {
@@ -170,7 +170,7 @@ func TestRenderedPNGIsDeterministicAndKeepsCellBorders(t *testing.T) {
 		t.Errorf("PNG height = %d, want %d", got, want)
 	}
 
-	border := parseHexColor(t, cellBorderColor)
+	border := color.NRGBA{R: cellBorderColor.R, G: cellBorderColor.G, B: cellBorderColor.B, A: cellBorderColor.A}
 	borderPixels := 0
 	for y := image.Bounds().Min.Y; y < image.Bounds().Max.Y; y++ {
 		for x := image.Bounds().Min.X; x < image.Bounds().Max.X; x++ {
@@ -243,16 +243,6 @@ func assertOutputExists(t *testing.T, path string, want bool) {
 	if !want && !os.IsNotExist(err) {
 		t.Errorf("unexpected output %s", path)
 	}
-}
-
-func parseHexColor(t *testing.T, value string) color.NRGBA {
-	t.Helper()
-	var result color.NRGBA
-	if _, err := fmt.Sscanf(value, "#%02x%02x%02x", &result.R, &result.G, &result.B); err != nil {
-		t.Fatalf("parse color %q: %v", value, err)
-	}
-	result.A = 255
-	return result
 }
 
 func colorsNear(first, second color.NRGBA, tolerance uint8) bool {
@@ -351,5 +341,41 @@ func TestRunAcceptsConstellationAttractors(t *testing.T) {
 	}
 	if err := run([]string{"-attractors", "orion", "-output", base}, &stdout, &stderr); err == nil {
 		t.Error("run() accepted an unknown constellation")
+	}
+}
+
+// TestSceneListsEachBorderOnce checks that a full map carries exactly one
+// border per world edge, so the raster path strokes shared borders a single
+// time, and that a partial map keeps borders only around drawn polygons.
+func TestSceneListsEachBorderOnce(t *testing.T) {
+	world, err := wgvc.Generate(wgvc.Config{WorldSeed: 42, ProvinceCount: 53, IslandCount: 1})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	full, err := buildScene(world, 480, 360, layerTerrain, nil)
+	if err != nil {
+		t.Fatalf("buildScene() error = %v", err)
+	}
+	if len(full.borders) != len(world.Edges) {
+		t.Errorf("full scene has %d borders for %d edges", len(full.borders), len(world.Edges))
+	}
+	seen := map[renderLine]bool{}
+	for _, border := range full.borders {
+		if seen[border] {
+			t.Fatalf("border %+v is listed twice", border)
+		}
+		seen[border] = true
+	}
+	selected := make([]bool, len(world.Provinces))
+	selected[world.Islands[0].ProvinceIDs[0]] = true
+	partial, err := buildScene(world, 480, 360, layerTerrain, selected)
+	if err != nil {
+		t.Fatalf("buildScene(partial) error = %v", err)
+	}
+	if len(partial.borders) == 0 || len(partial.borders) >= len(world.Edges) {
+		t.Errorf("partial scene has %d borders of %d edges", len(partial.borders), len(world.Edges))
+	}
+	if len(partial.borders) < len(partial.polygons) {
+		t.Errorf("partial scene has %d borders for %d drawn polygons", len(partial.borders), len(partial.polygons))
 	}
 }

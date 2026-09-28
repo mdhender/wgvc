@@ -38,14 +38,14 @@ func parseLayer(value string) (mapLayer, error) {
 	return "", fmt.Errorf("unsupported layer %q: use %s", value, strings.Join(names, ", "))
 }
 
-// provinceFill returns the hex fill color for a province under a layer.
-func provinceFill(layer mapLayer, province wgvc.Province) (string, error) {
+// provinceFill returns the fill color for a province under a layer.
+func provinceFill(layer mapLayer, province wgvc.Province) (color.RGBA, error) {
 	switch layer {
 	case layerTerrain:
 		return terrainColor(province.Terrain)
 	case layerElevation:
 		if err := checkFinite("elevation", province.Elevation); err != nil {
-			return "", err
+			return color.RGBA{}, err
 		}
 		// Pick the side of the coastline step by membership, not by value, so
 		// a land province at exactly sea level still reads as land.
@@ -55,7 +55,7 @@ func provinceFill(layer mapLayer, province wgvc.Province) (string, error) {
 		} else {
 			t = max(t, elevationRampLand)
 		}
-		return hexColor(ElevationRamp.At(t)), nil
+		return ElevationRamp.At(t), nil
 	case layerRelief:
 		// Relief is nominally in [0, 1) but a mean of neighbor differences
 		// rarely passes 0.3, so the layer spans a fixed display range and
@@ -68,14 +68,14 @@ func provinceFill(layer mapLayer, province wgvc.Province) (string, error) {
 	case layerClimate:
 		return climateColor(province.HeatBand, province.MoistureBand)
 	}
-	return "", fmt.Errorf("unsupported layer %q", layer)
+	return color.RGBA{}, fmt.Errorf("unsupported layer %q", layer)
 }
 
-func rampFill(ramp Ramp, field string, value float64) (string, error) {
+func rampFill(ramp Ramp, field string, value float64) (color.RGBA, error) {
 	if err := checkFinite(field, value); err != nil {
-		return "", err
+		return color.RGBA{}, err
 	}
-	return hexColor(ramp.At(value)), nil
+	return ramp.At(value), nil
 }
 
 func checkFinite(field string, value float64) error {
@@ -85,13 +85,14 @@ func checkFinite(field string, value float64) error {
 	return nil
 }
 
-func climateColor(heat wgvc.HeatBand, moisture wgvc.MoistureBand) (string, error) {
+func climateColor(heat wgvc.HeatBand, moisture wgvc.MoistureBand) (color.RGBA, error) {
 	if heat < 0 || int(heat) >= len(climateColors) || moisture < 0 || int(moisture) >= len(climateColors[heat]) {
-		return "", fmt.Errorf("unsupported climate: heat band %d, moisture band %d", heat, moisture)
+		return color.RGBA{}, fmt.Errorf("unsupported climate: heat band %d, moisture band %d", heat, moisture)
 	}
-	return hexColor(climateColors[heat][moisture]), nil
+	return climateColors[heat][moisture], nil
 }
 
+// hexColor formats a color as the #rrggbb text SVG and labels use.
 func hexColor(c color.RGBA) string {
 	return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
 }
