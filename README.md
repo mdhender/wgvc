@@ -434,7 +434,11 @@ Drainage works on the corner graph. Every corner touching ocean is an outlet,
 and a priority-flood from the outlets visits the remaining corners in order of
 filled elevation, so each gets one downstream neighbor and a monotone path to
 the sea while depressions fill to their spill level instead of trapping flow.
-Ties fall to the lower corner ID, and the filled surface is not exported. Lakes
+A corner's downstream neighbor is the visited neighbor with the lowest filled
+elevation; on a tie the sea wins over any other corner, then the steeper
+descent, then the shorter edge, then the lower corner ID, so a coastal corner
+beside both a lake and the sea drains to the sea. The filled surface is not
+exported. Lakes
 and inland seas are ordinary nodes: rivers flowing in end at the shore with a
 `basin` mouth, and the basin's water leaves at its spill corner as a river with
 a `basin` source. Each land province spreads `Area * Moisture` over its corners

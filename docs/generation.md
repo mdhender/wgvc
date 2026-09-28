@@ -52,7 +52,10 @@ requested count. Water can contain interior components such as lakes.
 - Drainage is derived from elevation, moisture, and IDs alone and consumes no
   randomness. Every corner on ocean is an outlet; a priority-flood from the
   outlets gives every other corner one downstream neighbor along a monotone
-  path to the sea, filling depressions to their spill level internally. Lakes
+  path to the sea, filling depressions to their spill level internally. The
+  downstream neighbor is the lowest filled neighbor; ties go to the sea over
+  any other corner, then to the steeper descent, then the shorter edge, then
+  the lower corner ID. Lakes
   and inland seas are ordinary nodes, so rivers flowing in end at the shore
   and the basin's water leaves at its spill corner. Runoff is each land
   province's `Area * Moisture` spread over its corners.

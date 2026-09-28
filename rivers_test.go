@@ -91,3 +91,62 @@ func TestDefaultWorldHasRiversOfEveryEndKind(t *testing.T) {
 		t.Errorf("discharge into ocean = %g, want inland runoff %g", intoOcean, inlandRunoff)
 	}
 }
+
+// TestRiversTakeTheSeaWhenItIsAdjacent checks that a river corner with a land
+// edge into the sea drains into the sea rather than continuing inland or into
+// a lake. Every shore corner sits at elevation 0, so a lake shore and a sea
+// shore tie on filled elevation; the tie must go to the sea.
+func TestRiversTakeTheSeaWhenItIsAdjacent(t *testing.T) {
+	config := x24.DefaultConfig()
+	config.WorldSeed = 0x0123456789abcdef
+	config.ProvinceCount = 10000
+	config.IslandCount = 21
+	config.OceanPercentage = 0.78
+	config.Constellation = "subaru"
+	config.AspectRatio = "5:2"
+	world, _, err := GenerateForRender(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertRiversTakeAdjacentSea(t, world)
+}
+
+func assertRiversTakeAdjacentSea(t *testing.T, world World) {
+	t.Helper()
+	oceanCorner := make([]bool, len(world.Corners))
+	for _, province := range world.Provinces {
+		if province.IslandID == NoIslandID && province.BasinID == NoBasinID {
+			for _, cornerID := range province.CornerIDs {
+				oceanCorner[cornerID] = true
+			}
+		}
+	}
+	seaNeighbor := make([]bool, len(world.Corners))
+	for _, edge := range world.Edges {
+		if len(edge.ProvinceIDs) != 2 || world.Provinces[edge.ProvinceIDs[0]].IslandID == NoIslandID || world.Provinces[edge.ProvinceIDs[1]].IslandID == NoIslandID {
+			continue
+		}
+		first, second := edge.CornerIDs[0], edge.CornerIDs[1]
+		if oceanCorner[second] {
+			seaNeighbor[first] = true
+		}
+		if oceanCorner[first] {
+			seaNeighbor[second] = true
+		}
+	}
+	failures := 0
+	for _, river := range world.Rivers {
+		for position, cornerID := range river.CornerIDs[:len(river.CornerIDs)-1] {
+			next := river.CornerIDs[position+1]
+			if seaNeighbor[cornerID] && !oceanCorner[next] {
+				failures++
+				if failures <= 5 {
+					t.Errorf("river %d corner %d has a land edge into the sea but flows to corner %d", river.ID, cornerID, next)
+				}
+			}
+		}
+	}
+	if failures > 5 {
+		t.Errorf("%d river corners in all skipped an adjacent sea corner", failures)
+	}
+}

@@ -41,8 +41,14 @@ func ClassifyDischarge(discharge float64) RiverClass {
 // order of filled elevation, max(own elevation, elevation of the corner it
 // was reached from), so each corner gets one downstream neighbor and a
 // monotone path to the sea; depressions fill to their spill level instead of
-// trapping flow. Ties fall to the lower corner ID. The filled surface is not
-// exported. Lake and inland-sea corners are ordinary nodes, so inflowing
+// trapping flow. Heap ties fall to the lower corner ID. A corner's downstream
+// neighbor is chosen when the corner is visited, among the neighbors already
+// visited: the lowest filled elevation wins; on a tie an ocean outlet beats
+// any other corner, then the steeper descent (filled drop over edge length),
+// then the shorter edge, then the lower corner ID. Every corner touching
+// water sits at elevation 0, so without the outlet preference a lake shore
+// could claim a coastal corner from the sea beside it. The filled surface is
+// not exported. Lake and inland-sea corners are ordinary nodes, so inflowing
 // rivers end at the shore and the lake's water leaves at its spill corner.
 //
 // Each land province spreads Area * Moisture evenly over its corners as
@@ -66,10 +72,6 @@ func assignRivers(world *World) {
 		return
 	}
 
-	type link struct {
-		corner CornerID
-		edge   EdgeID
-	}
 	links := make([][]link, cornerCount)
 	landEdge := make([]bool, len(world.Edges))
 	for _, edge := range world.Edges {
@@ -119,17 +121,32 @@ func assignRivers(world *World) {
 			heap.Push(queue, cornerHeapItem{corner: CornerID(cornerID), filled: filled[cornerID]})
 		}
 	}
+	resolved := make([]bool, cornerCount)
 	for queue.Len() > 0 {
 		item := heap.Pop(queue).(cornerHeapItem)
 		order = append(order, item.corner)
+		resolved[item.corner] = true
+		if !outlet[item.corner] {
+			// The neighbor that first reached this corner has the lowest
+			// filled elevation of any neighbor, so the choice below is only
+			// among neighbors tied with it.
+			for _, candidate := range links[item.corner] {
+				if !resolved[candidate.corner] {
+					continue
+				}
+				if current := downstream[item.corner]; current < 0 ||
+					betterDownstream(world, item.corner, candidate, link{current, downstreamEdge[item.corner]}, filled, outlet) {
+					downstream[item.corner] = candidate.corner
+					downstreamEdge[item.corner] = candidate.edge
+				}
+			}
+		}
 		for _, next := range links[item.corner] {
 			if visited[next.corner] {
 				continue
 			}
 			visited[next.corner] = true
 			filled[next.corner] = max(world.Corners[next.corner].Elevation, filled[item.corner])
-			downstream[next.corner] = item.corner
-			downstreamEdge[next.corner] = next.edge
 			heap.Push(queue, cornerHeapItem{corner: next.corner, filled: filled[next.corner]})
 		}
 	}
@@ -245,6 +262,39 @@ func assignRivers(world *World) {
 			river.Mouth.RiverID = riverAtCorner[river.CornerIDs[len(river.CornerIDs)-1]]
 		}
 	}
+}
+
+// link is one edge leaving a corner, seen from that corner.
+type link struct {
+	corner CornerID
+	edge   EdgeID
+}
+
+// betterDownstream reports whether candidate is a better downstream neighbor
+// for corner than current: lower filled elevation first, then an ocean
+// outlet over any other corner, then the steeper descent, then the shorter
+// edge, then the lower corner ID.
+func betterDownstream(world *World, corner CornerID, candidate, current link, filled []float64, outlet []bool) bool {
+	if filled[candidate.corner] != filled[current.corner] {
+		return filled[candidate.corner] < filled[current.corner]
+	}
+	if outlet[candidate.corner] != outlet[current.corner] {
+		return outlet[candidate.corner]
+	}
+	drop := filled[corner] - filled[candidate.corner]
+	candidateLength := world.Edges[candidate.edge].Length
+	currentLength := world.Edges[current.edge].Length
+	if candidateLength > 0 && currentLength > 0 {
+		candidateGradient := drop / candidateLength
+		currentGradient := drop / currentLength
+		if candidateGradient != currentGradient {
+			return candidateGradient > currentGradient
+		}
+	}
+	if candidateLength != currentLength {
+		return candidateLength < currentLength
+	}
+	return candidate.corner < current.corner
 }
 
 type cornerHeapItem struct {
