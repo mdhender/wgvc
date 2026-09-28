@@ -163,17 +163,17 @@ func TestGeometryBackendRejectsInvalidSites(t *testing.T) {
 		{{X: 1.1, Y: 0.5}},
 	}
 	for _, sites := range tests {
-		if _, err := computeBackendGeometry(sites); err == nil {
-			t.Errorf("computeBackendGeometry(%v) returned no error", sites)
+		if _, err := computeBackendGeometryInBounds(sites, 1, 1); err == nil {
+			t.Errorf("computeBackendGeometryInBounds(%v) returned no error", sites)
 		}
 	}
 }
 
 func mustComputeBackendGeometry(t *testing.T, sites []Point) backendGeometry {
 	t.Helper()
-	geometry, err := computeBackendGeometry(sites)
+	geometry, err := computeBackendGeometryInBounds(sites, 1, 1)
 	if err != nil {
-		t.Fatalf("computeBackendGeometry() error = %v", err)
+		t.Fatalf("computeBackendGeometryInBounds() error = %v", err)
 	}
 	return geometry
 }

@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-func TestTessellateIslandOneSite(t *testing.T) {
-	mesh := mustTessellateIsland(t, 3, []Point{{X: 0.37, Y: 0.61}})
+func TestTessellateUnitSquareOneSite(t *testing.T) {
+	mesh := mustTessellateUnitSquare(t, 3, []Point{{X: 0.37, Y: 0.61}})
 	assertValidMesh(t, mesh)
 
 	if got, want := len(mesh.corners), 4; got != want {
@@ -29,8 +29,8 @@ func TestTessellateIslandOneSite(t *testing.T) {
 	}
 }
 
-func TestTessellateIslandTwoSitesHaveOneInteriorAdjacency(t *testing.T) {
-	mesh := mustTessellateIsland(t, 0, []Point{{X: 0.25, Y: 0.5}, {X: 0.75, Y: 0.5}})
+func TestTessellateUnitSquareTwoSitesHaveOneInteriorAdjacency(t *testing.T) {
+	mesh := mustTessellateUnitSquare(t, 0, []Point{{X: 0.25, Y: 0.5}, {X: 0.75, Y: 0.5}})
 	assertValidMesh(t, mesh)
 
 	if got, want := meshAdjacencies(mesh), [][2]int{{0, 1}}; !reflect.DeepEqual(got, want) {
@@ -38,14 +38,14 @@ func TestTessellateIslandTwoSitesHaveOneInteriorAdjacency(t *testing.T) {
 	}
 }
 
-func TestTessellateIslandFourSymmetricSitesFormCycle(t *testing.T) {
+func TestTessellateUnitSquareFourSymmetricSitesFormCycle(t *testing.T) {
 	sites := []Point{
 		{X: 0.25, Y: 0.25},
 		{X: 0.75, Y: 0.25},
 		{X: 0.75, Y: 0.75},
 		{X: 0.25, Y: 0.75},
 	}
-	mesh := mustTessellateIsland(t, 0, sites)
+	mesh := mustTessellateUnitSquare(t, 0, sites)
 	assertValidMesh(t, mesh)
 
 	want := [][2]int{{0, 1}, {0, 3}, {1, 2}, {2, 3}}
@@ -54,58 +54,42 @@ func TestTessellateIslandFourSymmetricSitesFormCycle(t *testing.T) {
 	}
 }
 
-func TestTessellateIslandCanonicalPartitionCorpus(t *testing.T) {
+func TestTessellateUnitSquareCanonicalPartitionCorpus(t *testing.T) {
 	corpus := [][]Point{
 		{{X: 0.1, Y: 0.5}, {X: 0.35, Y: 0.5}, {X: 0.65, Y: 0.5}, {X: 0.9, Y: 0.5}},
 		{{X: 0.13, Y: 0.17}, {X: 0.42, Y: 0.11}, {X: 0.84, Y: 0.23}, {X: 0.27, Y: 0.58}, {X: 0.61, Y: 0.49}, {X: 0.88, Y: 0.76}, {X: 0.38, Y: 0.91}},
-		generateCandidateSites(3, 3, candidateRandom(1, 0)),
-		generateCandidateSites(6, 6, candidateRandom(8675309, 0)),
+		jitteredGridSites(3, 3, 1),
+		jitteredGridSites(6, 6, 8675309),
 	}
 
 	for corpusIndex, sites := range corpus {
-		mesh := mustTessellateIsland(t, IslandID(corpusIndex), sites)
+		mesh := mustTessellateUnitSquare(t, IslandID(corpusIndex), sites)
 		assertValidMesh(t, mesh)
 
-		repeated := mustTessellateIsland(t, IslandID(corpusIndex), sites)
+		repeated := mustTessellateUnitSquare(t, IslandID(corpusIndex), sites)
 		if !reflect.DeepEqual(mesh, repeated) {
 			t.Fatalf("corpus %d is not canonical across repeated calls", corpusIndex)
 		}
 	}
 }
 
-func TestTessellateIslandsBuildsRetainedMeshesInPlanOrder(t *testing.T) {
-	config := Config{WorldSeed: 42, ProvinceCount: 7, IslandCount: 2}
-	allocations := []int{4, 3}
-	plans, err := planIslands(config, allocations)
-	if err != nil {
-		t.Fatalf("planIslands() error = %v", err)
-	}
-	wantPlans := cloneIslandPlans(plans)
-
-	result, err := tessellateIslands(plans)
-	if err != nil {
-		t.Fatalf("tessellateIslands() error = %v", err)
-	}
-	if !reflect.DeepEqual(plans, wantPlans) {
-		t.Fatalf("tessellateIslands() mutated plans: got %+v, want %+v", plans, wantPlans)
-	}
-	if got, want := len(result.islands), 2; got != want {
-		t.Fatalf("island mesh count = %d, want %d", got, want)
-	}
-	for islandIndex, mesh := range result.islands {
-		if mesh.islandID != IslandID(islandIndex) {
-			t.Errorf("mesh %d island ID = %d", islandIndex, mesh.islandID)
-		}
-		if got, want := len(mesh.cells), allocations[islandIndex]; got != want {
-			t.Errorf("mesh %d retained cell count = %d, want %d", islandIndex, got, want)
-		}
-		if err := validateRetainedLandMesh(mesh); err != nil {
-			t.Errorf("mesh %d is not valid retained land: %v", islandIndex, err)
+// jitteredGridSites places one site per cell of a columns×rows grid over the
+// unit square, each offset from its cell center by up to a quarter cell.
+func jitteredGridSites(columns, rows int, seed uint64) []Point {
+	random := rand.New(rand.NewPCG(seed, 0x9e3779b97f4a7c15))
+	sites := make([]Point, 0, columns*rows)
+	for row := 0; row < rows; row++ {
+		for column := 0; column < columns; column++ {
+			sites = append(sites, Point{
+				X: (float64(column) + 0.5 + 0.5*(random.Float64()-0.5)) / float64(columns),
+				Y: (float64(row) + 0.5 + 0.5*(random.Float64()-0.5)) / float64(rows),
+			})
 		}
 	}
+	return sites
 }
 
-func TestTessellateIslandRejectsMalformedSitesWithContext(t *testing.T) {
+func TestTessellateUnitSquareRejectsMalformedSitesWithContext(t *testing.T) {
 	tests := []struct {
 		name  string
 		sites []Point
@@ -118,9 +102,9 @@ func TestTessellateIslandRejectsMalformedSitesWithContext(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := tessellateIsland(7, test.sites)
+			_, err := tessellateRectangle(7, test.sites, 1, 1)
 			if err == nil {
-				t.Fatal("tessellateIsland() returned no error")
+				t.Fatal("tessellateRectangle() returned no error")
 			}
 			if !strings.Contains(err.Error(), "island 7") || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error = %q, want island and site context containing %q", err, test.want)
@@ -129,15 +113,15 @@ func TestTessellateIslandRejectsMalformedSitesWithContext(t *testing.T) {
 	}
 }
 
-func mustTessellateIsland(t *testing.T, islandID IslandID, sites []Point) islandMesh {
+func mustTessellateUnitSquare(t *testing.T, islandID IslandID, sites []Point) islandMesh {
 	t.Helper()
 	wantSites := append([]Point(nil), sites...)
-	mesh, err := tessellateIsland(islandID, sites)
+	mesh, err := tessellateRectangle(islandID, sites, 1, 1)
 	if err != nil {
-		t.Fatalf("tessellateIsland() error = %v", err)
+		t.Fatalf("tessellateRectangle() error = %v", err)
 	}
 	if !reflect.DeepEqual(sites, wantSites) {
-		t.Fatalf("tessellateIsland() mutated sites: got %v, want %v", sites, wantSites)
+		t.Fatalf("tessellateRectangle() mutated sites: got %v, want %v", sites, wantSites)
 	}
 	return mesh
 }
@@ -330,14 +314,6 @@ func meshAdjacencies(mesh islandMesh) [][2]int {
 		return adjacencies[i][1] < adjacencies[j][1]
 	})
 	return adjacencies
-}
-
-func cloneIslandPlans(plans []islandPlan) []islandPlan {
-	cloned := append([]islandPlan(nil), plans...)
-	for i := range cloned {
-		cloned[i].candidates.sites = append([]Point(nil), plans[i].candidates.sites...)
-	}
-	return cloned
 }
 
 func cross(first, second, third Point) float64 {

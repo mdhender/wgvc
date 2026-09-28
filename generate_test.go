@@ -991,3 +991,24 @@ func containsProvinceID(values []ProvinceID, target ProvinceID) bool {
 	}
 	return false
 }
+
+// boundedBFS returns, in ascending order, the provinces within depth hops of
+// start through provinces accepted by allowed, including start.
+func boundedBFS(start ProvinceID, neighbors [][]ProvinceID, depth int, allowed func(ProvinceID) bool) []ProvinceID {
+	distance := map[ProvinceID]int{start: 0}
+	queue := []ProvinceID{start}
+	for next := 0; next < len(queue); next++ {
+		provinceID := queue[next]
+		if distance[provinceID] >= depth {
+			continue
+		}
+		for _, neighborID := range neighbors[provinceID] {
+			if _, seen := distance[neighborID]; allowed(neighborID) && !seen {
+				distance[neighborID] = distance[provinceID] + 1
+				queue = append(queue, neighborID)
+			}
+		}
+	}
+	slices.Sort(queue)
+	return queue
+}

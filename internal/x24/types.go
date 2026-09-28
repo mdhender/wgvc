@@ -164,6 +164,10 @@ func validatePenaltyRamp(name string, ramp []float64) error {
 	return nil
 }
 
+// Cell is one Voronoi cell of the growth mesh. Generate reads Site and
+// IslandID; Corners and Neighbors alias the mesh slices and are exposed for
+// inspection and tests only, since the caller re-tessellates the sites to
+// build the canonical world mesh.
 type Cell struct {
 	ID           int
 	Site         Point

@@ -108,7 +108,7 @@ func computeDiagram(points []Point, bounds Bounds) (*voronoi.Diagram, map[Point]
 	}
 	diagram := voronoi.ComputeDiagram(backend, voronoi.NewBBox(0, bounds.Width, 0, bounds.Height), true)
 	if len(diagram.Cells) != len(points) {
-		return nil, nil, fmt.Errorf("Voronoi backend returned %d cells for %d sites", len(diagram.Cells), len(points))
+		return nil, nil, fmt.Errorf("voronoi backend returned %d cells for %d sites", len(diagram.Cells), len(points))
 	}
 	return diagram, indexes, nil
 }

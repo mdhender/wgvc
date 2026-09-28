@@ -1,10 +1,16 @@
 # Retained-candidate blob feasibility decision
 
+> **Historical record.** This describes the per-island tile pipeline that
+> preceded x24. That code was retired in v0.8.10 (issue #59), so the contact
+> sheet below can no longer be regenerated; the command shown is kept as it
+> was. The current pipeline is documented in
+> [Single-mesh island generation](../blob-islands.md) and [x24](../x24.md).
+
 Issue #9 was the **go** decision for the retained-candidate architecture in
 #8. The feasibility fixture demonstrates bounded candidate construction and
 exact selection against the pinned rectangular Voronoi backend. The same
-selection algorithm is now part of `Generate`; the retained historical contact
-sheet is [`blob-selection.svg`](blob-selection.svg).
+selection algorithm later ran inside `Generate` until x24 replaced it; the
+retained historical contact sheet is [`blob-selection.svg`](blob-selection.svg).
 
 ## Construction and capacity
 
@@ -80,4 +86,4 @@ within their grid slots while retaining and validating the required
 grid-neighbor edges. Production measures the selected land, scales and places
 complete candidate envelopes, and returns both land and water without
 retessellating selected sites. See the final
-[blob-island gallery and documentation](blob-islands.md).
+[blob-island gallery and documentation](../blob-islands.md).

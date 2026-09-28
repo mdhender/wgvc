@@ -1,5 +1,10 @@
 # Centered land-only tile experiment
 
+> **Historical record.** This spike (issue #18) was built on the per-island
+> tile pipeline that preceded x24. That code was retired in v0.8.10 (issue
+> #59), so the fixture below can no longer be regenerated; the command shown
+> is kept as it was. The current pipeline is documented in [x24](../x24.md).
+
 Issue #18 tests an alternative to constructing one Voronoi diagram from every
 placed candidate site. It is intentionally isolated on an experiment branch
 and must not be merged without human approval.

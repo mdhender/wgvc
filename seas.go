@@ -507,8 +507,7 @@ func mergeTouchingCuts(cuts []neckCut, neighbors [][]ProvinceID) []neckCut {
 	for i := range parent {
 		parent[i] = i
 	}
-	var find func(int) int
-	find = func(i int) int {
+	find := func(i int) int {
 		for parent[i] != i {
 			parent[i] = parent[parent[i]]
 			i = parent[i]
@@ -671,25 +670,4 @@ func neckForCandidate(world *World, neighbors [][]ProvinceID, members []Province
 	slices.Sort(neck.Ends[0])
 	slices.Sort(neck.Ends[1])
 	return neck, true
-}
-
-// boundedBFS returns, in ascending order, the provinces within depth hops of
-// start through provinces accepted by allowed, including start.
-func boundedBFS(start ProvinceID, neighbors [][]ProvinceID, depth int, allowed func(ProvinceID) bool) []ProvinceID {
-	distance := map[ProvinceID]int{start: 0}
-	queue := []ProvinceID{start}
-	for next := 0; next < len(queue); next++ {
-		provinceID := queue[next]
-		if distance[provinceID] >= depth {
-			continue
-		}
-		for _, neighborID := range neighbors[provinceID] {
-			if _, seen := distance[neighborID]; allowed(neighborID) && !seen {
-				distance[neighborID] = distance[provinceID] + 1
-				queue = append(queue, neighborID)
-			}
-		}
-	}
-	slices.Sort(queue)
-	return queue
 }

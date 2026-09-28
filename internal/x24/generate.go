@@ -909,11 +909,3 @@ func (s *randomSet) remove(value int) {
 	s.values = s.values[:last]
 	delete(s.indexes, value)
 }
-
-func (s *randomSet) random(random *rand.Rand) int {
-	return s.values[random.IntN(len(s.values))]
-}
-
-func (s *randomSet) len() int {
-	return len(s.values)
-}

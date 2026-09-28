@@ -28,8 +28,11 @@ type backendEdge struct {
 	siteIndexes []int
 }
 
-// Mesh IDs are local to one island. World-space conversion and assignment of
-// public, world-global IDs belong to the later generation integration stage.
+// islandMesh is the canonical tessellation of one point set: corners in
+// strict coordinate order, edges in strict corner-pair order, and cells whose
+// rings are counterclockwise and start at their lowest corner ID. Generate
+// builds one for the whole world with islandID set to NoIslandID, then
+// assigns the public world-global IDs from it.
 type islandMesh struct {
 	islandID IslandID
 	cells    []meshCell
@@ -48,52 +51,44 @@ type meshEdge struct {
 	siteIndexes []int
 }
 
-func tessellateIslands(plans []islandPlan) (tessellation, error) {
-	if len(plans) == 0 {
-		return tessellation{}, fmt.Errorf("tessellation requires at least one island")
-	}
-
-	result := tessellation{
-		islands:          make([]islandMesh, len(plans)),
-		candidates:       make([]islandMesh, len(plans)),
-		landCandidateIDs: make([][]int, len(plans)),
-	}
-	for islandIndex, plan := range plans {
-		if plan.id != IslandID(islandIndex) {
-			return tessellation{}, fmt.Errorf("island %d has non-canonical ID %d", islandIndex, plan.id)
-		}
-		candidate, err := tessellateIsland(plan.id, plan.candidates.sites)
-		if err != nil {
-			return tessellation{}, fmt.Errorf("island %d tessellate candidates: %w", plan.id, err)
-		}
-		selected, err := selectCandidateCells(plan.landProvinceCount, plan.candidates, candidate, plan.shape)
-		if err != nil {
-			return tessellation{}, fmt.Errorf("island %d select land: %w", plan.id, err)
-		}
-		retained, err := extractRetainedMesh(candidate, selected)
-		if err != nil {
-			return tessellation{}, fmt.Errorf("island %d extract land: %w", plan.id, err)
-		}
-		result.islands[islandIndex] = retained
-		result.candidates[islandIndex] = candidate
-		result.landCandidateIDs[islandIndex] = append([]int(nil), selected...)
-	}
-	return result, nil
+type uniformTransform struct {
+	scale       float64
+	translation Point
 }
 
-func tessellateIsland(islandID IslandID, sites []Point) (islandMesh, error) {
-	geometry, err := computeBackendGeometry(sites)
-	if err != nil {
-		return islandMesh{}, fmt.Errorf("island %d: %w", islandID, err)
+func (transform uniformTransform) point(point Point) Point {
+	return Point{
+		X: transform.translation.X + transform.scale*point.X,
+		Y: transform.translation.Y + transform.scale*point.Y,
 	}
-
-	mesh, err := canonicalizeGeometry(islandID, sites, geometry)
-	if err != nil {
-		return islandMesh{}, fmt.Errorf("island %d: %w", islandID, err)
-	}
-	return mesh, nil
 }
 
+// transformMesh returns a deep copy of mesh with every corner and cell center
+// mapped through transform. Topology is unchanged.
+func transformMesh(mesh islandMesh, transform uniformTransform) islandMesh {
+	transformed := mesh
+	transformed.corners = make([]Point, len(mesh.corners))
+	for cornerID, corner := range mesh.corners {
+		transformed.corners[cornerID] = transform.point(corner)
+	}
+	transformed.cells = make([]meshCell, len(mesh.cells))
+	for cellID, cell := range mesh.cells {
+		transformed.cells[cellID] = cell
+		transformed.cells[cellID].center = transform.point(cell.center)
+		transformed.cells[cellID].cornerIDs = append([]int(nil), cell.cornerIDs...)
+	}
+	transformed.edges = make([]meshEdge, len(mesh.edges))
+	for edgeID, edge := range mesh.edges {
+		transformed.edges[edgeID] = edge
+		transformed.edges[edgeID].siteIndexes = append([]int(nil), edge.siteIndexes...)
+	}
+	return transformed
+}
+
+// tessellateRectangle tessellates sites inside the width×height rectangle
+// with the origin at one corner. The backend runs on the unit square, so the
+// sites are normalized on the way in and the mesh is scaled back on the way
+// out; canonical corner and edge order is decided in normalized coordinates.
 func tessellateRectangle(islandID IslandID, sites []Point, width, height float64) (islandMesh, error) {
 	geometry, err := computeBackendGeometryInBounds(sites, width, height)
 	if err != nil {
@@ -127,12 +122,8 @@ func tessellateRectangle(islandID IslandID, sites []Point, width, height float64
 	return mesh, nil
 }
 
-// computeBackendGeometry isolates dependency-specific types and restores the
-// caller's site order after the backend sorts its copied input.
-func computeBackendGeometry(sites []Point) (backendGeometry, error) {
-	return computeBackendGeometryInBounds(sites, 1, 1)
-}
-
+// computeBackendGeometryInBounds isolates dependency-specific types and
+// restores the caller's site order after the backend sorts its copied input.
 func computeBackendGeometryInBounds(sites []Point, width, height float64) (backendGeometry, error) {
 	if len(sites) == 0 {
 		return backendGeometry{}, fmt.Errorf("at least one site is required")
@@ -382,10 +373,164 @@ func canonicalizeGeometry(islandID IslandID, sites []Point, geometry backendGeom
 	}
 
 	mesh := islandMesh{islandID: islandID, cells: cells, corners: corners, edges: edges}
-	if err := validateCompleteCandidateMesh(mesh); err != nil {
+	if err := validateCanonicalMesh(mesh); err != nil {
 		return islandMesh{}, err
 	}
 	return mesh, nil
+}
+
+// validateCanonicalMesh checks the canonical ordering, topology, and polygon
+// invariants of a normalized mesh: every corner and center inside the unit
+// square, corners and edges in strict order, every cell a convex
+// counterclockwise ring that starts at its lowest corner, contains its center,
+// and is bounded by consistent edges, interior edges traversed in opposite
+// directions, no orphaned corners, and cell areas summing to the unit square.
+func validateCanonicalMesh(mesh islandMesh) error {
+	if len(mesh.cells) == 0 {
+		return fmt.Errorf("mesh has no cells")
+	}
+	if len(mesh.corners) < 3 {
+		return fmt.Errorf("mesh has only %d corners", len(mesh.corners))
+	}
+
+	cornerInRing := make([]bool, len(mesh.corners))
+	cornerInEdge := make([]bool, len(mesh.corners))
+	for cornerID, point := range mesh.corners {
+		if !finitePoint(point) || !pointInUnitSquare(point) {
+			return fmt.Errorf("corner %d is outside the finite unit square: %+v", cornerID, point)
+		}
+		if cornerID > 0 && !pointLess(mesh.corners[cornerID-1], point) {
+			return fmt.Errorf("corners %d and %d are not in strict canonical order", cornerID-1, cornerID)
+		}
+	}
+
+	edgeByCorners := make(map[[2]int]int, len(mesh.edges))
+	for edgeID, edge := range mesh.edges {
+		first, second := edge.cornerIDs[0], edge.cornerIDs[1]
+		if first < 0 || second >= len(mesh.corners) || first >= second {
+			return fmt.Errorf("edge %d has invalid canonical corners %v", edgeID, edge.cornerIDs)
+		}
+		if edgeID > 0 && !edgePairLess(mesh.edges[edgeID-1].cornerIDs, edge.cornerIDs) {
+			return fmt.Errorf("edges %d and %d are not in strict canonical order", edgeID-1, edgeID)
+		}
+		if pointDistance(mesh.corners[first], mesh.corners[second]) <= geometryTolerance {
+			return fmt.Errorf("edge %d has non-positive length within tolerance", edgeID)
+		}
+		if len(edge.siteIndexes) < 1 || len(edge.siteIndexes) > 2 {
+			return fmt.Errorf("edge %d has %d incident cells", edgeID, len(edge.siteIndexes))
+		}
+		for incidenceIndex, cellID := range edge.siteIndexes {
+			if cellID < 0 || cellID >= len(mesh.cells) {
+				return fmt.Errorf("edge %d refers to unknown cell %d", edgeID, cellID)
+			}
+			if incidenceIndex > 0 && edge.siteIndexes[incidenceIndex-1] >= cellID {
+				return fmt.Errorf("edge %d has non-canonical incidence %v", edgeID, edge.siteIndexes)
+			}
+		}
+		cornerInEdge[first] = true
+		cornerInEdge[second] = true
+		edgeByCorners[edge.cornerIDs] = edgeID
+	}
+
+	totalArea := 0.0
+	edgeTraversals := make([][][2]int, len(mesh.edges))
+	for cellID, cell := range mesh.cells {
+		if cell.siteIndex != cellID {
+			return fmt.Errorf("cell %d has site index %d", cellID, cell.siteIndex)
+		}
+		if !finitePoint(cell.center) || !pointInUnitSquare(cell.center) {
+			return fmt.Errorf("cell %d has center outside the finite unit square: %+v", cellID, cell.center)
+		}
+		if len(cell.cornerIDs) < 3 {
+			return fmt.Errorf("cell %d has only %d corners", cellID, len(cell.cornerIDs))
+		}
+		if cell.cornerIDs[0] != minimumInt(cell.cornerIDs) {
+			return fmt.Errorf("cell %d does not start at its lowest corner ID", cellID)
+		}
+
+		ring := make([]Point, len(cell.cornerIDs))
+		seenCorners := make(map[int]struct{}, len(cell.cornerIDs))
+		for ringIndex, cornerID := range cell.cornerIDs {
+			if cornerID < 0 || cornerID >= len(mesh.corners) {
+				return fmt.Errorf("cell %d refers to unknown corner %d", cellID, cornerID)
+			}
+			if _, exists := seenCorners[cornerID]; exists {
+				return fmt.Errorf("cell %d repeats corner %d", cellID, cornerID)
+			}
+			seenCorners[cornerID] = struct{}{}
+			cornerInRing[cornerID] = true
+			ring[ringIndex] = mesh.corners[cornerID]
+
+			next := cell.cornerIDs[(ringIndex+1)%len(cell.cornerIDs)]
+			edgeID, exists := edgeByCorners[orderedPair(cornerID, next)]
+			if !exists {
+				return fmt.Errorf("cell %d segment %d->%d has no edge", cellID, cornerID, next)
+			}
+			if !containsInt(mesh.edges[edgeID].siteIndexes, cellID) {
+				return fmt.Errorf("cell %d segment edge %d has inconsistent incidence", cellID, edgeID)
+			}
+			edgeTraversals[edgeID] = append(edgeTraversals[edgeID], [2]int{cornerID, next})
+		}
+
+		area := signedArea(ring)
+		if area <= geometryTolerance {
+			return fmt.Errorf("cell %d has non-positive area %g", cellID, area)
+		}
+		totalArea += area
+		for ringIndex, point := range ring {
+			next := ring[(ringIndex+1)%len(ring)]
+			after := ring[(ringIndex+2)%len(ring)]
+			if pointCross(point, next, after) < -geometryTolerance {
+				return fmt.Errorf("cell %d is not convex and counterclockwise at corner %d", cellID, ringIndex)
+			}
+			if pointCross(point, next, cell.center) < -geometryTolerance {
+				return fmt.Errorf("cell %d does not contain its generating center", cellID)
+			}
+		}
+	}
+
+	if math.Abs(totalArea-1) > geometryTolerance {
+		return fmt.Errorf("cell areas sum to %.17g, want 1", totalArea)
+	}
+	for edgeID, edge := range mesh.edges {
+		traversals := edgeTraversals[edgeID]
+		if len(traversals) != len(edge.siteIndexes) {
+			return fmt.Errorf("edge %d has %d polygon traversals for %d incident cells", edgeID, len(traversals), len(edge.siteIndexes))
+		}
+		if len(traversals) == 2 && (traversals[0][0] != traversals[1][1] || traversals[0][1] != traversals[1][0]) {
+			return fmt.Errorf("edge %d is not traversed in opposite directions", edgeID)
+		}
+	}
+	for cornerID := range mesh.corners {
+		if !cornerInRing[cornerID] || !cornerInEdge[cornerID] {
+			return fmt.Errorf("corner %d is orphaned", cornerID)
+		}
+	}
+	return nil
+}
+
+// pointCross returns twice the signed area of the triangle first, second,
+// third: positive when third lies to the left of the directed segment from
+// first to second.
+func pointCross(first, second, third Point) float64 {
+	return (second.X-first.X)*(third.Y-first.Y) - (second.Y-first.Y)*(third.X-first.X)
+}
+
+func edgePairLess(first, second [2]int) bool {
+	if first[0] != second[0] {
+		return first[0] < second[0]
+	}
+	return first[1] < second[1]
+}
+
+func minimumInt(values []int) int {
+	minimum := values[0]
+	for _, value := range values[1:] {
+		if value < minimum {
+			minimum = value
+		}
+	}
+	return minimum
 }
 
 func orderedPair(first, second int) [2]int {

@@ -28,8 +28,6 @@ Doc SVG galleries are golden outputs produced by tests; regenerate them with an 
 
 ```sh
 WGVC_UPDATE_SINGLE_MESH_GALLERY=1 go test -run TestSingleMeshIslandGallery   # docs/blob-islands.svg
-WGVC_UPDATE_TILE_EXPERIMENT=1    go test -run TestCenteredIslandTileGallery  # docs/tile-experiment.svg
-WGVC_UPDATE_BLOB_SVG=1           go test -run TestCandidateBlobContactSheet  # docs/blob-selection.svg
 WGVC_UPDATE_TERRAIN_LEGEND=1     go test -run TestTerrainLegend ./cmd/generate  # docs/references/terrain-legend.png
 ```
 
@@ -57,9 +55,9 @@ WGVC_UPDATE_TERRAIN_LEGEND=1     go test -run TestTerrainLegend ./cmd/generate  
 - Worlds are bit-identical across CPU architectures (`TestGenerateMatchesRecordedHash` guards this with recorded hashes). Go fuses `x*y + z` into one rounding on arm64 but not amd64, so wrap every product that feeds an addition or subtraction in an explicit `float64(...)` conversion, and use `internal/fmath` instead of `math.Hypot`, `math.Atan2`, or `math.Exp`, whose standard-library versions differ by architecture. After an intentional generator change, rerun the hash test with `WGVC_PRINT_WORLD_HASH=1` on both architectures and record the shared value.
 - `docs/generation.md` documents the public contracts (coordinates, topology, JSON schema); keep it and README in sync with behavior changes.
 
-### Legacy code
+### Retired code
 
-`allocation.go`, `placement.go`, `blob_selection.go`, `seeds.go`, `retained_mesh.go`, and the multi-mesh parts of `geometry.go` belong to an earlier per-island tile pipeline. They are reached only from tests (and the doc galleries above), not from `Generate`, apart from shared helpers such as `transformMesh`/`uniformTransform` and the tessellation code.
+The per-island tile pipeline that preceded x24 was removed in v0.8.10 (issue #59). Its decision records live under `docs/history/`; `random.go` lists its retired random domain values so a new stage does not reuse one.
 
 ### CLI (`cmd/generate`)
 

@@ -653,8 +653,8 @@ func TestNegativeWeightSitesAreRepulsors(t *testing.T) {
 	if got := constellation.starSites(); !reflect.DeepEqual(got, []int{0, 2}) {
 		t.Errorf("starSites() = %v, want [0 2]", got)
 	}
-	if got := constellation.repulsorSites(); !reflect.DeepEqual(got, []int{1}) {
-		t.Errorf("repulsorSites() = %v, want [1]", got)
+	if got := constellation.weight(1); got >= 0 {
+		t.Errorf("weight(1) = %v, want negative (a repulsor)", got)
 	}
 	if got := islandWeights(constellation, 3); !reflect.DeepEqual(got, []float64{2, 1, 1}) {
 		t.Errorf("islandWeights(3) = %v, want [2 1 1] (site 2 defaults to 1, extra island weighs 1)", got)
@@ -696,8 +696,14 @@ func TestSubaruMainlandFormsOneLandmass(t *testing.T) {
 	if len(result.Islands) != groups {
 		t.Errorf("subaru produced %d landmasses, want one per kin group: %d", len(result.Islands), groups)
 	}
-	if len(result.Repulsors) != len(constellation.repulsorSites()) {
-		t.Errorf("subaru placed %d repulsors, want %d", len(result.Repulsors), len(constellation.repulsorSites()))
+	repulsors := 0
+	for site := range constellation.Sites {
+		if constellation.weight(site) < 0 {
+			repulsors++
+		}
+	}
+	if len(result.Repulsors) != repulsors {
+		t.Errorf("subaru placed %d repulsors, want %d", len(result.Repulsors), repulsors)
 	}
 	for _, repulsor := range result.Repulsors {
 		if repulsor.Strength <= 0 || repulsor.Strength > 1 {
@@ -756,7 +762,7 @@ func TestConstellationSeedsIslandsOnStarCells(t *testing.T) {
 func TestEveryConstellationIsWellFormed(t *testing.T) {
 	for _, name := range ConstellationNames() {
 		constellation, ok := ConstellationByName(name)
-		if !ok || constellation.Name != name {
+		if !ok {
 			t.Errorf("constellation %q is not retrievable by its name", name)
 			continue
 		}

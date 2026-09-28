@@ -9,7 +9,6 @@ import (
 // longer extent spanning the full range. Placement scales the frame uniformly
 // to fit the map, so the shape keeps its proportions on any aspect ratio.
 type Constellation struct {
-	Name string
 	// AspectRatio is the map shape the figure is drawn for. The generate
 	// command uses it when -aspect is not given.
 	AspectRatio string
@@ -49,17 +48,6 @@ func (c Constellation) starSites() []int {
 	return stars
 }
 
-// repulsorSites lists the sites with negative weight, in order.
-func (c Constellation) repulsorSites() []int {
-	repulsors := make([]int, 0)
-	for site := range c.Sites {
-		if c.weight(site) < 0 {
-			repulsors = append(repulsors, site)
-		}
-	}
-	return repulsors
-}
-
 // constellations maps a -attractors name to its sites. Positions come from
 // the stars' right ascension and declination projected onto the celestial
 // pole, rotated so the figure's long axis lies west to east.
@@ -68,7 +56,6 @@ var constellations = map[string]Constellation{
 	// end through Yildun and epsilon to zeta, and the bowl is zeta, eta,
 	// Pherkad, and Kochab.
 	"ursa-minor": {
-		Name:        "ursa-minor",
 		AspectRatio: "2:1",
 		Sites: []Point{
 			{X: -1.00, Y: -0.01}, // Polaris
@@ -85,7 +72,6 @@ var constellations = map[string]Constellation{
 	// Gienah, Sadr, and delta to iota. Kappa is omitted because it sits too
 	// close to iota for two islands.
 	"cygnus": {
-		Name:        "cygnus",
 		AspectRatio: "3:2",
 		Sites: []Point{
 			{X: -0.03, Y: 0.76},  // Deneb
@@ -104,7 +90,6 @@ var constellations = map[string]Constellation{
 	// back up through Heze to tau; the tail runs from Heze through Syrma to
 	// mu in the west.
 	"virgo": {
-		Name:        "virgo",
 		AspectRatio: "2:1",
 		Sites: []Point{
 			{X: 1.00, Y: 0.09},   // Zavijava
@@ -130,7 +115,6 @@ var constellations = map[string]Constellation{
 	// to the northern island. Sites are ordered so the mainland is seeded
 	// first when fewer islands are asked for than stars.
 	"subaru": {
-		Name:        "subaru",
 		AspectRatio: "5:2",
 		Sites: []Point{
 			{X: -0.59, Y: -0.25}, // mainland, west end
@@ -182,7 +166,6 @@ var constellations = map[string]Constellation{
 	// joined at 86% ocean; and the tail tapers by weight. The whole dragon
 	// is one kin group.
 	"draco": {
-		Name:        "draco",
 		AspectRatio: "16:9",
 		Ocean:       0.86,
 		Sites: []Point{
@@ -235,7 +218,6 @@ var constellations = map[string]Constellation{
 	// and the tail shortened to fit, and body sites are spaced every 0.30 of
 	// the frame so the beads stay distinct at 84% ocean.
 	"aster": {
-		Name:        "aster",
 		AspectRatio: "16:9",
 		Ocean:       0.84,
 		Sites: []Point{
