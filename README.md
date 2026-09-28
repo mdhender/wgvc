@@ -213,9 +213,13 @@ Use `-format png` for `world.png`, `-format json` for `world.json`, or
 as `-format svg,json` select any combination, and `-format all` writes all three
 files. The `-output` value is a path without an extension. SVG and PNG dimensions
 are derived from the requested land-province count, the effective ocean
-percentage, and the aspect ratio. Both image formats use the same terrain fills,
-thin cell borders, heavier coastline, and blue river lines whose width follows
-the flow on each edge.
+percentage, and the aspect ratio, then multiplied by `-scale`, which defaults
+to 3. The scale also multiplies the margin and every stroke width, so a scaled
+map is the unscaled map drawn at a higher resolution; the default keeps the
+anti-aliased fringe on a border a small fraction of the line, and `-scale 1`
+restores the earlier one-pixel borders. Both image formats use the same terrain
+fills, thin cell borders, heavier coastline, and blue river lines whose width
+follows the flow on each edge.
 The `-aspect` flag accepts `landscape`, `portrait`, `widescreen`, and
 `cinematic` as aliases for their corresponding numeric ratios.
 

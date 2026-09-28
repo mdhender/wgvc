@@ -154,7 +154,11 @@ terrain and the `features` collection (`id`, `kind`, `island_ids`,
 `province_ids`).
 
 JSON uses Cartesian generation coordinates rather than the transformed pixel
-coordinates used by image renderers. Use a comma-separated format such as
+coordinates used by image renderers. Image dimensions are derived from the land
+count, effective ocean fraction, and aspect ratio, then multiplied by the
+`-scale` pixel scale (default 3) together with the margin and every stroke
+width, so the pixel grid of a map at one scale is that of the same map at scale
+1 magnified uniformly. Use a comma-separated format such as
 `-format svg,json` to export world data with an image, or `-format all` for SVG,
 PNG, and JSON. The existing `-format both` remains an SVG-and-PNG alias.
 

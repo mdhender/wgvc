@@ -82,11 +82,11 @@ func TestPartialMapKeepsFullMapScaleAndFogsTheRest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	width, height, err := renderDimensions(97, 0.68, "")
+	width, height, err := renderDimensions(97, 0.68, "", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	full, err := buildScene(world, width, height, layerTerrain, nil)
+	full, err := buildScene(world, width, height, 1, layerTerrain, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestPartialMapKeepsFullMapScaleAndFogsTheRest(t *testing.T) {
 			selected[exit.NeighborID] = true
 		}
 	}
-	partial, err := buildScene(world, width, height, layerTerrain, selected)
+	partial, err := buildScene(world, width, height, 1, layerTerrain, selected)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func TestRunRendersPartialMap(t *testing.T) {
 	if _, err := fmt.Sscanf(string(data), `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d"`, &width, &height); err != nil {
 		t.Fatalf("parse SVG dimensions: %v", err)
 	}
-	fullWidth, fullHeight, err := renderDimensions(60, 0.68, "")
+	fullWidth, fullHeight, err := renderDimensions(60, 0.68, "", defaultPixelScale)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -33,6 +33,7 @@ type options struct {
 	peakChillPercent float64
 	format           string
 	pretty           bool
+	scale            float64
 	layer            string
 	region           string
 	selectIDs        string
@@ -125,6 +126,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		polarIcePercent:  climateDefaults.PolarIce * 100,
 		peakChillPercent: climateDefaults.PeakChill * 100,
 		format:           formatSVG,
+		scale:            defaultPixelScale,
 		layer:            string(layerTerrain),
 		outputBase:       "world",
 	}
@@ -149,6 +151,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Float64Var(&options.peakChillPercent, "peak-chill", options.peakChillPercent, "target percentage of warm-region high peaks classified cold or colder")
 	flags.StringVar(&options.format, "format", options.format, "output format: svg, png, json, both, all, or a comma-separated combination")
 	flags.BoolVar(&options.pretty, "pretty", false, "indent the JSON export for reading; the default is compact")
+	flags.Float64Var(&options.scale, "scale", options.scale, "pixel scale for SVG and PNG: multiplies the derived image size, margin, and every stroke width")
 	flags.StringVar(&options.layer, "layer", options.layer, "field that colors SVG and PNG provinces: terrain, elevation, relief, heat, moisture, or climate")
 	flags.StringVar(&options.region, "region", "", "render only provinces centered in this world-coordinate box: minx,miny,maxx,maxy")
 	flags.StringVar(&options.selectIDs, "select", "", "render only these comma-separated province IDs")
@@ -219,7 +222,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	var width, height int
 	var scene renderScene
 	if formats.svg || formats.png {
-		width, height, err = renderDimensions(options.config.ProvinceCount, result.FinalOcean, options.config.AspectRatio)
+		width, height, err = renderDimensions(options.config.ProvinceCount, result.FinalOcean, options.config.AspectRatio, options.scale)
 		if err != nil {
 			return fmt.Errorf("derive render dimensions: %w", err)
 		}
@@ -227,7 +230,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		scene, err = buildScene(world, width, height, layer, selected)
+		scene, err = buildScene(world, width, height, options.scale, layer, selected)
 		if err != nil {
 			return fmt.Errorf("build render scene: %w", err)
 		}
@@ -304,15 +307,21 @@ func parseOutputFormats(value string) (outputFormats, error) {
 	return formats, nil
 }
 
-func renderDimensions(provinceCount int, oceanPercentage float64, aspect string) (int, int, error) {
+// renderDimensions derives the image size from the land province count, the
+// effective ocean fraction, and the aspect ratio, then multiplies it by the
+// pixel scale so the whole map, margin included, is drawn at that resolution.
+func renderDimensions(provinceCount int, oceanPercentage float64, aspect string, scale float64) (int, int, error) {
 	unitWidth, unitHeight, err := aspectratio.Dimensions(aspect)
 	if err != nil {
 		return 0, 0, err
 	}
+	if !(scale > 0) || math.IsInf(scale, 1) {
+		return 0, 0, fmt.Errorf("pixel scale %g must be a positive finite number", scale)
+	}
 	cellCount := math.Ceil(float64(provinceCount) / (1 - oceanPercentage))
 	linearScale := pixelsPerCell * math.Sqrt(cellCount)
-	width := max(minimumImageSize, int(math.Ceil(unitWidth*linearScale+2*imageMargin)))
-	height := max(minimumImageSize, int(math.Ceil(unitHeight*linearScale+2*imageMargin)))
+	width := max(minimumImageSize, int(math.Ceil((unitWidth*linearScale+2*imageMargin)*scale)))
+	height := max(minimumImageSize, int(math.Ceil((unitHeight*linearScale+2*imageMargin)*scale)))
 	return width, height, nil
 }
 

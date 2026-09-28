@@ -12,11 +12,15 @@ import (
 	"github.com/mdhender/wgvc"
 )
 
+// The margin and stroke widths are expressed at a pixel scale of 1; a scene
+// multiplies them by its scale so a scaled map is the unscaled map drawn at
+// a higher resolution.
 const (
-	minimumImageSize = 64
-	imageMargin      = 24.0
-	cellBorderWidth  = 1.0
-	coastlineWidth   = 2.5
+	minimumImageSize  = 64
+	imageMargin       = 24.0
+	cellBorderWidth   = 1.0
+	coastlineWidth    = 2.5
+	defaultPixelScale = 3.0
 )
 
 // Map colors are held as color values and formatted as hex only where the
@@ -97,25 +101,32 @@ type renderRiverSegment struct {
 // renderScene is the resolved drawing: polygons carry their fill, borders
 // list every edge of a drawn polygon exactly once so the raster path strokes
 // each shared border a single time, and coastlines and rivers overlay them.
+// scale is the pixel scale the scene was laid out at; stroke widths are
+// multiplied by it when the scene is drawn.
 type renderScene struct {
 	width      int
 	height     int
+	scale      float64
 	polygons   []renderPolygon
 	borders    []renderLine
 	coastlines []renderLine
 	rivers     []renderRiverSegment
 }
 
-// buildScene lays out the whole world at the given image size. With a
-// non-nil selected slice it instead produces a partial map: the image is
+// buildScene lays out the whole world at the given image size and pixel
+// scale, which must be positive and is the factor the image dimensions were
+// scaled by so that the margin scales with them. With a non-nil selected slice it instead produces a partial map: the image is
 // cropped to the selected provinces plus the usual margin, at exactly the
 // full map's scale and on its pixel grid, so partial maps of one world line
 // up with each other and with the full map. Unselected provinces that fall
 // inside the crop are drawn as fog with borders but no fill, coastline, or
 // river.
-func buildScene(world wgvc.World, width, height int, layer mapLayer, selected []bool) (renderScene, error) {
+func buildScene(world wgvc.World, width, height int, scale float64, layer mapLayer, selected []bool) (renderScene, error) {
 	if width < minimumImageSize || height < minimumImageSize {
 		return renderScene{}, fmt.Errorf("width and height must each be at least %d pixels", minimumImageSize)
+	}
+	if !(scale > 0) || math.IsInf(scale, 1) {
+		return renderScene{}, fmt.Errorf("pixel scale must be a positive finite number")
 	}
 	if len(world.Corners) == 0 || len(world.Provinces) == 0 {
 		return renderScene{}, fmt.Errorf("world has no renderable geometry")
@@ -134,17 +145,18 @@ func buildScene(world wgvc.World, width, height int, layer mapLayer, selected []
 	if worldWidth <= 0 || worldHeight <= 0 || math.IsNaN(worldWidth) || math.IsNaN(worldHeight) {
 		return renderScene{}, fmt.Errorf("world bounds are not finite and positive")
 	}
-	scale := math.Min(
-		(float64(width)-2*imageMargin)/worldWidth,
-		(float64(height)-2*imageMargin)/worldHeight,
+	margin := imageMargin * scale
+	unitsToPixels := math.Min(
+		(float64(width)-2*margin)/worldWidth,
+		(float64(height)-2*margin)/worldHeight,
 	)
-	xOffset := (float64(width) - worldWidth*scale) / 2
-	yOffset := (float64(height) - worldHeight*scale) / 2
+	xOffset := (float64(width) - worldWidth*unitsToPixels) / 2
+	yOffset := (float64(height) - worldHeight*unitsToPixels) / 2
 	fullHeight := float64(height)
 	fullTransform := func(point wgvc.Point) renderPoint {
 		return renderPoint{
-			x: xOffset + (point.X-minimum.X)*scale,
-			y: fullHeight - yOffset - (point.Y-minimum.Y)*scale,
+			x: xOffset + (point.X-minimum.X)*unitsToPixels,
+			y: fullHeight - yOffset - (point.Y-minimum.Y)*unitsToPixels,
 		}
 	}
 	transform := fullTransform
@@ -168,17 +180,17 @@ func buildScene(world wgvc.World, width, height int, layer mapLayer, selected []
 		if math.IsInf(cropMinX, 1) {
 			return renderScene{}, fmt.Errorf("selection contains no province")
 		}
-		originX := math.Floor(math.Max(0, cropMinX-imageMargin))
-		originY := math.Floor(math.Max(0, cropMinY-imageMargin))
-		width = int(math.Ceil(math.Min(float64(width), cropMaxX+imageMargin))) - int(originX)
-		height = int(math.Ceil(math.Min(float64(height), cropMaxY+imageMargin))) - int(originY)
+		originX := math.Floor(math.Max(0, cropMinX-margin))
+		originY := math.Floor(math.Max(0, cropMinY-margin))
+		width = int(math.Ceil(math.Min(float64(width), cropMaxX+margin))) - int(originX)
+		height = int(math.Ceil(math.Min(float64(height), cropMaxY+margin))) - int(originY)
 		transform = func(point wgvc.Point) renderPoint {
 			full := fullTransform(point)
 			return renderPoint{x: full.x - originX, y: full.y - originY}
 		}
 	}
 
-	scene := renderScene{width: width, height: height, polygons: make([]renderPolygon, 0, len(world.Provinces))}
+	scene := renderScene{width: width, height: height, scale: scale, polygons: make([]renderPolygon, 0, len(world.Provinces))}
 	drawn := make([]bool, len(world.Provinces))
 	for _, province := range world.Provinces {
 		if len(province.CornerIDs) < 3 {
@@ -264,7 +276,7 @@ func buildScene(world wgvc.World, width, height int, layer mapLayer, selected []
 				return renderScene{}, fmt.Errorf("river %d edge %d has discharge %g below the stream threshold", river.ID, edgeID, edge.Discharge)
 			}
 			scene.rivers = append(scene.rivers, renderRiverSegment{
-				width: width,
+				width: width * scale,
 				line: renderLine{
 					start: transform(world.Corners[edge.CornerIDs[0]].Point),
 					end:   transform(world.Corners[edge.CornerIDs[1]].Point),
@@ -289,14 +301,14 @@ func renderSVG(scene renderScene) ([]byte, error) {
 	fmt.Fprintf(&svg, "<rect width=\"%d\" height=\"%d\" fill=\"%s\"/>\n", scene.width, scene.height, hexColor(backgroundColor))
 	borderHex := hexColor(cellBorderColor)
 	for _, polygon := range scene.polygons {
-		fmt.Fprintf(&svg, "<polygon fill=\"%s\" stroke=\"%s\" stroke-width=\"%.1f\" stroke-linejoin=\"round\" points=\"", hexColor(polygon.fill), borderHex, cellBorderWidth)
+		fmt.Fprintf(&svg, "<polygon fill=\"%s\" stroke=\"%s\" stroke-width=\"%.1f\" stroke-linejoin=\"round\" points=\"", hexColor(polygon.fill), borderHex, cellBorderWidth*scene.scale)
 		for _, point := range polygon.points {
 			fmt.Fprintf(&svg, "%.3f,%.3f ", point.x, point.y)
 		}
 		svg.WriteString("\"/>\n")
 	}
 	for _, coastline := range scene.coastlines {
-		fmt.Fprintf(&svg, "<line stroke=\"%s\" stroke-width=\"%.1f\" stroke-linecap=\"round\" x1=\"%.3f\" y1=\"%.3f\" x2=\"%.3f\" y2=\"%.3f\"/>\n", hexColor(coastlineColor), coastlineWidth, coastline.start.x, coastline.start.y, coastline.end.x, coastline.end.y)
+		fmt.Fprintf(&svg, "<line stroke=\"%s\" stroke-width=\"%.1f\" stroke-linecap=\"round\" x1=\"%.3f\" y1=\"%.3f\" x2=\"%.3f\" y2=\"%.3f\"/>\n", hexColor(coastlineColor), coastlineWidth*scene.scale, coastline.start.x, coastline.start.y, coastline.end.x, coastline.end.y)
 	}
 	for _, river := range scene.rivers {
 		fmt.Fprintf(&svg, "<line class=\"river\" stroke=\"%s\" stroke-width=\"%.1f\" stroke-linecap=\"round\" x1=\"%.3f\" y1=\"%.3f\" x2=\"%.3f\" y2=\"%.3f\"/>\n", hexColor(riverColor), river.width, river.line.start.x, river.line.start.y, river.line.end.x, river.line.end.y)
@@ -322,13 +334,13 @@ func renderPNG(scene renderScene) ([]byte, error) {
 		canvas.Fill()
 	}
 	canvas.SetColor(cellBorderColor)
-	canvas.SetLineWidth(cellBorderWidth)
+	canvas.SetLineWidth(cellBorderWidth * scene.scale)
 	for _, border := range scene.borders {
 		canvas.DrawLine(border.start.x, border.start.y, border.end.x, border.end.y)
 		canvas.Stroke()
 	}
 	canvas.SetColor(coastlineColor)
-	canvas.SetLineWidth(coastlineWidth)
+	canvas.SetLineWidth(coastlineWidth * scene.scale)
 	for _, coastline := range scene.coastlines {
 		canvas.DrawLine(coastline.start.x, coastline.start.y, coastline.end.x, coastline.end.y)
 		canvas.Stroke()

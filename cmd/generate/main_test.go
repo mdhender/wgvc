@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/png"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,7 +83,7 @@ func TestRenderDimensionsComeFromProvinceCountOceanAndAspect(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			width, height, err := renderDimensions(test.provinces, test.ocean, test.aspect)
+			width, height, err := renderDimensions(test.provinces, test.ocean, test.aspect, 1)
 			if err != nil {
 				t.Fatalf("renderDimensions() error = %v", err)
 			}
@@ -90,6 +91,68 @@ func TestRenderDimensionsComeFromProvinceCountOceanAndAspect(t *testing.T) {
 				t.Errorf("renderDimensions() = %d×%d, want %d×%d", width, height, test.wantWidth, test.wantHeight)
 			}
 		})
+	}
+}
+
+func TestRenderDimensionsMultiplyByPixelScale(t *testing.T) {
+	baseWidth, baseHeight, err := renderDimensions(100, 0.75, "16:9", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	width, height, err := renderDimensions(100, 0.75, "16:9", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The scaled size is rounded up once, after scaling, so it can fall short
+	// of three times the rounded-up base size by at most the scale.
+	if width > 3*baseWidth || width < 3*baseWidth-3 || height > 3*baseHeight || height < 3*baseHeight-3 {
+		t.Errorf("renderDimensions(scale 3) = %d×%d, want about %d×%d", width, height, 3*baseWidth, 3*baseHeight)
+	}
+	for _, scale := range []float64{0, -1, math.Inf(1), math.NaN()} {
+		if _, _, err := renderDimensions(100, 0.75, "16:9", scale); err == nil {
+			t.Errorf("renderDimensions(scale %g) accepted an invalid scale", scale)
+		}
+	}
+}
+
+func TestSceneScaleMultipliesMarginAndStrokeWidths(t *testing.T) {
+	world, err := wgvc.Generate(wgvc.Config{WorldSeed: 7, ProvinceCount: 40, IslandCount: 2, AspectRatio: "1:1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, err := buildScene(world, 480, 360, 1, layerTerrain, nil)
+	if err != nil {
+		t.Fatalf("buildScene(scale 1) error = %v", err)
+	}
+	scaled, err := buildScene(world, 960, 720, 2, layerTerrain, nil)
+	if err != nil {
+		t.Fatalf("buildScene(scale 2) error = %v", err)
+	}
+	if len(scaled.polygons) != len(base.polygons) || len(scaled.rivers) != len(base.rivers) {
+		t.Fatalf("scaled scene has %d polygons and %d rivers, want %d and %d", len(scaled.polygons), len(scaled.rivers), len(base.polygons), len(base.rivers))
+	}
+	for i, polygon := range base.polygons {
+		for j, point := range polygon.points {
+			got := scaled.polygons[i].points[j]
+			if math.Abs(got.x-2*point.x) > 1e-6 || math.Abs(got.y-2*point.y) > 1e-6 {
+				t.Fatalf("polygon %d point %d = (%g,%g), want (%g,%g)", i, j, got.x, got.y, 2*point.x, 2*point.y)
+			}
+		}
+	}
+	for i, river := range base.rivers {
+		if scaled.rivers[i].width != 2*river.width {
+			t.Fatalf("river %d width = %g, want %g", i, scaled.rivers[i].width, 2*river.width)
+		}
+	}
+	svg, err := renderSVG(scaled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(svg), fmt.Sprintf(`stroke-width="%.1f" stroke-linejoin`, 2*cellBorderWidth)) {
+		t.Errorf("scaled SVG does not stroke borders at %.1f", 2*cellBorderWidth)
+	}
+	if _, err := buildScene(world, 480, 360, 0, layerTerrain, nil); err == nil {
+		t.Error("buildScene accepted a zero scale")
 	}
 }
 
@@ -106,7 +169,7 @@ func TestRunSVGUsesDerivedDimensionsAndTerrainColors(t *testing.T) {
 	if _, err := fmt.Sscanf(string(data), `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d"`, &width, &height); err != nil {
 		t.Fatalf("parse SVG dimensions: %v", err)
 	}
-	wantWidth, wantHeight, err := renderDimensions(30, 0.5, "16:9")
+	wantWidth, wantHeight, err := renderDimensions(30, 0.5, "16:9", defaultPixelScale)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +207,7 @@ func TestRenderedPNGIsDeterministicAndKeepsCellBorders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
-	scene, err := buildScene(world, 480, 360, layerTerrain, nil)
+	scene, err := buildScene(world, 480, 360, 1, layerTerrain, nil)
 	if err != nil {
 		t.Fatalf("buildScene() error = %v", err)
 	}
@@ -352,7 +415,7 @@ func TestSceneListsEachBorderOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
-	full, err := buildScene(world, 480, 360, layerTerrain, nil)
+	full, err := buildScene(world, 480, 360, 1, layerTerrain, nil)
 	if err != nil {
 		t.Fatalf("buildScene() error = %v", err)
 	}
@@ -368,7 +431,7 @@ func TestSceneListsEachBorderOnce(t *testing.T) {
 	}
 	selected := make([]bool, len(world.Provinces))
 	selected[world.Islands[0].ProvinceIDs[0]] = true
-	partial, err := buildScene(world, 480, 360, layerTerrain, selected)
+	partial, err := buildScene(world, 480, 360, 1, layerTerrain, selected)
 	if err != nil {
 		t.Fatalf("buildScene(partial) error = %v", err)
 	}
