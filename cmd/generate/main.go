@@ -147,8 +147,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Var(rampFlag{values: &options.config.RepulsorRamp}, "repulsor-ramp", "comma-separated penalties by hop distance from a constellation repulsor at full strength")
 	flags.IntVar(&options.config.MaxRounds, "rounds", options.config.MaxRounds, "maximum generation rounds")
 	flags.IntVar(&options.config.Relaxations, "relaxations", options.config.Relaxations, "Lloyd relaxation passes per round")
-	flags.Float64Var(&options.polarIcePercent, "polar-ice", options.polarIcePercent, "target percentage of ocean provinces in the polar heat band")
-	flags.Float64Var(&options.peakChillPercent, "peak-chill", options.peakChillPercent, "target percentage of warm-region high peaks classified cold or colder")
+	flags.Float64Var(&options.polarIcePercent, "polar-ice", options.polarIcePercent, "target percentage of ocean provinces in the polar heat band; 0 asks for none")
+	flags.Float64Var(&options.peakChillPercent, "peak-chill", options.peakChillPercent, "target percentage of warm-region high peaks classified cold or colder; 0 asks for none")
 	flags.StringVar(&options.format, "format", options.format, "output format: svg, png, json, both, all, or a comma-separated combination")
 	flags.BoolVar(&options.pretty, "pretty", false, "indent the JSON export for reading; the default is compact")
 	flags.Float64Var(&options.scale, "scale", options.scale, "pixel scale for SVG and PNG: multiplies the derived image size, margin, and every stroke width")
@@ -205,12 +205,6 @@ func run(args []string, stdout, stderr io.Writer) error {
 	climateConfig := wgvc.ClimateConfig{
 		PolarIce:  options.polarIcePercent / 100,
 		PeakChill: options.peakChillPercent / 100,
-	}
-	if climateConfig.PolarIce == 0 {
-		climateConfig.PolarIce = climateDefaults.PolarIce
-	}
-	if climateConfig.PeakChill == 0 {
-		climateConfig.PeakChill = climateDefaults.PeakChill
 	}
 	world, result, err := wgvc.GenerateForRenderWithClimate(options.config, climateConfig)
 	if err != nil {

@@ -179,12 +179,16 @@ func TestGenerateDefaultWorldKeepsBestEffortHeatBands(t *testing.T) {
 }
 
 func TestClimateConfigValidationAndDefaults(t *testing.T) {
-	got, err := normalizeClimateConfig(ClimateConfig{})
-	if err != nil {
-		t.Fatalf("normalizeClimateConfig() error = %v", err)
+	// Config's zero values select the defaults, field by field.
+	if got, want := (Config{}).climateConfig(), DefaultClimateConfig(); got != want {
+		t.Errorf("zero Config climate = %+v, want defaults %+v", got, want)
 	}
-	if got != DefaultClimateConfig() {
-		t.Errorf("zero climate config = %+v, want defaults %+v", got, DefaultClimateConfig())
+	if got, want := (Config{PolarIce: 0.3}).climateConfig(), (ClimateConfig{PolarIce: 0.3, PeakChill: defaultPeakChill}); got != want {
+		t.Errorf("Config{PolarIce: 0.3} climate = %+v, want %+v", got, want)
+	}
+	// ClimateConfig is literal: zero is a valid target, not a sentinel.
+	if err := validateClimateConfig(ClimateConfig{}); err != nil {
+		t.Errorf("validateClimateConfig(zero) error = %v, want nil", err)
 	}
 	for _, config := range []ClimateConfig{
 		{PolarIce: -0.1},
@@ -194,10 +198,54 @@ func TestClimateConfigValidationAndDefaults(t *testing.T) {
 		{PeakChill: 1.1},
 		{PeakChill: math.Inf(1)},
 	} {
-		if _, err := normalizeClimateConfig(config); err == nil {
-			t.Errorf("normalizeClimateConfig(%+v) returned no error", config)
+		if err := validateClimateConfig(config); err == nil {
+			t.Errorf("validateClimateConfig(%+v) returned no error", config)
 		}
 	}
+}
+
+// TestZeroClimateTargetsAreHonored checks that GenerateForRenderWithClimate
+// takes a zero target literally (issue #64). The polar band is a fixed
+// population share that land alone cannot always fill, so a zero target need
+// not reach zero polar ocean, but it must move the calibration well below the
+// default target.
+func TestZeroClimateTargetsAreHonored(t *testing.T) {
+	growth := x24.DefaultConfig()
+	growth.WorldSeed = 42
+	growth.ProvinceCount = 300
+	growth.IslandCount = 4
+	defaults, _, err := GenerateForRenderWithClimate(growth, DefaultClimateConfig())
+	if err != nil {
+		t.Fatalf("GenerateForRenderWithClimate(defaults) error = %v", err)
+	}
+	iceFree, _, err := GenerateForRenderWithClimate(growth, ClimateConfig{PeakChill: defaultPeakChill})
+	if err != nil {
+		t.Fatalf("GenerateForRenderWithClimate(zero polar ice) error = %v", err)
+	}
+	defaultPolar, defaultOcean := countPolarOcean(defaults)
+	zeroPolar, zeroOcean := countPolarOcean(iceFree)
+	if defaultOcean != zeroOcean {
+		t.Fatalf("ocean count changed with the climate target: %d vs %d", defaultOcean, zeroOcean)
+	}
+	if defaultPolar == 0 {
+		t.Fatalf("default target produced no polar ocean out of %d", defaultOcean)
+	}
+	if zeroPolar*2 > defaultPolar {
+		t.Errorf("zero polar-ice target left %d polar ocean provinces, default target %d; want at most half", zeroPolar, defaultPolar)
+	}
+}
+
+func countPolarOcean(world World) (polar, ocean int) {
+	for _, province := range world.Provinces {
+		if province.IslandID != NoIslandID {
+			continue
+		}
+		ocean++
+		if province.HeatBand == HeatBandPolar {
+			polar++
+		}
+	}
+	return polar, ocean
 }
 
 // TestSelectHeatOrderMatchesSortedPrefix checks the quickselect against a

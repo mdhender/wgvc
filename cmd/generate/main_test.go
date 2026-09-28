@@ -297,6 +297,60 @@ func TestRunRejectsInvalidClimatePercentages(t *testing.T) {
 	}
 }
 
+// TestRunHonorsZeroClimateTargets checks that -polar-ice 0 reaches the
+// generator as a zero target instead of being replaced by the default
+// (issue #64): the JSON export echoes the target and the world has far fewer
+// polar ocean provinces than the default target gives.
+func TestRunHonorsZeroClimateTargets(t *testing.T) {
+	dir := t.TempDir()
+	polarOcean := func(name string, extra ...string) (fraction float64, polar int) {
+		t.Helper()
+		base := filepath.Join(dir, name)
+		args := append([]string{"-seed", "42", "-provinces", "300", "-islands", "4", "-format", "json", "-output", base}, extra...)
+		if err := run(args, io.Discard, io.Discard); err != nil {
+			t.Fatalf("run(%v) error = %v", args, err)
+		}
+		data, err := os.ReadFile(base + ".json")
+		if err != nil {
+			t.Fatalf("read %s: %v", base+".json", err)
+		}
+		var document struct {
+			Generation struct {
+				Config struct {
+					PolarIceFraction float64 `json:"polar_ice_fraction"`
+				} `json:"config"`
+			} `json:"generation"`
+			Provinces []struct {
+				IslandID wgvc.IslandID `json:"island_id"`
+				HeatBand string        `json:"heat_band"`
+			} `json:"provinces"`
+		}
+		if err := json.Unmarshal(data, &document); err != nil {
+			t.Fatalf("decode %s: %v", base+".json", err)
+		}
+		for _, province := range document.Provinces {
+			if province.IslandID == wgvc.NoIslandID && province.HeatBand == "polar" {
+				polar++
+			}
+		}
+		return document.Generation.Config.PolarIceFraction, polar
+	}
+	defaultFraction, defaultPolar := polarOcean("default")
+	if want := wgvc.DefaultClimateConfig().PolarIce; defaultFraction != want {
+		t.Errorf("default polar_ice_fraction = %g, want %g", defaultFraction, want)
+	}
+	zeroFraction, zeroPolar := polarOcean("ice-free", "-polar-ice", "0")
+	if zeroFraction != 0 {
+		t.Errorf("-polar-ice 0 exported polar_ice_fraction = %g, want 0", zeroFraction)
+	}
+	if defaultPolar == 0 {
+		t.Fatal("default target produced no polar ocean provinces")
+	}
+	if zeroPolar*2 > defaultPolar {
+		t.Errorf("-polar-ice 0 left %d polar ocean provinces, default %d; want at most half", zeroPolar, defaultPolar)
+	}
+}
+
 func assertOutputExists(t *testing.T, path string, want bool) {
 	t.Helper()
 	_, err := os.Stat(path)

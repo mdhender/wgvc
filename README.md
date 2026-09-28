@@ -306,8 +306,9 @@ go run ./cmd/generate -attractors 5 -output five-attractors
 The command exposes all growth controls, including `-ocean`, `-edge-barrier`,
 `-edge-ramp`, `-attractant-ramp`, `-attractant-jitter`, `-temperature`,
 `-rival-ramp`, `-repulsor-ramp`, `-rounds`, and `-relaxations`. Climate calibration is
-controlled by `-polar-ice` and `-peak-chill`, both expressed as percentages. Run
-`go run ./cmd/generate -h` for their defaults and descriptions. `-version`
+controlled by `-polar-ice` and `-peak-chill`, both expressed as percentages and
+taken literally: `-polar-ice 0` asks for an ice-free ocean rather than the
+default. Run `go run ./cmd/generate -h` for their defaults and descriptions. `-version`
 prints the generator version and exits; a built binary appends the commit it
 was built from as semver build metadata.
 
@@ -520,7 +521,8 @@ provinces piles up at either end. Water receives no elevation cooling.
 `Config.PolarIce` and `Config.PeakChill` are the calibration targets, as
 fractions, with zero values selecting the defaults: the share of ocean
 provinces in the polar band, and the share of high-latitude high-elevation land
-that is cold or polar. The generator searches `warmth` in `[0.25, 1]` and
+that is cold or polar. `GenerateForRenderWithClimate` takes a `ClimateConfig`
+literally, so a zero target there asks for none. The generator searches `warmth` in `[0.25, 1]` and
 `cooling` in `[0, 1]` for the pair whose fractions come within half a
 percentage point (or half a province) of both targets; among such pairs the
 strongest gradient wins, so the targets bound the gradient rather than being

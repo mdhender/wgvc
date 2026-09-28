@@ -21,8 +21,7 @@ func Generate(config Config) (World, error) {
 	growthConfig.ProvinceCount = config.ProvinceCount
 	growthConfig.IslandCount = config.IslandCount
 	growthConfig.AspectRatio = string(config.AspectRatio)
-	climateConfig, _ := normalizeClimateConfig(ClimateConfig{PolarIce: config.PolarIce, PeakChill: config.PeakChill})
-	world, _, err := generateForRender(growthConfig, climateConfig)
+	world, _, err := generateForRender(growthConfig, config.climateConfig())
 	return world, err
 }
 
@@ -33,10 +32,11 @@ func GenerateForRender(growthConfig x24.Config) (World, x24.Result, error) {
 }
 
 // GenerateForRenderWithClimate constructs a world using the renderer's full
-// growth configuration and explicit climate calibration targets.
+// growth configuration and explicit climate calibration targets. The targets
+// are used as given: a zero target asks for no polar ocean or no chilled
+// peaks rather than selecting the default.
 func GenerateForRenderWithClimate(growthConfig x24.Config, climateConfig ClimateConfig) (World, x24.Result, error) {
-	climateConfig, err := normalizeClimateConfig(climateConfig)
-	if err != nil {
+	if err := validateClimateConfig(climateConfig); err != nil {
 		return World{}, x24.Result{}, err
 	}
 	return generateForRender(growthConfig, climateConfig)
