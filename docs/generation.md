@@ -123,14 +123,24 @@ requested count. Water can contain interior components such as lakes.
 
 `go run ./cmd/generate -format json -output world` writes `world.json` as one
 compact line; `-pretty` writes the same document indented. The
-document has `schema_version: 10`, generator identity, generation configuration
-and effective result metadata, world-coordinate bounds, and the canonical `islands`,
+document has `schema_version: 11`, generator identity, generation configuration
+and effective result metadata, world-coordinate bounds, the
+`minimum_passable_edge_length`, and the canonical `islands`,
 `basins`, `provinces`, `corners`, `edges`, `rivers`, `sea_zones`, `straits`,
 `necks`, and `features` collections. It uses the same IDs
 and references described above. Water provinces retain `island_id: -1`, and
 provinces outside any basin have `basin_id: -1`; terrain and elevation, heat, and
 moisture bands use descriptive strings. The seed is a hexadecimal string to
 preserve the complete unsigned 64-bit value.
+
+`minimum_passable_edge_length` is a length in world units, currently 0.15,
+below which an edge between two provinces is not a border a player may cross.
+Voronoi tessellation produces some edges only a few percent of a province's
+width, which disappear under the border stroke on a rendered map. The mesh,
+`edges`, `exits`, and `rivers` include such edges unchanged so the geometry
+stays complete for drawing; a consumer that moves between provinces must
+ignore exits whose edge `length` is below this value, and treat the two
+provinces as no more adjacent than two that meet only at a corner.
 
 `generation.generator.version` is the semantic version of the generator without
 build metadata (for example `0.7.3-alpha`), so exports from different builds of
@@ -154,7 +164,9 @@ added each province's `coast_distance` and `sea_zone_id`, and the `sea_zones`
 province's `ocean_edges`, `basin_edges`, `shelter`, `river_ids`,
 `river_mouth_ids`, and `confluence_ids`. Schema version 9 added the `plateau`
 terrain and the `features` collection (`id`, `kind`, `island_ids`,
-`province_ids`).
+`province_ids`). Schema version 10 replaced `generation.config.control_penalty` with
+`rival_ramp`. Schema version 11 added the top-level
+`minimum_passable_edge_length`.
 
 JSON uses Cartesian generation coordinates rather than the transformed pixel
 coordinates used by image renderers. Image dimensions are derived from the land

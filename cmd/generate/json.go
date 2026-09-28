@@ -10,22 +10,26 @@ import (
 	"github.com/mdhender/wgvc/internal/x24"
 )
 
-const jsonSchemaVersion = 10
+const jsonSchemaVersion = 11
 
 type jsonWorld struct {
 	SchemaVersion int            `json:"schema_version"`
 	Generation    jsonGeneration `json:"generation"`
 	Bounds        jsonBounds     `json:"bounds"`
-	Islands       []jsonIsland   `json:"islands"`
-	Basins        []jsonBasin    `json:"basins"`
-	Provinces     []jsonProvince `json:"provinces"`
-	Corners       []jsonCorner   `json:"corners"`
-	Edges         []jsonEdge     `json:"edges"`
-	Rivers        []jsonRiver    `json:"rivers"`
-	SeaZones      []jsonSeaZone  `json:"sea_zones"`
-	Straits       []jsonStrait   `json:"straits"`
-	Necks         []jsonNeck     `json:"necks"`
-	Features      []jsonFeature  `json:"features"`
+	// MinimumPassableEdgeLength is wgvc.MinimumPassableEdgeLength: edges
+	// shorter than it are exported like any other but are not borders a
+	// player may cross.
+	MinimumPassableEdgeLength float64        `json:"minimum_passable_edge_length"`
+	Islands                   []jsonIsland   `json:"islands"`
+	Basins                    []jsonBasin    `json:"basins"`
+	Provinces                 []jsonProvince `json:"provinces"`
+	Corners                   []jsonCorner   `json:"corners"`
+	Edges                     []jsonEdge     `json:"edges"`
+	Rivers                    []jsonRiver    `json:"rivers"`
+	SeaZones                  []jsonSeaZone  `json:"sea_zones"`
+	Straits                   []jsonStrait   `json:"straits"`
+	Necks                     []jsonNeck     `json:"necks"`
+	Features                  []jsonFeature  `json:"features"`
 }
 
 type jsonFeature struct {
@@ -255,17 +259,18 @@ func writeJSON(output io.Writer, world wgvc.World, config x24.Config, climateCon
 				RepulsorProvinceIDs:   repulsorProvinceIDs(result),
 			},
 		},
-		Bounds:    bounds,
-		Islands:   make([]jsonIsland, len(world.Islands)),
-		Basins:    make([]jsonBasin, len(world.Basins)),
-		Provinces: make([]jsonProvince, len(world.Provinces)),
-		Corners:   make([]jsonCorner, len(world.Corners)),
-		Edges:     make([]jsonEdge, len(world.Edges)),
-		Rivers:    make([]jsonRiver, len(world.Rivers)),
-		SeaZones:  make([]jsonSeaZone, len(world.SeaZones)),
-		Straits:   make([]jsonStrait, len(world.Straits)),
-		Necks:     make([]jsonNeck, len(world.Necks)),
-		Features:  make([]jsonFeature, len(world.Features)),
+		Bounds:                    bounds,
+		MinimumPassableEdgeLength: wgvc.MinimumPassableEdgeLength,
+		Islands:                   make([]jsonIsland, len(world.Islands)),
+		Basins:                    make([]jsonBasin, len(world.Basins)),
+		Provinces:                 make([]jsonProvince, len(world.Provinces)),
+		Corners:                   make([]jsonCorner, len(world.Corners)),
+		Edges:                     make([]jsonEdge, len(world.Edges)),
+		Rivers:                    make([]jsonRiver, len(world.Rivers)),
+		SeaZones:                  make([]jsonSeaZone, len(world.SeaZones)),
+		Straits:                   make([]jsonStrait, len(world.Straits)),
+		Necks:                     make([]jsonNeck, len(world.Necks)),
+		Features:                  make([]jsonFeature, len(world.Features)),
 	}
 	for index, island := range world.Islands {
 		document.Islands[index] = jsonIsland{ID: island.ID, ProvinceIDs: island.ProvinceIDs}

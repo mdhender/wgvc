@@ -233,13 +233,14 @@ twice the size. Its top-level shape is:
 
 ```json
 {
-  "schema_version": 9,
+  "schema_version": 11,
   "generation": {
-    "generator": { "version": "0.7.3-alpha", "build": "9a64246" },
+    "generator": { "version": "0.8.7-alpha", "build": "9a64246" },
     "config": { "seed": "0x0123456789abcdef" },
     "result": { "province_count": 4688, "land_province_count": 1500 }
   },
   "bounds": { "minimum": { "x": 0, "y": 0 }, "maximum": { "x": 68, "y": 68 } },
+  "minimum_passable_edge_length": 0.15,
   "islands": [],
   "basins": [],
   "provinces": [],
@@ -259,7 +260,10 @@ lists its boundary `edge_ids` in ring order, its numbered `exits`, and its
 `area`, edges refer to their
 incident provinces and carry their `length`, water provinces use
 `island_id: -1`, and provinces outside any basin use `basin_id: -1`. Terrain and climate
-bands are descriptive strings. The seed is a hexadecimal string so all 64 bits
+bands are descriptive strings. `minimum_passable_edge_length` is the length in
+world units below which an edge is too short to be a border a player may
+cross; such edges stay in the mesh and the export so maps draw correctly, and
+a consumer moving between provinces ignores exits whose edge is shorter. The seed is a hexadecimal string so all 64 bits
 survive parsers whose numeric values use IEEE-754 doubles.
 `generation.generator` records the generator version (without build metadata)
 and, when available, the commit the binary was built from; see

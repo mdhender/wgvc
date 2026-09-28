@@ -36,6 +36,18 @@ func TestRunJSONContainsCanonicalWorldData(t *testing.T) {
 	if document.SchemaVersion != jsonSchemaVersion {
 		t.Errorf("schema version = %d, want %d", document.SchemaVersion, jsonSchemaVersion)
 	}
+	if document.MinimumPassableEdgeLength != wgvc.MinimumPassableEdgeLength || document.MinimumPassableEdgeLength <= 0 {
+		t.Errorf("minimum_passable_edge_length = %g, want %g", document.MinimumPassableEdgeLength, wgvc.MinimumPassableEdgeLength)
+	}
+	shortEdges := 0
+	for _, edge := range document.Edges {
+		if edge.Length < document.MinimumPassableEdgeLength {
+			shortEdges++
+		}
+	}
+	if shortEdges == 0 || shortEdges == len(document.Edges) {
+		t.Errorf("%d of %d exported edges are shorter than the passable minimum; want some but not all, since short edges stay in the export", shortEdges, len(document.Edges))
+	}
 	if got, want := document.Generation.Generator.Version, wgvc.Version().Short(); got != want {
 		t.Errorf("generator version = %q, want %q", got, want)
 	}

@@ -458,6 +458,15 @@ type River struct {
 	Mouth     RiverEnd
 }
 
+// MinimumPassableEdgeLength is the length, in world units, below which an
+// edge between two provinces is too short to be a usable border: the edge
+// stays in the mesh and the export, but a consumer that moves pieces between
+// provinces treats it as impassable, so the two provinces are no more
+// adjacent than two that share only a corner. A land province has area 1,
+// so this is about 15% of a typical province's width; shorter edges vanish
+// under the border stroke on a rendered map.
+const MinimumPassableEdgeLength = 0.15
+
 // Edge is an undirected geometric boundary, never a route. CornerIDs contains
 // its two endpoints. ProvinceIDs contains one province at the outside of the
 // world or two provinces inside it. A coastline has one land and one water
