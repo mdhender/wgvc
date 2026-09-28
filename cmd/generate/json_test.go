@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/mdhender/wgvc"
@@ -371,5 +372,47 @@ func TestRunJSONIsDeterministic(t *testing.T) {
 	}
 	if len(first) == 0 || first[len(first)-1] != '\n' {
 		t.Fatal("JSON export does not end with a newline")
+	}
+}
+
+// TestRunJSONIsCompactUnlessPretty checks that the default export is one
+// compact line and that -pretty yields an indented document with the same
+// content.
+func TestRunJSONIsCompactUnlessPretty(t *testing.T) {
+	commonArgs := []string{"-seed", "0x0123456789abcdef", "-provinces", "40", "-islands", "3", "-ocean", "0.5", "-format", "json"}
+	compactBase := filepath.Join(t.TempDir(), "compact")
+	prettyBase := filepath.Join(t.TempDir(), "pretty")
+	if err := run(append(append([]string{}, commonArgs...), "-output", compactBase), &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("compact run() error = %v", err)
+	}
+	if err := run(append(append([]string{}, commonArgs...), "-pretty", "-output", prettyBase), &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("pretty run() error = %v", err)
+	}
+	compact, err := os.ReadFile(compactBase + ".json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pretty, err := os.ReadFile(prettyBase + ".json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := bytes.Count(compact, []byte("\n")); got != 1 {
+		t.Errorf("compact export has %d newlines, want exactly the trailing one", got)
+	}
+	if !bytes.HasPrefix(pretty, []byte("{\n"+jsonIndent+"\"schema_version\"")) {
+		t.Errorf("pretty export does not start with an indented document: %q", pretty[:min(len(pretty), 40)])
+	}
+	if len(pretty) <= len(compact) {
+		t.Errorf("pretty export (%d bytes) is not larger than compact (%d bytes)", len(pretty), len(compact))
+	}
+	var fromCompact, fromPretty jsonWorld
+	if err := json.Unmarshal(compact, &fromCompact); err != nil {
+		t.Fatalf("decode compact: %v", err)
+	}
+	if err := json.Unmarshal(pretty, &fromPretty); err != nil {
+		t.Fatalf("decode pretty: %v", err)
+	}
+	if !reflect.DeepEqual(fromCompact, fromPretty) {
+		t.Error("compact and pretty exports decode to different documents")
 	}
 }

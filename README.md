@@ -220,8 +220,9 @@ The `-aspect` flag accepts `landscape`, `portrait`, `widescreen`, and
 `cinematic` as aliases for their corresponding numeric ratios.
 
 JSON output contains the canonical indexed world topology in Cartesian world
-coordinates; it does not contain pixel coordinates or rendering styles. Its
-top-level shape is:
+coordinates; it does not contain pixel coordinates or rendering styles. The file
+is one compact line by default; `-pretty` indents it for reading, at roughly
+twice the size. Its top-level shape is:
 
 ```json
 {

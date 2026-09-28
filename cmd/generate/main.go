@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -31,6 +32,7 @@ type options struct {
 	polarIcePercent  float64
 	peakChillPercent float64
 	format           string
+	pretty           bool
 	layer            string
 	region           string
 	selectIDs        string
@@ -146,6 +148,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags.Float64Var(&options.polarIcePercent, "polar-ice", options.polarIcePercent, "target percentage of ocean provinces in the polar heat band")
 	flags.Float64Var(&options.peakChillPercent, "peak-chill", options.peakChillPercent, "target percentage of warm-region high peaks classified cold or colder")
 	flags.StringVar(&options.format, "format", options.format, "output format: svg, png, json, both, all, or a comma-separated combination")
+	flags.BoolVar(&options.pretty, "pretty", false, "indent the JSON export for reading; the default is compact")
 	flags.StringVar(&options.layer, "layer", options.layer, "field that colors SVG and PNG provinces: terrain, elevation, relief, heat, moisture, or climate")
 	flags.StringVar(&options.region, "region", "", "render only provinces centered in this world-coordinate box: minx,miny,maxx,maxy")
 	flags.StringVar(&options.selectIDs, "select", "", "render only these comma-separated province IDs")
@@ -250,12 +253,11 @@ func run(args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	if formats.json {
-		data, err := renderJSON(world, options.config, climateConfig, result)
+		err := writeOutputStream(options.outputBase+".json", func(output io.Writer) error {
+			return writeJSON(output, world, options.config, climateConfig, result, options.pretty)
+		})
 		if err != nil {
 			return fmt.Errorf("render JSON: %w", err)
-		}
-		if err := writeOutput(options.outputBase+".json", data); err != nil {
-			return err
 		}
 	}
 	dimensions := ""
@@ -319,6 +321,31 @@ func writeOutput(path string, data []byte) error {
 		return fmt.Errorf("create output directory for %s: %w", path, err)
 	}
 	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+// writeOutputStream creates path and hands write a buffered writer, so a
+// large export streams to disk instead of being assembled in memory first.
+func writeOutputStream(path string, write func(io.Writer) error) (err error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create output directory for %s: %w", path, err)
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", path, err)
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close %s: %w", path, closeErr)
+		}
+	}()
+	buffered := bufio.NewWriterSize(file, 1<<20)
+	if err := write(buffered); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := buffered.Flush(); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil

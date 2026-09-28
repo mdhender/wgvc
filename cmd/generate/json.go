@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 
 	"github.com/mdhender/wgvc"
@@ -197,10 +198,17 @@ type jsonEdge struct {
 	Discharge   float64           `json:"discharge"`
 }
 
-func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateConfig, result x24.Result) ([]byte, error) {
+// jsonIndent is the indentation of a -pretty export.
+const jsonIndent = "  "
+
+// writeJSON streams the world export to output as one compact JSON document
+// followed by a newline, or indented with jsonIndent when pretty is set. The
+// two forms decode to the same document; compact is the default because the
+// indentation roughly doubles the file and the encoding time.
+func writeJSON(output io.Writer, world wgvc.World, config x24.Config, climateConfig wgvc.ClimateConfig, result x24.Result, pretty bool) error {
 	bounds, err := worldBounds(world)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	landProvinceCount := 0
 	for _, province := range world.Provinces {
@@ -273,15 +281,15 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 	for index, province := range world.Provinces {
 		elevationBand, err := elevationBandName(province.ElevationBand)
 		if err != nil {
-			return nil, fmt.Errorf("province %d: %w", province.ID, err)
+			return fmt.Errorf("province %d: %w", province.ID, err)
 		}
 		heatBand, err := heatBandName(province.HeatBand)
 		if err != nil {
-			return nil, fmt.Errorf("province %d: %w", province.ID, err)
+			return fmt.Errorf("province %d: %w", province.ID, err)
 		}
 		moistureBand, err := moistureBandName(province.MoistureBand)
 		if err != nil {
-			return nil, fmt.Errorf("province %d: %w", province.ID, err)
+			return fmt.Errorf("province %d: %w", province.ID, err)
 		}
 		exits := make([]jsonExit, len(province.Exits))
 		for exitIndex, exit := range province.Exits {
@@ -357,11 +365,11 @@ func renderJSON(world wgvc.World, config x24.Config, climateConfig wgvc.ClimateC
 	for index, feature := range world.Features {
 		document.Features[index] = jsonFeature{ID: feature.ID, Kind: feature.Kind, IslandIDs: feature.IslandIDs, ProvinceIDs: feature.ProvinceIDs}
 	}
-	data, err := json.MarshalIndent(document, "", "  ")
-	if err != nil {
-		return nil, err
+	encoder := json.NewEncoder(output)
+	if pretty {
+		encoder.SetIndent("", jsonIndent)
 	}
-	return append(data, '\n'), nil
+	return encoder.Encode(document)
 }
 
 // emptyIfNil keeps list fields as [] rather than null in the export.

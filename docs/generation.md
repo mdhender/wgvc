@@ -118,7 +118,8 @@ requested count. Water can contain interior components such as lakes.
 
 ## JSON export
 
-`go run ./cmd/generate -format json -output world` writes `world.json`. The
+`go run ./cmd/generate -format json -output world` writes `world.json` as one
+compact line; `-pretty` writes the same document indented. The
 document has `schema_version: 10`, generator identity, generation configuration
 and effective result metadata, world-coordinate bounds, and the canonical `islands`,
 `basins`, `provinces`, `corners`, `edges`, `rivers`, `sea_zones`, `straits`,
