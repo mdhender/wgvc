@@ -1,6 +1,10 @@
 package wgvc
 
-import "math"
+import (
+	"math"
+
+	"github.com/mdhender/wgvc/internal/fmath"
+)
 
 // assignExits numbers each province's boundary edges clockwise from north.
 // The ring is counterclockwise with +Y north, so clockwise is reverse ring
@@ -50,7 +54,7 @@ func assignExits(world *World) {
 func outwardBearing(first, second Point) float64 {
 	normalX := second.Y - first.Y
 	normalY := -(second.X - first.X)
-	degrees := math.Atan2(normalX, normalY) * 180 / math.Pi
+	degrees := fmath.Atan2(normalX, normalY) * 180 / math.Pi
 	if degrees < 0 {
 		degrees += 360
 	}

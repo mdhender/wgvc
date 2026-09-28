@@ -59,12 +59,26 @@ func (noise valueNoise) latticeValue(x, y int64) float64 {
 	return float64(value>>11) / (1 << 53)
 }
 
+// smoothQuintic and interpolate round each product explicitly so the compiler
+// cannot fuse it into a multiply-add on arm64; the noise must sample to the
+// same bits on every architecture.
 func smoothQuintic(value float64) float64 {
-	return value * value * value * (value*(value*6-15) + 10)
+	return value * value * value * (float64(value*(float64(value*6)-15)) + 10)
 }
 
 func interpolate(first, second, fraction float64) float64 {
-	return first + fraction*(second-first)
+	return first + float64(fraction*(second-first))
+}
+
+// scaleLandElevation and scaleWaterElevation map unit noise onto the land and
+// water elevation ranges. The explicit conversion rounds the product before
+// the addition so arm64 cannot fuse the two and diverge from amd64.
+func scaleLandElevation(noise float64) float64 {
+	return elevationLandMargin + float64((1-elevationLandMargin)*noise)
+}
+
+func scaleWaterElevation(noise float64) float64 {
+	return -1 + float64((1-elevationWaterMargin)*noise)
 }
 
 func assignElevations(world *World, worldSeed uint64) {
@@ -108,9 +122,9 @@ func assignCornerElevations(world *World, cornerValues []float64) {
 	for cornerID := range world.Corners {
 		switch kinds[cornerID] {
 		case cornerLand:
-			world.Corners[cornerID].Elevation = elevationLandMargin + (1-elevationLandMargin)*cornerValues[cornerID]
+			world.Corners[cornerID].Elevation = scaleLandElevation(cornerValues[cornerID])
 		case cornerWater:
-			world.Corners[cornerID].Elevation = -1 + (1-elevationWaterMargin)*cornerValues[cornerID]
+			world.Corners[cornerID].Elevation = scaleWaterElevation(cornerValues[cornerID])
 		default:
 			world.Corners[cornerID].Elevation = 0
 		}
@@ -131,9 +145,9 @@ func assignEdgeElevations(world *World, cornerValues []float64) {
 		}
 		edgeNoise := (cornerValues[edge.CornerIDs[0]] + cornerValues[edge.CornerIDs[1]]) / 2
 		if firstLand {
-			edge.Elevation = elevationLandMargin + (1-elevationLandMargin)*edgeNoise
+			edge.Elevation = scaleLandElevation(edgeNoise)
 		} else {
-			edge.Elevation = -1 + (1-elevationWaterMargin)*edgeNoise
+			edge.Elevation = scaleWaterElevation(edgeNoise)
 		}
 	}
 }

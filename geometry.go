@@ -2,10 +2,11 @@ package wgvc
 
 import (
 	"fmt"
+	"github.com/mdhender/wgvc/internal/fmath"
 	"math"
 	"sort"
 
-	voronoi "github.com/pzsz/voronoi"
+	voronoi "github.com/mdhender/wgvc/internal/voronoi"
 )
 
 // geometryTolerance is the absolute tolerance used after normalization to
@@ -464,14 +465,16 @@ func near(first, second float64) bool {
 }
 
 func pointDistance(first, second Point) float64 {
-	return math.Hypot(first.X-second.X, first.Y-second.Y)
+	return fmath.Hypot(first.X-second.X, first.Y-second.Y)
 }
 
 func signedArea(ring []Point) float64 {
 	twiceArea := 0.0
 	for i, point := range ring {
 		next := ring[(i+1)%len(ring)]
-		twiceArea += point.X*next.Y - next.X*point.Y
+		// Explicit conversions keep the products from fusing into a
+		// multiply-add on arm64; see backendPointInBounds.
+		twiceArea += float64(point.X*next.Y) - float64(next.X*point.Y)
 	}
 	return twiceArea / 2
 }

@@ -2,6 +2,7 @@ package x24
 
 import (
 	"fmt"
+	"github.com/mdhender/wgvc/internal/fmath"
 	"math"
 	"math/rand/v2"
 	"sort"
@@ -23,7 +24,10 @@ func Generate(config Config) (Result, error) {
 	width, height, _ := aspectratio.Dimensions(config.AspectRatio)
 	bounds := singlemesh.Bounds{Width: width, Height: height}
 	for round := 0; round < config.MaxRounds; round++ {
-		ocean := math.Min(config.OceanPercentage+float64(round)*oceanEscalation, maximumOcean)
+		// Explicit float64 conversions throughout this package round each
+		// product separately so arm64 cannot fuse it into a multiply-add and
+		// diverge from amd64.
+		ocean := math.Min(config.OceanPercentage+float64(float64(round)*oceanEscalation), maximumOcean)
 		cellCount := int(math.Ceil(float64(config.ProvinceCount) / (1 - ocean)))
 		random := roundRandom(config.WorldSeed, round)
 		mesh, err := singlemesh.Build(cellCount, config.Relaxations, bounds, random)
@@ -74,8 +78,8 @@ func makeAttractants(cells []singlemesh.Cell, bounds singlemesh.Bounds, edgeDist
 		regionWidth, regionHeight := bounds.Width/regions, bounds.Height/regions
 		center := Point{X: (float64(regionX) + 0.5) * regionWidth, Y: (float64(regionY) + 0.5) * regionHeight}
 		target := Point{
-			X: center.X + (2*random.Float64()-1)*jitter*regionWidth/2,
-			Y: center.Y + (2*random.Float64()-1)*jitter*regionHeight/2,
+			X: center.X + (float64(2*random.Float64())-1)*jitter*regionWidth/2,
+			Y: center.Y + (float64(2*random.Float64())-1)*jitter*regionHeight/2,
 		}
 		bestCell, bestDistance := -1, math.Inf(1)
 		for cellID, cell := range cells {
@@ -85,7 +89,7 @@ func makeAttractants(cells []singlemesh.Cell, bounds singlemesh.Bounds, edgeDist
 				continue
 			}
 			dx, dy := cell.Site.X-target.X, cell.Site.Y-target.Y
-			distance := dx*dx + dy*dy
+			distance := float64(dx*dx) + float64(dy*dy)
 			if distance < bestDistance {
 				bestCell, bestDistance = cellID, distance
 			}
@@ -185,7 +189,7 @@ func repulsorField(cells []singlemesh.Cell, values []float64, repulsors []Repuls
 		for head := 0; head < len(queue); head++ {
 			cellID := queue[head]
 			distance := distances[cellID]
-			values[cellID] += repulsor.Strength * ramp[distance]
+			values[cellID] += float64(repulsor.Strength * ramp[distance])
 			if distance >= reach {
 				continue
 			}
@@ -236,7 +240,7 @@ func makeConstellationSites(cells []singlemesh.Cell, bounds singlemesh.Bounds, e
 	repulsors := make([]Repulsor, 0)
 	skips := make([]AttractantSkip, 0)
 	for index, site := range constellation.Sites {
-		target := Point{X: bounds.Width/2 + site.X*scale, Y: bounds.Height/2 + site.Y*scale}
+		target := Point{X: bounds.Width/2 + float64(site.X*scale), Y: bounds.Height/2 + float64(site.Y*scale)}
 		regionX := min(int(target.X/bounds.Width*regions), regions-1)
 		regionY := min(int(target.Y/bounds.Height*regions), regions-1)
 		repulsor := constellation.weight(index) < 0
@@ -246,7 +250,7 @@ func makeConstellationSites(cells []singlemesh.Cell, bounds singlemesh.Bounds, e
 				continue
 			}
 			dx, dy := cell.Site.X-target.X, cell.Site.Y-target.Y
-			distance := dx*dx + dy*dy
+			distance := float64(dx*dx) + float64(dy*dy)
 			if distance < bestDistance {
 				bestCell, bestDistance = cellID, distance
 			}
@@ -689,7 +693,7 @@ func (s *growthState) weightedFrontier(islandID int, temperature float64, random
 	}
 	total := 0.0
 	for i, value := range weights {
-		weights[i] = math.Exp((value - maximum) / temperature)
+		weights[i] = fmath.Exp((value - maximum) / temperature)
 		total += weights[i]
 	}
 	draw := random.Float64() * total

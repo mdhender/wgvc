@@ -332,9 +332,9 @@ func assertValidWorld(t *testing.T, world World, config Config) {
 			if firstLand == secondLand {
 				edgeNoise := (cornerValues[edge.CornerIDs[0]] + cornerValues[edge.CornerIDs[1]]) / 2
 				if firstLand {
-					wantElevation = elevationLandMargin + (1-elevationLandMargin)*edgeNoise
+					wantElevation = scaleLandElevation(edgeNoise)
 				} else {
-					wantElevation = -1 + (1-elevationWaterMargin)*edgeNoise
+					wantElevation = scaleWaterElevation(edgeNoise)
 				}
 			}
 		}

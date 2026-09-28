@@ -7,7 +7,7 @@ import (
 	"math"
 	"sort"
 
-	voronoi "github.com/pzsz/voronoi"
+	voronoi "github.com/mdhender/wgvc/internal/voronoi"
 )
 
 type Point struct {
@@ -35,8 +35,8 @@ func Build(count, relaxations int, bounds Bounds, random interface{ Float64() fl
 	points := make([]Point, count)
 	for i := range points {
 		points[i] = Point{
-			X: siteInset + (bounds.Width-2*siteInset)*random.Float64(),
-			Y: siteInset + (bounds.Height-2*siteInset)*random.Float64(),
+			X: siteInset + float64((bounds.Width-2*siteInset)*random.Float64()),
+			Y: siteInset + float64((bounds.Height-2*siteInset)*random.Float64()),
 		}
 	}
 	for range relaxations {
@@ -130,14 +130,18 @@ func cellRing(cell *voronoi.Cell) ([]Point, error) {
 	return ring, nil
 }
 
+// polygonCentroid and signedArea wrap each product in an explicit float64
+// conversion. The Go spec lets a compiler fuse x*y + z into one rounding, and
+// the arm64 backend does while amd64 does not; the conversion forces the
+// product to round on its own so both architectures relax to identical sites.
 func polygonCentroid(ring []Point) Point {
 	twiceArea, x, y := 0.0, 0.0, 0.0
 	for i, current := range ring {
 		next := ring[(i+1)%len(ring)]
-		cross := current.X*next.Y - next.X*current.Y
+		cross := float64(current.X*next.Y) - float64(next.X*current.Y)
 		twiceArea += cross
-		x += (current.X + next.X) * cross
-		y += (current.Y + next.Y) * cross
+		x += float64((current.X + next.X) * cross)
+		y += float64((current.Y + next.Y) * cross)
 	}
 	return Point{X: x / (3 * twiceArea), Y: y / (3 * twiceArea)}
 }
@@ -146,7 +150,7 @@ func signedArea(ring []Point) float64 {
 	twiceArea := 0.0
 	for i, current := range ring {
 		next := ring[(i+1)%len(ring)]
-		twiceArea += current.X*next.Y - next.X*current.Y
+		twiceArea += float64(current.X*next.Y) - float64(next.X*current.Y)
 	}
 	return twiceArea / 2
 }

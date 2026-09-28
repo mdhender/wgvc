@@ -160,9 +160,9 @@ func calibrateHeat(provinces []Province, heatSource, latitudes []float64, config
 		var roundBest heatCalibration
 		haveRoundBest := false
 		for warmthIndex := range gridSize {
-			warmth := warmthLow + float64(warmthIndex)*warmthStep
+			warmth := warmthLow + float64(float64(warmthIndex)*warmthStep)
 			for coolingIndex := range gridSize {
-				cooling := coolingLow + float64(coolingIndex)*coolingStep
+				cooling := coolingLow + float64(float64(coolingIndex)*coolingStep)
 				candidate := evaluateHeatCandidate(provinces, heatSource, latitudes, oceanCount, len(peakSlice), counts, config, warmth, cooling, polarTolerance, peakTolerance, scratch)
 				if !haveBest || betterHeatCalibration(candidate, best) {
 					best = candidate
@@ -350,9 +350,11 @@ func adjustedHeatValues(provinces []Province, heatSource, latitudes []float64, w
 func adjustHeatValues(values []float64, provinces []Province, heatSource, latitudes []float64, warmth, cooling float64) {
 	for provinceID := range provinces {
 		province := &provinces[provinceID]
-		heat := (1-warmth)*heatSource[provinceID] + warmth*(1-latitudes[provinceID])
+		// Explicit conversions round each product separately so arm64
+		// cannot fuse them into multiply-adds and diverge from amd64.
+		heat := float64((1-warmth)*heatSource[provinceID]) + float64(warmth*(1-latitudes[provinceID]))
 		if province.IslandID != NoIslandID {
-			heat *= 1 - cooling*max(0, province.Elevation)
+			heat *= 1 - float64(cooling*max(0, province.Elevation))
 		}
 		values[provinceID] = heat
 	}

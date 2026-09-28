@@ -8,6 +8,12 @@ that rectangle, and exposes each edge's left and right cells. It is licensed
 under the MIT License, which is compatible with this repository's MIT
 license.
 
+The backend now lives in this repository as `internal/voronoi`, a copy of that
+commit (without its unused `utils` subpackage) whose floating-point products
+are wrapped in explicit `float64` conversions so that arm64 and amd64 compute
+identical vertices (issue #57). The module no longer depends on the upstream
+package.
+
 The retained harness in `geometry_backend_test.go` proves the backend behavior
 used by the production wrapper in `geometry.go`. It covers horizontal and
 vertical two-site cases, horizontal and vertical collinear sites, a

@@ -222,12 +222,19 @@ number derive each growth stream through SplitMix64; terrain uses an independent
 domain-separated stream. No package-global random source is used. Identical
 configurations produce deeply identical worlds for a fixed generator version.
 
-Across CPU architectures, island membership, topology, every ID, and every band
-and terrain classification are identical. Continuous values (coordinates,
-elevation, heat, moisture) can differ in their lowest-order bits, because Go
-permits fused multiply-add on arm64 but not amd64. Mesh corners that the Voronoi
-backend clips to the world rectangle are snapped exactly onto its sides, so this
-rounding cannot reorder the canonical corner IDs.
+Worlds are also bit-identical across CPU architectures, including every
+coordinate, elevation, heat, moisture, length, and bearing. Go permits a
+compiler to fuse `x*y + z` into a single multiply-add with one rounding, and the
+arm64 backend does while amd64 does not, so the generator wraps every product
+that feeds an addition or subtraction in an explicit `float64` conversion, which
+the language specification defines as forcing a separate rounding. The Voronoi
+backend is a copy of `pzsz/voronoi` under `internal/voronoi` with the same
+treatment, and `internal/fmath` supplies `Hypot`, `Atan2`, and `Exp`, whose
+standard-library versions differ by architecture (and, for `Exp` on amd64, by
+CPU feature). Mesh corners that the backend clips to the world rectangle are
+additionally snapped exactly onto its sides. `TestGenerateMatchesRecordedHash`
+hashes every field of several generated worlds against recorded values, so a
+regression on either architecture fails the suite.
 
 See [Single-mesh island generation](blob-islands.md) for visual fixtures and
 regression coverage.

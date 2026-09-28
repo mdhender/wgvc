@@ -14,6 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```sh
 go test ./...                       # full suite
 go test -race ./...
+GOARCH=amd64 go test ./...        # cross-architecture check; runs under Rosetta on Apple silicon
 go test -run TestName ./            # single test in the root package
 go test -run TestName ./cmd/generate
 
@@ -40,7 +41,7 @@ WGVC_UPDATE_TERRAIN_LEGEND=1     go test -run TestTerrainLegend ./cmd/generate  
 
 `Generate(Config)` → `generateForRender`, which runs these stages in order:
 
-1. **Growth** — `internal/x24.Generate`: builds one Lloyd-relaxed Voronoi point set for the whole world (`internal/singlemesh`, wrapping `pzsz/voronoi`), then grows all islands concurrently over it with a desirability field (edge barrier/ramp, optional attractants, softmax choice, rival ramp by hop distance to other islands' land). Touching islands merge. On failure a round is discarded and retried with +3% ocean on a fresh derived stream. Algorithm and defaults: `docs/x24.md`.
+1. **Growth** — `internal/x24.Generate`: builds one Lloyd-relaxed Voronoi point set for the whole world (`internal/singlemesh`, wrapping `internal/voronoi`, a copy of `pzsz/voronoi` with fusion-safe arithmetic), then grows all islands concurrently over it with a desirability field (edge barrier/ramp, optional attractants, softmax choice, rival ramp by hop distance to other islands' land). Touching islands merge. On failure a round is discarded and retried with +3% ocean on a fresh derived stream. Algorithm and defaults: `docs/x24.md`.
 2. **Canonical tessellation** — `tessellateRectangle` (`geometry.go`) re-tessellates the x24 sites into the canonical `islandMesh` with shared, world-global corner and edge IDs and CCW rings.
 3. **Scaling** — the mesh is uniformly scaled so total land area equals the land province count (a typical land province has area ≈ 1).
 4. **Fields** — `assignGeometry` (edge lengths, ring-ordered `Province.EdgeIDs`, areas), `assignExits` (exits numbered clockwise from north with bearings), `assignElevations` (per-corner noise → corner/edge → province mean/band), `assignRelief` (mean absolute elevation difference to same-medium edge neighbors, in `[0,1)`), `assignClimate` (heat/moisture + calibrated bands), `assignBasins` (water components with no path to the world boundary become lake/inland-sea basins), `assignRivers` (priority-flood drainage over the corner graph; river chains along land-land edges), `assignCoastDistances`, `assignSeaZones` (farthest-point seeds, graph-Voronoi zones over ocean), `assignStraits`, `assignNecks` (small vertex cuts of island land graphs), `assignHarbors` (shelter, water edge counts, river lists), then `assignTerrain` (deterministic classification, consumes no randomness) and `assignFeatures` (named terrain regions and archipelagos, read from terrain). Only elevation and climate consume randomness. Terrain never changes geometry, topology, or land/water membership; only feature identification runs after it.
@@ -53,6 +54,7 @@ WGVC_UPDATE_TERRAIN_LEGEND=1     go test -run TestTerrainLegend ./cmd/generate  
 - `Province.IslandID` (or `NoIslandID` for water) is the authority for land vs water — not terrain or elevation. Basins (`Province.BasinID`) are drawn only from growth water and never change membership.
 - Edge incidence is undirected geometric adjacency, not a game route.
 - Identical `Config` → deeply identical `World`. Each stage draws from its own domain-separated PCG stream derived via SplitMix64 (`random.go`; x24 has its own in `internal/x24/random.go`). Add a new domain constant for any new random stage rather than reusing an existing stream, so existing outputs are not perturbed.
+- Worlds are bit-identical across CPU architectures (`TestGenerateMatchesRecordedHash` guards this with recorded hashes). Go fuses `x*y + z` into one rounding on arm64 but not amd64, so wrap every product that feeds an addition or subtraction in an explicit `float64(...)` conversion, and use `internal/fmath` instead of `math.Hypot`, `math.Atan2`, or `math.Exp`, whose standard-library versions differ by architecture. After an intentional generator change, rerun the hash test with `WGVC_PRINT_WORLD_HASH=1` on both architectures and record the shared value.
 - `docs/generation.md` documents the public contracts (coordinates, topology, JSON schema); keep it and README in sync with behavior changes.
 
 ### Legacy code
