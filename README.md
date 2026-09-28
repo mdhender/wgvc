@@ -159,35 +159,38 @@ apart, so the initial island count is normally the final landmass count; this
 seed merges one pair in the crowded center for 26 landmasses. A continent is
 grown the other way, by disabling the ramp so that 25 islands at 45% water merge
 into one landmass with inland seas and bays; a single initial island instead
-grows into one featureless block against the map edge.
+grows into one featureless block against the map edge. Dimensions below are at
+the default `-scale 3`; [How to regenerate the README maps and doc
+images](docs/how-to/recipes.md) lists every recipe with its expected status
+line.
 
 ```sh
-# Goal map: 27→26 islands, 45,455 provinces, 5322×2255
+# Goal map: 27→26 islands, 45,455 provinces, 15965×6764
 go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 27 -provinces 10000 -ocean 0.78 \
   -aspect cinematic -attractors 9 -format png -output tnyc
 
-# Subaru archipelago (the README header): 21→6 islands, 45,455 provinces, 5442×2206
+# Subaru archipelago (the README header): 21→6 islands, 45,455 provinces, 16325×6617
 go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 21 -provinces 10000 -ocean 0.78 \
   -attractors subaru -format png -output subaru
 
-# Draco: 35→1 islands with an inland sea in the head, 71,429 provinces, 5750×3256
+# Draco: 35→1 islands with an inland sea in the head, 71,429 provinces, 17249×9766
 go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 35 -provinces 10000 \
   -attractors draco -format png -output draco
 
-# Aster: the dragon as 25→14 islands behind a kin head, 62,500 provinces, 5382×3048
+# Aster: the dragon as 25→14 islands behind a kin head, 62,500 provinces, 16144×9144
 go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 25 -provinces 10000 \
   -attractors aster -format png -output aster
 
-# Little Dipper: 7→7 islands, 45,455 provinces, 4873×2461
+# Little Dipper: 7→7 islands, 45,455 provinces, 14617×7381
 go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 7 -provinces 10000 -ocean 0.78 \
   -attractors ursa-minor -format png -output ursa-minor
 
-# One continent: 25→1 islands, 18,182 provinces, 3384×1444
+# One continent: 25→1 islands, 18,182 provinces, 10151×4331
 go run ./cmd/generate -seed 0x0123456789abcdef \
   -islands 25 -provinces 10000 -ocean 0.45 -rival-ramp 0 \
   -aspect cinematic -attractors 5 -format png -output tnyc-continent
